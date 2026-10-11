@@ -1,0 +1,179 @@
+# ERROR-CODES
+
+错误码分段、抛出方式、前端映射。
+
+---
+
+## 1. 定位
+
+错误码是前后端的契约，不是日志。每个错误码对应一个确定的用户可见提示与一个 HTTP 状态码。业务代码只抛 `BizException`，不自行拼装响应。
+
+## 2. 分段
+
+| 段位 | 领域 |
+|---|---|
+| 0 | 成功（保留码，不属于任何分段） |
+| 1000 | 通用 |
+| 2000 | 认证与登录态 |
+| 2200 | 用户 |
+| 2300 | 角色 |
+| 2400 | 菜单与权限 |
+| 2500 | 幂等 |
+| 3000 | 会话与运行 |
+| 4000 | 模型 |
+| 5000 | 工具 |
+| 6000 | 文件 |
+| 7000 | 运行时 |
+| 8000 | 技能 |
+| 9000 | 系统与中间件 |
+
+## 3. 通用 1000（0 为成功保留码）
+
+信封 `R<T>` 中 `code = "0"` 表示成功；1000 段自 1001 起为通用失败码。
+
+| 码 | 标识 | HTTP | 提示 |
+|---|---|---|---|
+| 0 | `SUCCESS` | 200 | 成功 |
+| 1001 | `PARAM_INVALID` | 400 | 参数不合法 |
+| 1002 | `RESOURCE_NOT_FOUND` | 404 | 资源不存在 |
+| 1003 | `STATE_CONFLICT` | 409 | 当前状态不允许该操作 |
+| 1004 | `RATE_LIMITED` | 429 | 操作过于频繁，请稍后再试 |
+| 1099 | `INTERNAL_ERROR` | 500 | 服务内部错误 |
+
+## 4. 认证 2000
+
+| 码 | 标识 | HTTP | 提示 |
+|---|---|---|---|
+| 2001 | `UNAUTHORIZED` | 401 | 请先登录 |
+| 2002 | `CREDENTIAL_INVALID` | 401 | 用户名或密码错误 |
+| 2003 | `FORBIDDEN` | 403 | 没有操作权限 |
+| 2004 | `TOKEN_EXPIRED` | 401 | 登录已过期 |
+| 2005 | `OLD_PASSWORD_INVALID` | 400 | 原密码不正确 |
+
+## 5. 用户 2200
+
+| 码 | 标识 | HTTP | 提示 |
+|---|---|---|---|
+| 2201 | `USER_NOT_FOUND` | 404 | 用户不存在 |
+| 2202 | `USERNAME_CONFLICT` | 409 | 登录名已存在 |
+| 2203 | `ACCOUNT_DISABLED` | 403 | 账号已停用 |
+| 2204 | `SELF_OPERATION_FORBIDDEN` | 409 | 不能对自己执行该操作 |
+
+## 6. 角色 2300
+
+| 码 | 标识 | HTTP | 提示 |
+|---|---|---|---|
+| 2301 | `ROLE_NOT_FOUND` | 404 | 角色不存在 |
+| 2302 | `ROLE_CODE_CONFLICT` | 409 | 角色码已存在 |
+| 2303 | `ROLE_IN_USE` | 409 | 角色已分配给用户，不能删除 |
+| 2304 | `BUILTIN_ROLE_IMMUTABLE` | 409 | 内置角色不允许该操作 |
+
+## 7. 菜单与权限 2400
+
+| 码 | 标识 | HTTP | 提示 |
+|---|---|---|---|
+| 2401 | `MENU_NOT_FOUND` | 404 | 菜单不存在 |
+| 2402 | `MENU_HAS_CHILDREN` | 409 | 存在子菜单，不能删除 |
+| 2403 | `MENU_PERM_CONFLICT` | 409 | 权限标识已存在 |
+| 2404 | `PERMISSION_DENIED` | 403 | 无此权限点 |
+
+## 8. 幂等 2500
+
+| 码 | 标识 | HTTP | 提示 |
+|---|---|---|---|
+| 2501 | `REPEAT_SUBMIT` | 409 | 请求正在处理中，请勿重复提交 |
+
+## 9. 会话与运行 3000
+
+| 码 | 标识 | HTTP | 提示 |
+|---|---|---|---|
+| 3001 | `SESSION_NOT_FOUND` | 404 | 会话不存在 |
+| 3002 | `SESSION_BUSY` | 409 | 该会话有运行正在进行 |
+| 3101 | `RUN_NOT_FOUND` | 404 | 运行不存在 |
+| 3102 | `RUN_NOT_ABORTABLE` | 409 | 该运行不可中断 |
+| 3103 | `RUN_ALREADY_FINISHED` | 409 | 运行已结束 |
+
+## 10. 模型 4000
+
+| 码 | 标识 | HTTP | 提示 |
+|---|---|---|---|
+| 4001 | `PROVIDER_NOT_CONFIGURED` | 400 | 模型供应方未配置 |
+| 4002 | `MODEL_CALL_FAILED` | 502 | 模型调用失败 |
+| 4003 | `MODEL_CALL_TIMEOUT` | 504 | 模型调用超时 |
+| 4004 | `MODEL_OUTPUT_INVALID` | 502 | 模型返回内容无法解析 |
+
+## 11. 工具 5000
+
+| 码 | 标识 | HTTP | 提示 |
+|---|---|---|---|
+| 5001 | `TOOL_NOT_FOUND` | 404 | 工具不存在 |
+| 5002 | `TOOL_DISABLED` | 409 | 工具已禁用 |
+| 5003 | `TOOL_EXEC_TIMEOUT` | 504 | 工具执行超时 |
+| 5004 | `TOOL_PARAM_INVALID` | 400 | 工具参数不合法 |
+
+## 12. 文件 6000
+
+| 码 | 标识 | HTTP | 提示 |
+|---|---|---|---|
+| 6001 | `FILE_NOT_FOUND` | 404 | 文件不存在 |
+| 6002 | `FILE_UPLOAD_FAILED` | 500 | 文件上传失败 |
+| 6003 | `FILE_TOO_LARGE` | 413 | 文件超过大小上限 |
+| 6004 | `FILE_DELETE_FAILED` | 500 | 文件删除失败 |
+
+## 13. 运行时 7000
+
+| 码 | 标识 | HTTP | 提示 |
+|---|---|---|---|
+| 7001 | `PYTHON_NOT_READY` | 503 | Python 运行时未就绪 |
+| 7002 | `PYTHON_BUNDLE_MISSING` | 503 | 内置运行时包缺失 |
+| 7003 | `PYTHON_EXEC_FAILED` | 500 | 脚本执行失败 |
+| 7004 | `PYTHON_UNSAFE_PATH` | 400 | 脚本包含不安全的路径引用 |
+
+## 14. 技能 8000
+
+| 码 | 标识 | HTTP | 提示 |
+|---|---|---|---|
+| 8001 | `SKILL_NOT_FOUND` | 404 | 技能不存在 |
+| 8002 | `SKILL_CODE_CONFLICT` | 409 | 技能标识已存在 |
+| 8003 | `SKILL_CONTENT_TOO_LONG` | 400 | 技能内容超过 8000 字上限 |
+
+## 15. 系统 9000
+
+| 码 | 标识 | HTTP | 提示 |
+|---|---|---|---|
+| 9001 | `DB_UNAVAILABLE` | 503 | 数据库不可用 |
+| 9002 | `REDIS_UNAVAILABLE` | 503 | 缓存不可用 |
+| 9003 | `STORAGE_UNAVAILABLE` | 503 | 对象存储不可用 |
+| 9004 | `MQ_UNAVAILABLE` | 503 | 消息队列不可用 |
+
+## 16. 处理约定
+
+后端抛出：
+
+```java
+throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
+```
+
+全局处理器 `GlobalExceptionHandler` 统一转换：
+
+| 异常 | 处理 |
+|---|---|
+| `BizException` | 按错误码输出，记录 warn |
+| `NotLoginException`（Sa-Token） | 转 `UNAUTHORIZED` / `TOKEN_EXPIRED` |
+| `NotPermissionException` / `NotRoleException`（Sa-Token） | 转 `FORBIDDEN` |
+| `MethodArgumentNotValidException` | 转 `PARAM_INVALID`，附带字段错误 |
+| 其他异常 | 转 `INTERNAL_ERROR`，记录 error 含堆栈 |
+
+信封 `code` 一律为 `String`（如 `"0"`、`"3001"`），与 HTTP 状态码的 int 区分；网络交互字段全部使用包装类型。
+
+前端映射（`web/src/api/index.ts`）：按 `code` 取 `locales` 中的提示文案，`401` 触发重新登录，`403` 提示无权限并停留当前页，`5xx` 允许重试一次。
+
+## 17. 取舍
+
+| 选择 | 换来什么 | 代价 |
+|---|---|---|
+| 分段编码 | 看码知领域，便于归类统计 | 段位需预留，避免后期挤占 |
+| 错误码同时带 HTTP 状态 | 网关与前端各取所需 | 两处需同步维护 |
+| code 用 String | 与 HTTP int 状态码天然区分，序列化不丢精度 | 前端比较须用字符串 |
+| 内部错误不回传堆栈 | 不泄露实现细节 | 排障需查日志 |
+| 登录失败统一提示 | 不暴露用户是否存在 | 排查需依赖日志 |

@@ -1,0 +1,14 @@
+package com.liteworkbench.domain.constant;
+
+/** 会话相关静态常量 */
+public interface SessionConst {
+
+    /** 标题最大长度 */
+    int TITLE_MAX_LENGTH = 128;
+    /** 新建会话默认标题 */
+    String DEFAULT_TITLE = "新会话";
+    /** 会话运行锁过期时间，秒 */
+    long LOCK_TTL_SECONDS = 900;
+    /** 系统提示词最大长度 */
+    int SYSTEM_PROMPT_MAX_LENGTH = 8000;
+}

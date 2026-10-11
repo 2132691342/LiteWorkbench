@@ -1,0 +1,75 @@
+# LiteWorkbench 中间件编排：PostgreSQL(pgvector) / Redisearch / MinIO / RabbitMQ
+# 镜像取自华为云 SWR，国内网络友好；端口与凭据与 docs/DEPLOYMENT.md 对齐
+services:
+  postgres:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/pgvector/pgvector:pg16
+    container_name: pgvector
+    restart: always
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: admin_public
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/redislabs/redisearch:2.4.14
+    container_name: redisearch
+    restart: always
+    command: >
+      redis-server --requirepass admin_public
+      --maxmemory 256mb --maxmemory-policy allkeys-lru
+      --loadmodule /usr/lib/redis/modules/redisearch.so
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "-a", "admin_public", "ping" ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  minio:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/pgsty/minio:RELEASE.2026-04-17T00-00-00Z
+    container_name: minio
+    restart: always
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadminpublic
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  rabbitmq:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/rabbitmq:4-management
+    container_name: rabbitmq
+    restart: always
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin_public
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "ping", "--quiet" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  pgdata: { }
+  minio_data: { }

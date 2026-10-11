@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.liteworkbench.mapper.WbRunMapper">
+
+    <update id="updateTerminal">
+        UPDATE wb_run
+        SET status = #{status},
+            stop_reason = #{stopReason},
+            iter_count = #{iterCount},
+            input_tokens = #{inputTokens},
+            output_tokens = #{outputTokens},
+            ended_at = now(),
+            duration_ms = #{durationMs}
+        WHERE run_id = #{runId}
+    </update>
+
+    <sql id="Page_Condition">
+        <where>
+            <if test="req.sessionId != null and req.sessionId != ''">r.session_id = #{req.sessionId}</if>
+            <if test="req.keyword != null and req.keyword != ''">
+                AND r.prompt LIKE '%' || #{req.keyword} || '%'
+            </if>
+        </where>
+    </sql>
+
+    <select id="selectPage" resultType="com.liteworkbench.domain.entity.WbRunDO">
+        SELECT r.* FROM wb_run r
+        <include refid="Page_Condition"/>
+        ORDER BY r.created_at DESC
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="countPage" resultType="long">
+        SELECT count(*) FROM wb_run r
+        <include refid="Page_Condition"/>
+    </select>
+
+    <select id="runTrendByDay" resultType="map">
+        SELECT to_char(created_at AT TIME ZONE 'Asia/Shanghai', 'YYYYMMDD') AS date,
+               count(*) AS value
+        FROM wb_run
+        WHERE created_at >= now() - (#{days} || ' days')::interval
+        GROUP BY 1 ORDER BY 1
+    </select>
+
+    <select id="tokenTrendByDay" resultType="map">
+        SELECT to_char(created_at AT TIME ZONE 'Asia/Shanghai', 'YYYYMMDD') AS date,
+               coalesce(sum(input_tokens + output_tokens), 0) AS value
+        FROM wb_run
+        WHERE created_at >= now() - (#{days} || ' days')::interval
+        GROUP BY 1 ORDER BY 1
+    </select>
+</mapper>

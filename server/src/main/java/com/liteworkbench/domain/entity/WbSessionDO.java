@@ -1,0 +1,45 @@
+package com.liteworkbench.domain.entity;
+
+import lombok.Data;
+
+import java.io.Serial;
+import java.io.Serializable;
+import java.time.LocalDateTime;
+
+/** 会话实体，映射 wb_session */
+@Data
+public class WbSessionDO implements Serializable {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
+
+    /** 会话 ID，SESS_ 前缀 */
+    private String sessionId;
+    /** 归属用户 */
+    private String userId;
+    /** 会话标题 */
+    private String title;
+    /** 供应方编码，空则用默认供应方 */
+    private String providerCode;
+    /** 模型名，空则用供应方默认模型 */
+    private String modelName;
+    /** 系统提示词 */
+    private String systemPrompt;
+    /** 消息数 */
+    private Integer messageCount;
+    /** 运行数 */
+    private Integer runCount;
+    /** 累计 token 用量 */
+    private Long totalTokens;
+    /** 最近活跃时间 */
+    private LocalDateTime lastActiveAt;
+    /** 业务状态 normal / disabled */
+    private String state;
+    private String createdBy;
+    private LocalDateTime createdAt;
+    private String updatedBy;
+    private LocalDateTime updatedAt;
+    /** 逻辑删除 */
+    private Boolean deleted;
+    private String remark;
+}

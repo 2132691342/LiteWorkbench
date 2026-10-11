@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.liteworkbench.mapper.WbProviderMapper">
+
+    <update id="update">
+        UPDATE wb_provider
+        <set>
+            <if test="providerName != null and providerName != ''">provider_name = #{providerName},</if>
+            <if test="baseUrl != null">base_url = #{baseUrl},</if>
+            <if test="apiKeyEnc != null and apiKeyEnc != ''">api_key_enc = #{apiKeyEnc},</if>
+            <if test="defaultModel != null">default_model = #{defaultModel},</if>
+            <if test="enabled != null">enabled = #{enabled},</if>
+            updated_by = #{updatedBy},
+            updated_at = now()
+        </set>
+        WHERE provider_id = #{providerId} AND deleted = false
+    </update>
+</mapper>

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.liteworkbench.mapper.WbSkillMapper">
+
+    <update id="update">
+        UPDATE wb_skill
+        <set>
+            <if test="skillName != null and skillName != ''">skill_name = #{skillName},</if>
+            <if test="summary != null">summary = #{summary},</if>
+            <if test="content != null">content = #{content},</if>
+            <if test="triggerWords != null">trigger_words = #{triggerWords},</if>
+            <if test="enabled != null">enabled = #{enabled},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            updated_by = #{updatedBy},
+            updated_at = now()
+        </set>
+        WHERE skill_id = #{skillId} AND user_id = #{userId} AND deleted = false
+    </update>
+
+    <sql id="Page_Condition">
+        <where>
+            deleted = false
+            AND user_id = #{userId}
+            <if test="req.keyword != null and req.keyword != ''">
+                AND (skill_name LIKE '%' || #{req.keyword} || '%'
+                     OR skill_code LIKE '%' || #{req.keyword} || '%')
+            </if>
+        </where>
+    </sql>
+
+    <select id="selectPage" resultType="com.liteworkbench.domain.entity.WbSkillDO">
+        SELECT * FROM wb_skill
+        <include refid="Page_Condition"/>
+        ORDER BY created_at DESC
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="countPage" resultType="long">
+        SELECT count(*) FROM wb_skill
+        <include refid="Page_Condition"/>
+    </select>
+</mapper>

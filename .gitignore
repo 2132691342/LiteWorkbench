@@ -1,0 +1,27 @@
+# 构建产物
+server/target/
+web/dist/
+web/node_modules/
+*.class
+
+# 日志
+logs/
+*.log
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# 本地环境
+.env.local
+*.local
+
+# 运行时数据目录
+server/data/
+data/

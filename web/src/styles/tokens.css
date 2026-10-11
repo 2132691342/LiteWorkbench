@@ -1,0 +1,43 @@
+:root {
+  /* 品牌四色：全站唯一色值源头，组件一律引用语义别名 */
+  --data_visualization-color-1: #2563eb;
+  --data_visualization-color-2: #9333ea;
+  --data_visualization-color-3: #f8fafc;
+  --data_visualization-color-4: #334155;
+
+  /* 语义别名 */
+  --lw-primary: var(--data_visualization-color-1);
+  --lw-primary-hover: #1d4ed8;
+  --lw-primary-active: #1e40af;
+  --lw-primary-tint: rgba(37, 99, 235, 0.08);
+  --lw-secondary: var(--data_visualization-color-2);
+  --lw-secondary-hover: #7e22ce;
+  --lw-secondary-tint: rgba(147, 51, 234, 0.08);
+  --lw-surface: var(--data_visualization-color-3);
+  --lw-surface-raised: #ffffff;
+  --lw-border: #e2e8f0;
+  --lw-border-strong: #cbd5e1;
+  --lw-ink: var(--data_visualization-color-4);
+  --lw-ink-muted: #64748b;
+  --lw-ink-disabled: #94a3b8;
+
+  /* 语义色：低饱和，不与品牌色抢注意力 */
+  --lw-success: #5abf8a;
+  --lw-warning: #d6a85c;
+  --lw-error: #d46a6a;
+  --lw-info: var(--lw-primary);
+
+  /* 阴影仅两级 */
+  --lw-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --lw-shadow-md: 0 4px 12px rgba(15, 23, 42, 0.12);
+
+  /* 动效令牌：所有过渡只允许引用这三个 */
+  --lw-dur-fast: 120ms;
+  --lw-dur: 200ms;
+  --lw-dur-slow: 300ms;
+  --lw-ease: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* 布局尺寸 */
+  --lw-topbar-h: 64px;
+  --lw-sidebar-w: 208px;
+}

@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.liteworkbench.mapper.SysRoleMapper">
+
+    <sql id="Base_Column_List">
+        role_id, role_code, role_name, sort_no, state,
+        created_by, created_at, updated_by, updated_at, deleted, remark
+    </sql>
+
+    <insert id="insert">
+        INSERT INTO sys_role (role_id, role_code, role_name, sort_no, state, created_by, remark)
+        VALUES (#{roleId}, #{roleCode}, #{roleName}, #{sortNo}, #{state}, #{createdBy}, #{remark})
+    </insert>
+
+    <update id="update">
+        UPDATE sys_role
+        <set>
+            <if test="roleName != null and roleName != ''">role_name = #{roleName},</if>
+            <if test="sortNo != null">sort_no = #{sortNo},</if>
+            <if test="state != null and state != ''">state = #{state},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            updated_by = #{updatedBy},
+            updated_at = now()
+        </set>
+        WHERE role_id = #{roleId} AND deleted = false
+    </update>
+
+    <select id="selectById" resultType="com.liteworkbench.domain.entity.SysRoleDO">
+        SELECT <include refid="Base_Column_List"/>
+        FROM sys_role
+        WHERE role_id = #{roleId} AND deleted = false
+    </select>
+
+    <select id="selectList" resultType="com.liteworkbench.domain.entity.SysRoleDO">
+        SELECT <include refid="Base_Column_List"/>
+        FROM sys_role
+        WHERE deleted = false AND state = 'normal'
+        ORDER BY sort_no ASC, created_at ASC
+    </select>
+
+    <select id="selectPage" resultType="com.liteworkbench.domain.entity.SysRoleDO">
+        SELECT <include refid="Base_Column_List"/>
+        FROM sys_role
+        WHERE deleted = false
+        <if test="keyword != null and keyword != ''">
+            AND (role_code ILIKE CONCAT('%', #{keyword}, '%')
+                 OR role_name ILIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        ORDER BY sort_no ASC, created_at ASC
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="countPage" resultType="long">
+        SELECT COUNT(1)
+        FROM sys_role
+        WHERE deleted = false
+        <if test="keyword != null and keyword != ''">
+            AND (role_code ILIKE CONCAT('%', #{keyword}, '%')
+                 OR role_name ILIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+    </select>
+
+    <select id="countByCode" resultType="long">
+        SELECT COUNT(1)
+        FROM sys_role
+        WHERE role_code = #{roleCode} AND deleted = false
+        <if test="excludeId != null and excludeId != ''">
+            AND role_id &lt;&gt; #{excludeId}
+        </if>
+    </select>
+
+    <select id="selectByUserId" resultType="com.liteworkbench.domain.entity.SysRoleDO">
+        SELECT r.role_id, r.role_code, r.role_name, r.sort_no, r.state,
+               r.created_by, r.created_at, r.updated_by, r.updated_at, r.deleted, r.remark
+        FROM sys_role r
+        INNER JOIN sys_user_role ur ON ur.role_id = r.role_id
+        WHERE ur.user_id = #{userId} AND r.deleted = false AND r.state = 'normal'
+        ORDER BY r.sort_no ASC
+    </select>
+
+    <select id="countUserRefs" resultType="long">
+        SELECT COUNT(1)
+        FROM sys_user_role ur
+        INNER JOIN sys_user u ON u.user_id = ur.user_id AND u.deleted = false
+        WHERE ur.role_id = #{roleId}
+    </select>
+
+    <update id="deleteById">
+        UPDATE sys_role
+        SET deleted = true, state = 'disabled', updated_by = #{updatedBy}, updated_at = now()
+        WHERE role_id = #{roleId} AND deleted = false
+    </update>
+
+    <select id="selectMenuIdsByRoleId" resultType="string">
+        SELECT menu_id
+        FROM sys_role_menu
+        WHERE role_id = #{roleId}
+    </select>
+
+    <insert id="insertRoleMenus">
+        INSERT INTO sys_role_menu (role_id, menu_id, created_by)
+        VALUES
+        <foreach collection="menuIds" item="menuId" separator=",">
+            (#{roleId}, #{menuId}, #{createdBy})
+        </foreach>
+        ON CONFLICT (role_id, menu_id) DO NOTHING
+    </insert>
+
+    <delete id="deleteRoleMenus">
+        DELETE FROM sys_role_menu WHERE role_id = #{roleId}
+    </delete>
+
+    <select id="selectUserIdsByRoleId" resultType="string">
+        SELECT ur.user_id
+        FROM sys_user_role ur
+        INNER JOIN sys_user u ON u.user_id = ur.user_id AND u.deleted = false
+        WHERE ur.role_id = #{roleId}
+    </select>
+</mapper>

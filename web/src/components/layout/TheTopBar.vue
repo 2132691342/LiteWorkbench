@@ -1,0 +1,136 @@
+<script setup lang="ts">
+import { Expand, Fold, SwitchButton, User } from '@element-plus/icons-vue'
+import { ElMessageBox } from 'element-plus'
+import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
+import LwButton from '@/components/ui/LwButton.vue'
+import { switchLocale } from '@/locales'
+import { useAppStore } from '@/stores/app'
+import { useUserStore } from '@/stores/user'
+import { ROLE_ADMIN, ROLE_SUPER_ADMIN } from '@/utils/const'
+import PasswordDialog from '@/views/settings/PasswordDialog.vue'
+
+/** 顶栏：品牌区 + 语言切换 + 用户菜单，退出登录前二次确认 */
+const { t } = useI18n()
+const router = useRouter()
+const appStore = useAppStore()
+const userStore = useUserStore()
+
+const passwordVisible = ref(false)
+const localeText = computed(() => (appStore.locale === 'zh-CN' ? 'EN' : '中'))
+const initials = computed(() => userStore.nickname.slice(0, 2).toUpperCase() || 'LW')
+const roleLabel = computed(() => {
+  if (userStore.roleCodes.includes(ROLE_SUPER_ADMIN)) {
+    return t('app.roleSuperAdmin')
+  }
+  if (userStore.roleCodes.includes(ROLE_ADMIN)) {
+    return t('app.roleAdmin')
+  }
+  return t('app.roleUser')
+})
+
+/** 中英切换 */
+function toggleLocale(): void {
+  switchLocale(appStore.locale === 'zh-CN' ? 'en-US' : 'zh-CN')
+}
+
+/** 退出前二次确认，避免误触 */
+async function handleLogout(): Promise<void> {
+  await ElMessageBox.confirm(t('app.logoutConfirm'), t('app.logout'), {
+    confirmButtonText: t('common.confirm'),
+    cancelButtonText: t('common.cancel'),
+    type: 'warning',
+  })
+  await userStore.logout()
+  router.push('/login')
+}
+
+/** 用户下拉命令 */
+function handleCommand(command: string): void {
+  if (command === 'password') {
+    passwordVisible.value = true
+  } else if (command === 'logout') {
+    void handleLogout()
+  }
+}
+</script>
+
+<template>
+  <header
+    class="h-16 flex items-center justify-between px-4 md:px-6 border-b shrink-0 z-20"
+    style="background-color: var(--lw-surface-raised); border-color: var(--lw-border)"
+  >
+    <div class="flex items-center gap-4 md:gap-8">
+      <div class="flex items-center gap-3">
+        <LwButton
+          variant="text"
+          size="sm"
+          class="lg:hidden"
+          :title="appStore.sidebarCollapsed ? t('app.expand') : t('app.collapse')"
+          @click="appStore.toggleSidebar()"
+        >
+          <template #icon>
+            <el-icon><component :is="appStore.sidebarCollapsed ? Expand : Fold" /></el-icon>
+          </template>
+        </LwButton>
+        <div
+          class="w-8 h-8 rounded-lg flex items-center justify-center font-bold shadow-sm"
+          style="background-color: var(--lw-primary); color: #fff"
+        >
+          <svg width="18" height="18" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+            <path d="M9 22V10h3v9h6v3H9z" fill="currentColor" />
+            <circle cx="22" cy="12" r="2.4" fill="currentColor" opacity="0.85" />
+          </svg>
+        </div>
+        <span class="font-bold text-lg tracking-tight hidden sm:block">{{ t('app.title') }}</span>
+      </div>
+      <nav class="hidden md:flex gap-6 text-sm font-medium">
+        <router-link
+          v-for="link in [
+            { to: '/dashboard', label: 'menu.dashboard' },
+            { to: '/console', label: 'menu.console' },
+            { to: '/files', label: 'menu.files' },
+          ]"
+          :key="link.to"
+          :to="link.to"
+          class="transition-all duration-200 hover:opacity-100 hover:scale-105"
+          style="color: var(--lw-ink); opacity: 0.65"
+          active-class="!opacity-100 font-bold"
+        >
+          {{ t(link.label) }}
+        </router-link>
+      </nav>
+    </div>
+
+    <div class="flex items-center gap-2 md:gap-3">
+      <LwButton variant="ghost" size="sm" @click="toggleLocale">{{ localeText }}</LwButton>
+      <div class="hidden sm:flex flex-col items-end mr-1 leading-tight">
+        <span class="text-xs font-bold" style="color: var(--lw-ink)">{{ userStore.nickname }}</span>
+        <span class="text-[10px]" style="color: var(--lw-ink-muted)">
+          {{ roleLabel }}
+        </span>
+      </div>
+      <el-dropdown trigger="click" @command="handleCommand">
+        <div
+          class="w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shadow-sm cursor-pointer transition-transform duration-200 hover:scale-105"
+          style="background-color: var(--lw-secondary); color: #fff"
+        >
+          {{ initials }}
+        </div>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="password">
+              <el-icon class="mr-1"><User /></el-icon>{{ t('app.changePassword') }}
+            </el-dropdown-item>
+            <el-dropdown-item command="logout" divided>
+              <el-icon class="mr-1"><SwitchButton /></el-icon>{{ t('app.logout') }}
+            </el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
+    </div>
+
+    <PasswordDialog v-model="passwordVisible" />
+  </header>
+</template>

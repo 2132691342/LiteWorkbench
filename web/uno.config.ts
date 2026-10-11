@@ -1,0 +1,42 @@
+import { defineConfig, presetAttributify, presetUno } from 'unocss'
+
+/** UnoCSS 配置：主题色只映射设计令牌，组件禁止硬编码色值 */
+export default defineConfig({
+  presets: [presetUno(), presetAttributify()],
+  theme: {
+    colors: {
+      lw: {
+        primary: 'var(--lw-primary)',
+        primaryHover: 'var(--lw-primary-hover)',
+        primaryActive: 'var(--lw-primary-active)',
+        secondary: 'var(--lw-secondary)',
+        surface: 'var(--lw-surface)',
+        raised: 'var(--lw-surface-raised)',
+        border: 'var(--lw-border)',
+        ink: 'var(--lw-ink)',
+        muted: 'var(--lw-ink-muted)',
+        disabled: 'var(--lw-ink-disabled)',
+        success: 'var(--lw-success)',
+        warning: 'var(--lw-warning)',
+        error: 'var(--lw-error)',
+      },
+    },
+    borderRadius: {
+      card: '12px',
+      control: '8px',
+      tag: '6px',
+    },
+  },
+  shortcuts: {
+    'lw-card': 'bg-white rounded-card border border-lw-border shadow-sm',
+    'lw-panel': 'lw-card p-5 flex flex-col gap-4',
+    'lw-page': 'p-6 flex flex-col gap-6 min-h-full',
+    'lw-page-head': 'flex flex-wrap justify-between items-center gap-4',
+    'lw-title': 'text-2xl font-bold tracking-tight text-lw-ink',
+    'lw-subtitle': 'text-sm text-lw-muted',
+    'lw-label': 'text-xs font-bold text-lw-muted',
+    'lw-input':
+      'w-full px-3 py-2.5 rounded-control border border-lw-border bg-transparent text-sm text-lw-ink outline-none transition-all duration-200 focus:border-lw-primary',
+    'lw-center': 'flex items-center justify-center',
+  },
+})

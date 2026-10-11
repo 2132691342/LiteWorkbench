@@ -1,0 +1,122 @@
+# LiteWorkbench 后端配置：默认值面向本地容器中间件，生产用环境变量覆盖
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: lite-workbench
+  datasource:
+    url: ${LITEWORKBENCH_DATASOURCE_URL:jdbc:postgresql://localhost:5432/postgres}
+    username: ${LITEWORKBENCH_DATASOURCE_USERNAME:postgres}
+    password: ${LITEWORKBENCH_DATASOURCE_PASSWORD:admin_public}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
+  data:
+    redis:
+      host: ${LITEWORKBENCH_REDIS_HOST:localhost}
+      port: ${LITEWORKBENCH_REDIS_PORT:6379}
+      password: ${LITEWORKBENCH_REDIS_PASSWORD:admin_public}
+      database: ${LITEWORKBENCH_REDIS_DATABASE:0}
+      timeout: 3000ms
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/schema.sql
+      continue-on-error: false
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+  jackson:
+    default-property-inclusion: non_null
+    time-zone: GMT+8
+  rabbitmq:
+    host: ${LITEWORKBENCH_MQ_HOST:localhost}
+    port: ${LITEWORKBENCH_MQ_PORT:5672}
+    username: ${LITEWORKBENCH_MQ_USERNAME:admin}
+    password: ${LITEWORKBENCH_MQ_PASSWORD:admin_public}
+    listener:
+      simple:
+        retry:
+          enabled: true
+          max-attempts: 3
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.liteworkbench.domain.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    default-fetch-size: 100
+    default-statement-timeout: 30
+
+# 认证鉴权：令牌风格用 ULID，登录态存 Redis
+sa-token:
+  token-name: lw-token
+  timeout: ${LITEWORKBENCH_AUTH_TOKEN_TIMEOUT:7200}
+  active-timeout: -1
+  is-concurrent: true
+  is-share: false
+  token-style: ulid
+  is-log: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+liteworkbench:
+  # 日志目录，容器内用环境变量覆盖
+  log-dir: ${LITEWORKBENCH_LOG_DIR:logs}
+  auth:
+    # 种子账号初始密码，首次登录后应修改
+    default-password: admin123
+  agent:
+    provider: openai
+    model:
+      default-name: qwen-plus
+      temperature: 0.3
+      stream: true
+    loop:
+      max-iters: 20
+    skill:
+      enabled: true
+  runtime:
+    python:
+      enabled: true
+      # 空则按 数据目录 -> PATH 顺序探测
+      path: ""
+      timeout-seconds: 120
+    # 运行时数据根目录，Python 工作目录挂在其下
+    data-dir: ${LITEWORKBENCH_RUNTIME_DATA_DIR:./data}
+  storage:
+    endpoint: ${LITEWORKBENCH_STORAGE_ENDPOINT:http://localhost:9000}
+    access-key: ${LITEWORKBENCH_STORAGE_ACCESS_KEY:minioadmin}
+    secret-key: ${LITEWORKBENCH_STORAGE_SECRET_KEY:minioadminpublic}
+    bucket-name: liteworkbench
+  security:
+    # 供应方密钥加密因子，生产必须覆盖
+    secret: ${LITEWORKBENCH_SECURITY_SECRET:liteworkbench-default-secret}
+  degradation:
+    # 中间件不可用时是否允许降级启动
+    allow-start: ${LITEWORKBENCH_DEGRADATION_ALLOW_START:true}
+
+logging:
+  config: classpath:logback-spring.xml
+  level:
+    root: info
+    com.liteworkbench: info

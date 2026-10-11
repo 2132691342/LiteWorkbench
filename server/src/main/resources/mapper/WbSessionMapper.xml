@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.liteworkbench.mapper.WbSessionMapper">
+
+    <sql id="Base_Column_List">
+        session_id, user_id, title, provider_code, model_name, system_prompt,
+        message_count, run_count, total_tokens, last_active_at, state,
+        created_by, created_at, updated_by, updated_at, deleted, remark
+    </sql>
+
+    <update id="update">
+        UPDATE wb_session
+        <set>
+            <if test="title != null and title != ''">title = #{title},</if>
+            <if test="providerCode != null">provider_code = #{providerCode},</if>
+            <if test="modelName != null">model_name = #{modelName},</if>
+            <if test="systemPrompt != null">system_prompt = #{systemPrompt},</if>
+            <if test="state != null and state != ''">state = #{state},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            updated_by = #{updatedBy},
+            updated_at = now()
+        </set>
+        WHERE session_id = #{sessionId} AND user_id = #{userId} AND deleted = false
+    </update>
+
+    <update id="updateStats">
+        UPDATE wb_session
+        SET message_count = message_count + #{messageDelta},
+            run_count = run_count + #{runDelta},
+            total_tokens = total_tokens + #{tokenDelta},
+            last_active_at = now()
+        WHERE session_id = #{sessionId}
+    </update>
+
+    <sql id="Page_Condition">
+        <where>
+            s.deleted = false
+            AND s.user_id = #{userId}
+            <if test="req.sessionId != null and req.sessionId != ''">AND s.session_id = #{req.sessionId}</if>
+            <if test="req.keyword != null and req.keyword != ''">
+                AND s.title LIKE '%' || #{req.keyword} || '%'
+            </if>
+        </where>
+    </sql>
+
+    <select id="selectPage" resultType="com.liteworkbench.domain.entity.WbSessionDO">
+        SELECT s.* FROM wb_session s
+        <include refid="Page_Condition"/>
+        ORDER BY s.last_active_at DESC NULLS LAST, s.created_at DESC
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="countPage" resultType="long">
+        SELECT count(*) FROM wb_session s
+        <include refid="Page_Condition"/>
+    </select>
+</mapper>

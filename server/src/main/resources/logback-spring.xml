@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 日志：liteworkbench.log 全量 / -error.log 告警以上 / -agent.log Agent 链路，按天滚动保留 30 天；
+     LW_REDISEARCH 经 MQ 异步入检索索引，失败静默丢弃 -->
+<configuration scan="false">
+
+    <springProperty scope="context" name="LOG_DIR" source="liteworkbench.log-dir" defaultValue="logs"/>
+
+    <property name="PATTERN_CONSOLE"
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) [%thread] [%X{traceId:-}] %cyan(%logger{36}) - %msg%n"/>
+    <property name="PATTERN_FILE"
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [%X{traceId:-}] [%X{userId:-}] %logger{36} - %msg%n"/>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>INFO</level>
+        </filter>
+        <encoder>
+            <pattern>${PATTERN_CONSOLE}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <appender name="FILE_ALL" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_DIR}/liteworkbench.log</file>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>INFO</level>
+        </filter>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_DIR}/history/liteworkbench.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <maxFileSize>100MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>5GB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${PATTERN_FILE}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <appender name="FILE_ERROR" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_DIR}/liteworkbench-error.log</file>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>WARN</level>
+        </filter>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_DIR}/history/liteworkbench-error.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <maxFileSize>100MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>2GB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${PATTERN_FILE}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <appender name="FILE_AGENT" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_DIR}/liteworkbench-agent.log</file>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>INFO</level>
+        </filter>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_DIR}/history/liteworkbench-agent.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <maxFileSize>100MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>2GB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${PATTERN_FILE}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- 日志检索：经 MQ 异步入 Redisearch，队列满丢弃，不回压业务线程 -->
+    <appender name="LW_REDISEARCH" class="com.liteworkbench.observability.RedisearchLogAppender"/>
+
+    <!-- 异步落盘，队列满时丢弃以避免回压业务线程 -->
+    <appender name="ASYNC_ALL" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="FILE_ALL"/>
+        <queueSize>2048</queueSize>
+        <discardingThreshold>512</discardingThreshold>
+        <neverBlock>true</neverBlock>
+    </appender>
+
+    <appender name="ASYNC_ERROR" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="FILE_ERROR"/>
+        <queueSize>512</queueSize>
+        <neverBlock>true</neverBlock>
+    </appender>
+
+    <appender name="ASYNC_REDISEARCH" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="LW_REDISEARCH"/>
+        <queueSize>2048</queueSize>
+        <discardingThreshold>512</discardingThreshold>
+        <neverBlock>true</neverBlock>
+    </appender>
+
+    <!-- Agent 链路专用日志，additivity 关闭避免重复落全量文件 -->
+    <logger name="com.liteworkbench.agent" level="INFO" additivity="false">
+        <appender-ref ref="FILE_AGENT"/>
+    </logger>
+    <logger name="com.liteworkbench.runtime" level="INFO" additivity="false">
+        <appender-ref ref="FILE_AGENT"/>
+    </logger>
+    <logger name="com.liteworkbench.service.RunService" level="INFO" additivity="false">
+        <appender-ref ref="FILE_AGENT"/>
+        <appender-ref ref="ASYNC_ALL"/>
+        <appender-ref ref="ASYNC_ERROR"/>
+    </logger>
+
+    <logger name="org.springframework" level="WARN"/>
+    <logger name="com.zaxxer.hikari" level="WARN"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="ASYNC_ALL"/>
+        <appender-ref ref="ASYNC_ERROR"/>
+        <appender-ref ref="ASYNC_REDISEARCH"/>
+    </root>
+</configuration>

@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.liteworkbench.mapper.SysMenuMapper">
+
+    <sql id="Base_Column_List">
+        menu_id, parent_id, menu_name, menu_type, route_path, component, icon, perm_code,
+        sort_no, visible, state, created_by, created_at, updated_by, updated_at, deleted, remark
+    </sql>
+
+    <insert id="insert">
+        INSERT INTO sys_menu (menu_id, parent_id, menu_name, menu_type, route_path, component,
+                              icon, perm_code, sort_no, visible, state, created_by, remark)
+        VALUES (#{menuId}, #{parentId}, #{menuName}, #{menuType}, #{routePath}, #{component},
+                #{icon}, #{permCode}, #{sortNo}, #{visible}, #{state}, #{createdBy}, #{remark})
+    </insert>
+
+    <update id="update">
+        UPDATE sys_menu
+        <set>
+            <if test="parentId != null and parentId != ''">parent_id = #{parentId},</if>
+            <if test="menuName != null and menuName != ''">menu_name = #{menuName},</if>
+            <if test="menuType != null and menuType != ''">menu_type = #{menuType},</if>
+            <if test="routePath != null">route_path = #{routePath},</if>
+            <if test="component != null">component = #{component},</if>
+            <if test="icon != null">icon = #{icon},</if>
+            <if test="permCode != null">perm_code = #{permCode},</if>
+            <if test="sortNo != null">sort_no = #{sortNo},</if>
+            <if test="visible != null">visible = #{visible},</if>
+            <if test="state != null and state != ''">state = #{state},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            updated_by = #{updatedBy},
+            updated_at = now()
+        </set>
+        WHERE menu_id = #{menuId} AND deleted = false
+    </update>
+
+    <select id="selectById" resultType="com.liteworkbench.domain.entity.SysMenuDO">
+        SELECT <include refid="Base_Column_List"/>
+        FROM sys_menu
+        WHERE menu_id = #{menuId} AND deleted = false
+    </select>
+
+    <select id="selectAll" resultType="com.liteworkbench.domain.entity.SysMenuDO">
+        SELECT <include refid="Base_Column_List"/>
+        FROM sys_menu
+        WHERE deleted = false
+        ORDER BY sort_no ASC, created_at ASC
+    </select>
+
+    <select id="selectVisibleByUserId" resultType="com.liteworkbench.domain.entity.SysMenuDO">
+        SELECT DISTINCT m.menu_id, m.parent_id, m.menu_name, m.menu_type, m.route_path, m.component,
+                        m.icon, m.perm_code, m.sort_no, m.visible, m.state, m.created_by, m.created_at,
+                        m.updated_by, m.updated_at, m.deleted, m.remark
+        FROM sys_menu m
+        INNER JOIN sys_role_menu rm ON rm.menu_id = m.menu_id
+        INNER JOIN sys_user_role ur ON ur.role_id = rm.role_id
+        WHERE ur.user_id = #{userId}
+          AND m.deleted = false
+          AND m.state = 'normal'
+          AND m.menu_type &lt;&gt; 'button'
+        ORDER BY m.sort_no ASC
+    </select>
+
+    <select id="selectMenuIdsByUserId" resultType="string">
+        SELECT DISTINCT rm.menu_id
+        FROM sys_role_menu rm
+        INNER JOIN sys_user_role ur ON ur.role_id = rm.role_id
+        WHERE ur.user_id = #{userId}
+    </select>
+
+    <select id="selectPermCodesByUserId" resultType="string">
+        SELECT DISTINCT m.perm_code
+        FROM sys_menu m
+        INNER JOIN sys_role_menu rm ON rm.menu_id = m.menu_id
+        INNER JOIN sys_user_role ur ON ur.role_id = rm.role_id
+        INNER JOIN sys_role r ON r.role_id = ur.role_id AND r.deleted = false AND r.state = 'normal'
+        WHERE ur.user_id = #{userId}
+          AND m.deleted = false
+          AND m.state = 'normal'
+          AND m.perm_code IS NOT NULL
+          AND m.perm_code &lt;&gt; ''
+    </select>
+
+    <select id="countByPermCode" resultType="long">
+        SELECT COUNT(1)
+        FROM sys_menu
+        WHERE perm_code = #{permCode} AND deleted = false
+        <if test="excludeId != null and excludeId != ''">
+            AND menu_id &lt;&gt; #{excludeId}
+        </if>
+    </select>
+
+    <select id="countChildren" resultType="long">
+        SELECT COUNT(1)
+        FROM sys_menu
+        WHERE parent_id = #{parentId} AND deleted = false
+    </select>
+
+    <update id="deleteById">
+        UPDATE sys_menu
+        SET deleted = true, updated_by = #{updatedBy}, updated_at = now()
+        WHERE menu_id = #{menuId} AND deleted = false
+    </update>
+</mapper>
