@@ -56,14 +56,16 @@ public class DataInitializer implements ApplicationRunner {
         log.info("[data.init] cost={}ms", System.currentTimeMillis() - start);
     }
 
-    /** 菜单树仅在空表时初始化，ID 固定便于授权引用 */
+    /** 菜单逐条补齐：ID 固定便于授权引用，已存在则跳过，支持升级时新增菜单 */
     private void initMenus() {
-        if (CollUtil.isNotEmpty(sysMenuMapper.selectAll())) {
-            return;
-        }
+        int created = 0;
         for (MenuSeed seed : MENU_SEEDS) {
+            String menuId = menuId(seed.seq());
+            if (Objects.nonNull(sysMenuMapper.selectById(menuId))) {
+                continue;
+            }
             SysMenuDO menu = new SysMenuDO();
-            menu.setMenuId(menuId(seed.seq()));
+            menu.setMenuId(menuId);
             menu.setParentId(seed.parentSeq() == 0 ? "0" : menuId(seed.parentSeq()));
             menu.setMenuName(seed.name());
             menu.setMenuType(seed.type());
@@ -76,8 +78,9 @@ public class DataInitializer implements ApplicationRunner {
             menu.setState(StateEnum.NORMAL.getCode());
             menu.setCreatedBy("system");
             sysMenuMapper.insert(menu);
+            created++;
         }
-        log.info("[data.init.menu] count={}", MENU_SEEDS.size());
+        log.info("[data.init.menu] created={} total={}", created, MENU_SEEDS.size());
     }
 
     /** 内置三角色 + 种子账号：admin（超级管理员）、demo（普通用户） */
@@ -160,9 +163,20 @@ public class DataInitializer implements ApplicationRunner {
         return String.format("%s_%026d", IdPrefixConst.MENU.getPrefix(), seq);
     }
 
-    /** 普通用户可用的基础菜单名 */
+    /** 菜单种子中的全部权限点，供权限契约测试校验 */
+    static List<String> seedPermCodes() {
+        return MENU_SEEDS.stream()
+                .map(MenuSeed::perm)
+                .filter(StrUtil::isNotBlank)
+                .distinct()
+                .toList();
+    }
+
+    /** 普通用户可用的菜单与操作点：工作台功能 + 自己数据的增删改 */
     private static final List<String> USER_MENU_NAMES = List.of(
-            "menu.dashboard", "menu.console", "menu.files", "menu.skills", "menu.settings", "menu.showcase");
+            "menu.dashboard", "menu.console", "menu.files", "menu.skills", "menu.settings", "menu.showcase",
+            "menu.files.delete",
+            "menu.skills.list", "menu.skills.create", "menu.skills.update", "menu.skills.delete");
 
     /** 菜单种子：seq 为固定自增号，parentSeq 为 0 表示根 */
     private record MenuSeed(int seq, int parentSeq, String name, String type, String route,
@@ -204,6 +218,7 @@ public class DataInitializer implements ApplicationRunner {
         // 监控页操作点
         seeds.add(new MenuSeed(50, 6, "menu.monitor.python.reprobe", button, null, null, null, "monitor:python:reprobe", 1));
         // 技能页操作点
+        seeds.add(new MenuSeed(59, 4, "menu.skills.list", button, null, null, null, "wb:skill:list", 0));
         seeds.add(new MenuSeed(60, 4, "menu.skills.create", button, null, null, null, "wb:skill:create", 1));
         seeds.add(new MenuSeed(61, 4, "menu.skills.update", button, null, null, null, "wb:skill:update", 2));
         seeds.add(new MenuSeed(62, 4, "menu.skills.delete", button, null, null, null, "wb:skill:delete", 3));

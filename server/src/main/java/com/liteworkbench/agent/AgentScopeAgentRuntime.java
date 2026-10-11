@@ -8,7 +8,6 @@ import com.liteworkbench.agent.spi.ToolGate;
 import com.liteworkbench.domain.dto.RunEventDTO;
 import com.liteworkbench.runtime.PythonRuntime;
 import io.agentscope.core.ReActAgent;
-import io.agentscope.core.event.AgentEvent;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.message.UserMessage;
 import io.agentscope.core.model.ExecutionConfig;
@@ -50,13 +49,9 @@ public class AgentScopeAgentRuntime implements AgentRuntime {
         };
         return agent.streamEvents(messages)
                 .timeout(MODEL_TIMEOUT)
-                .map(event -> adapt(event, context, seqHolder.seq++, capture))
+                .map(event -> adapter.adapt(event, context.runId(), context.sessionId(),
+                        seqHolder.seq++, capture))
                 .doFinally(signal -> log.info("[agent.stream] runId={} signal={}", context.runId(), signal));
-    }
-
-    @Override
-    public void evict(String providerCode, String modelName) {
-        modelFactory.evict(providerCode, modelName);
     }
 
     /** 装配 Agent：模型 + 工具 + 迭代上限 + 调用超时 */
@@ -87,9 +82,5 @@ public class AgentScopeAgentRuntime implements AgentRuntime {
         }
         messages.add(new UserMessage(context.prompt()));
         return messages;
-    }
-
-    private RunEventDTO adapt(AgentEvent event, RunContext context, long seq, ToolOutputCapture capture) {
-        return adapter.adapt(event, context.runId(), context.sessionId(), seq, capture);
     }
 }

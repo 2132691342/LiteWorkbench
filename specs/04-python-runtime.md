@@ -16,7 +16,7 @@
 3 系统 PATH 中的 python3 / python
 ```
 
-探测结果缓存，页面可触发重新探测（`POST /api/v1/runtime/python/reprobe`，权限 `monitor:python:reprobe`）。执行工作目录限制在 `{liteworkbench.runtime.data-dir}/python` 内。
+探测结果缓存到内存，页面可触发重新探测（`POST /api/v1/runtime/python/reprobe`，权限 `monitor:python:reprobe`）。执行工作目录限制在 `{liteworkbench.runtime.data-dir}/python` 内。
 
 | 状态 | 含义 |
 |---|---|
@@ -24,7 +24,7 @@
 | `NOT_FOUND` | 三种方式都没找到 |
 | `BAD_VERSION` | 找到但版本低于 3.8 |
 
-探测结果缓存到内存。首次探测用闸门串行化，避免并发请求同时触发探测；页面可显式清缓存重探。内置目录下写 `.version` 标记，版本不一致时视为缺失重新探测。
+首次探测用双检锁闸门串行化，避免并发请求同时触发探测；页面可显式清缓存重探。探测只做 `--version` 一次进程调用，成本低，因此探测结果缓存整个进程生命周期。
 
 **为什么不做嵌入解压**：容器镜像里已经装好 Python，再嵌一份上百 MB 的运行时只会让镜像变大。内置路径仅作为兜底位置保留。
 
@@ -47,17 +47,18 @@ public record ExecResult(int exitCode, String stdout, String stderr, boolean tim
 ```
 execute(request)
   ├─ 1 探测解释器，未就绪抛 PYTHON_NOT_READY
-  ├─ 2 安全校验：代码与工作目录不得越出数据目录（越界抛 PYTHON_UNSAFE_PATH）
+  ├─ 2 工作目录经 normalize 后必须在数据目录内（越界抛 PYTHON_UNSAFE_PATH）；
+  │    脚本内容含连续路径穿越片段（≥2 段 `../` / `..\`）直接拒绝
   ├─ 3 脚本落盘到临时目录 lwb-python-{ulid}.py
   ├─ 4 ProcessBuilder 启动，工作目录设为 workDir，注入 PYTHONIOENCODING=utf-8 与
-  │    PYTHONDONTWRITEBYTECODE=1，PATH 首位放解释器所在目录
+  │    PYTHONDONTWRITEBYTECODE=1
   ├─ 5 超时后按进程树终止（ProcessHandle.descendants() 全部 destroyForcibly）
-  ├─ 6 双通道收集输出：先做编码归一（GBK/UTF-16 → UTF-8），再清控制字符
+  ├─ 6 双通道按 UTF-8 收集输出，清 ANSI 与控制字符
   ├─ 7 超长时保尾截断 8000 字符
   └─ 8 finally 删除临时脚本
 ```
 
-路径越界判定用「规范化后前缀校验」：`toRealPath()` 之后必须仍在数据目录内。只比对字符串前缀挡不住 `..` 与符号链接。
+工作目录安全用「normalize 后前缀校验」：路径规范化之后必须仍以数据目录为前缀，单纯比对原始字符串挡不住 `..` 与重复分隔符。
 
 ## REST 契约
 

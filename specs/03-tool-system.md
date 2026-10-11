@@ -10,20 +10,20 @@
 
 工具用 AgentScope 的 `@Tool` + `@ToolParam` 声明，由 `Toolkit.registerTool` 注册。启用状态从 `wb_tool` 读取，禁用则不注册。
 
-| 工具 | Label | 类别 | 风险 | 审批 |
-|---|---|---|---|---|
-| `python_exec` | 执行 Python | runtime | confirm | 否 |
-| `file_read` | 读取文件 | file | safe | 否 |
-| `file_write` | 写入文件 | file | confirm | 否 |
-| `http_get` | 发起请求 | network | safe | 否 |
+| 工具 | Label | 类别 | 风险 |
+|---|---|---|---|
+| `python_exec` | 执行 Python | runtime | confirm |
+| `file_read` | 读取文件 | file | safe |
+| `file_write` | 写入文件 | file | confirm |
+| `http_get` | 发起请求 | network | safe |
 
 风险等级：
 
 | 等级 | 语义 | 处理 |
 |---|---|---|
 | `safe` | 只读，无副作用 | 直接执行 |
-| `confirm` | 有副作用 | 直接执行，但在时间线上标黄 |
-| `danger` | 可能造成不可逆破坏 | 需页面确认，未实现前一律禁用 |
+| `confirm` | 有副作用 | Agent 内直接执行；页面手工调用（`/tool/invoke`）必须显式 `confirmed: true` |
+| `danger` | 可能造成不可逆破坏 | 页面确认流程实现前一律拒绝 |
 
 ## 契约
 
@@ -61,15 +61,17 @@ public class WorkbenchTools {
 
 `/tool/invoke/{toolName}` 请求体 `{ "args": {...}, "confirmed": false }`。`safe` 直接执行；`confirm` 必须带 `"confirmed": true`；`danger` 在页面确认流程实现前一律返回 `FORBIDDEN`。参数校验失败抛 `TOOL_PARAM_INVALID`（5004），与 Agent 内执行共用同一套前置检查。
 
-**超时取值优先级**：调用参数 `timeoutSeconds` > 工具默认 60 秒；`python_exec` 另受运行时 300 秒硬上限约束（见 spec 04）。
+**超时取值优先级**：调用参数 `timeoutSeconds` > 工具默认 60 秒；`python_exec` 另受运行时 300 秒硬上限约束（见 spec 04），`http_get` 固定 60 秒。
+
+**启用即时生效**：工具启用状态在每次执行前从 `wb_tool` 读取（`ToolGate`），页面启停无需重建任何缓存。
 
 ## 取舍
 
 | 选择 | 换来什么 | 代价 |
 |---|---|---|
-| 失败以文本返回而非抛异常 | 模型能自我纠错，不中断运行 | 需要靠前缀识别失败 |
+| 失败以文本返回而非抛异常 | 模型能自我纠错，不中断运行 | 需要靠 `ERROR:` 前缀识别失败 |
 | 输出保尾不保头 | 异常原因不被截断 | 看不到开头输出 |
-| 启用状态从库读取 | 页面可动态开关 | 变更后需 evict Agent 缓存 |
+| 启用状态从库读取 | 页面可动态开关、即时生效 | 每次执行多一次查询（有本地缓存兜底） |
 | 不做工具审批流 | 流程短 | 危险工具靠 `risk_level` 标注 + 平台级启停兜底（`wb_tool` 为平台级定义） |
 
 ## 约束

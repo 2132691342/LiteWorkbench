@@ -7,18 +7,18 @@ import LwButton from '@/components/ui/LwButton.vue'
 import LwCard from '@/components/ui/LwCard.vue'
 import LwPageState from '@/components/ui/LwPageState.vue'
 import LwTag from '@/components/ui/LwTag.vue'
-import { monitorApi } from '@/api'
 import { usePermission } from '@/composables/usePermission'
-import type { HealthRESP, PythonStatusVO } from '@/types/api'
+import { useMonitorStore } from '@/stores/monitor'
 
 /** 健康监控：PostgreSQL / Redis / MinIO / RabbitMQ / Python 逐项探测 + 运行时状态 */
 const { t } = useI18n()
 const { hasPerm } = usePermission()
+const monitorStore = useMonitorStore()
 
-const loading = ref(false)
-const error = ref('')
-const health = ref<HealthRESP | null>(null)
-const python = ref<PythonStatusVO | null>(null)
+const loading = computed(() => monitorStore.loading)
+const error = computed(() => monitorStore.error)
+const health = computed(() => monitorStore.health)
+const python = computed(() => monitorStore.python)
 const reprobing = ref(false)
 
 const componentNames: Record<string, string> = {
@@ -41,26 +41,13 @@ const items = computed(() =>
 const aggregate = computed(() => health.value?.status ?? '')
 
 async function load(): Promise<void> {
-  loading.value = true
-  error.value = ''
-  try {
-    const [healthResult, pythonResult] = await Promise.all([
-      monitorApi.health(),
-      monitorApi.pythonStatus(),
-    ])
-    health.value = healthResult
-    python.value = pythonResult
-  } catch (e) {
-    error.value = (e as Error).message
-  } finally {
-    loading.value = false
-  }
+  await Promise.all([monitorStore.loadHealth(), monitorStore.loadPython()])
 }
 
 async function reprobe(): Promise<void> {
   reprobing.value = true
   try {
-    python.value = await monitorApi.pythonReprobe()
+    await monitorStore.reprobe()
     ElMessage.success(t('common.success'))
   } finally {
     reprobing.value = false
@@ -116,8 +103,7 @@ onMounted(load)
       </LwPageState>
     </LwCard>
 
-    <LwCard class="mt-6">
-      <template #title>{{ t('monitor.python') }}</template>
+    <LwCard class="mt-6" :title="t('monitor.python')">
       <div class="flex items-center justify-between gap-4 flex-wrap">
         <div class="flex items-center gap-3">
           <LwTag :tone="toneOf(python?.status ?? '')">{{ python?.status ?? '-' }}</LwTag>

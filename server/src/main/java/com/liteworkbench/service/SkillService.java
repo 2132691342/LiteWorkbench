@@ -1,11 +1,11 @@
 package com.liteworkbench.service;
 
-import cn.hutool.core.date.LocalDateTimeUtil;
 import cn.hutool.core.util.StrUtil;
 import com.liteworkbench.common.BizException;
 import com.liteworkbench.common.ErrorCodeEnum;
 import com.liteworkbench.common.IdGenerator;
 import com.liteworkbench.common.PageResult;
+import com.liteworkbench.common.TimeUtil;
 import com.liteworkbench.config.AgentProperties;
 import com.liteworkbench.domain.constant.IdPrefixConst;
 import com.liteworkbench.domain.dto.PageREQ;
@@ -17,7 +17,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
@@ -155,12 +154,10 @@ public class SkillService {
         vo.setContent(skill.getContent());
         vo.setTriggerWords(skill.getTriggerWords());
         vo.setEnabled(skill.getEnabled());
-        vo.setCreatedAt(toMillis(skill.getCreatedAt()));
-        vo.setUpdatedAt(toMillis(skill.getUpdatedAt()));
+        vo.setCreatedAt(TimeUtil.toMillis(skill.getCreatedAt()));
+        vo.setUpdatedAt(TimeUtil.toMillis(skill.getUpdatedAt()));
         return vo;
     }
 
-    private Long toMillis(LocalDateTime time) {
-        return Objects.isNull(time) ? null : LocalDateTimeUtil.toEpochMilli(time);
-    }
+
 }

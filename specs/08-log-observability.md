@@ -24,8 +24,10 @@ MQ 不可用时跳过索引，只留文件，不阻塞业务线程。
 | 文件 | 策略 | 保留 |
 |---|---|---|
 | `liteworkbench.log` | 按天切分，单文件 100MB | 30 天 |
-| `liteworkbench-error.log` | 按天切分 + 级别过滤 ERROR/WARN | 30 天 |
-| `liteworkbench-agent.log` | 按天切分，Agent 链路专用 | 30 天 |
+| `liteworkbench-error.log` | 按天切分 + 级别过滤 WARN/ERROR | 30 天 |
+| `liteworkbench-agent.log` | 按天切分，Agent 链路与运行编排专用 | 30 天 |
+
+三个文件与检索索引的关系：所有级别日志进 `liteworkbench.log`；WARN/ERROR 另进 error 文件；`agent` / `runtime` / `RunService` 的日志除进索引外，另进 agent 文件，避免 Agent 高频日志冲淡全量文件。
 
 ### Redisearch 索引
 
@@ -45,7 +47,7 @@ MQ 不可用时跳过索引，只留文件，不阻塞业务线程。
 | RabbitMQ | 连接打开 | 3s |
 | Python | 版本探测 | 5s |
 
-聚合状态：`UP` 全通，`DEGRADED` 有非核心组件失败，`DOWN` 数据库或 Redis 失败。索引文档键带 TTL 30 天，过期后由 Redisearch GC 同步清理索引，无需定时任务。
+聚合状态：`UP` 全通，`DEGRADED` 有非核心组件失败，`DOWN` 数据库或 Redis 失败。索引文档键带 30 天 TTL，过期由 Redis 自动回收；不做定时清理任务。
 
 ## 契约
 
@@ -61,7 +63,7 @@ MQ 不可用时跳过索引，只留文件，不阻塞业务线程。
 日志事件
   ├─ 组装文档：log_id / ts / level / logger / thread / trace_id / message / exception
   ├─ 投递 MQ（失败记 warn 后丢弃）
-  └─ Consumer 批量 HSET + 索引更新
+  └─ Consumer 逐条 HSET 并设置 30 天 TTL
 ```
 
 ## 取舍

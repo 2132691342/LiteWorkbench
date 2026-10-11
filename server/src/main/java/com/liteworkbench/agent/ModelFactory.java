@@ -55,26 +55,15 @@ public class ModelFactory {
         return model;
     }
 
-    /** 清除指定组合的缓存 */
-    public void evict(String providerCode, String modelName) {
-        if (StrUtil.isBlank(modelName)) {
-            modelCache.keySet().stream()
-                    .filter(key -> key.startsWith(cachePrefix(providerCode)))
-                    .forEach(modelCache::remove);
-            return;
-        }
-        modelCache.remove(StrUtil.format("{}.{}", providerCode, modelName));
-    }
-
     /** 清除某供应方的全部缓存 */
     public void evictProvider(String providerCode) {
-        String prefix = cachePrefix(providerCode);
+        String prefix = providerCode + ".";
         modelCache.keySet().stream().filter(key -> key.startsWith(prefix)).forEach(modelCache::remove);
     }
 
     /** 供应方配置：Redis 5 分钟缓存，未命中回源 */
     public WbProviderDO loadProvider(String providerCode) {
-        String cacheKey = RedisKeyConst.cacheProvider(providerCode);
+        String cacheKey = StrUtil.format(RedisKeyConst.CACHE_PROVIDER, providerCode);
         String cachedId = redisTemplate.opsForValue().get(cacheKey);
         WbProviderDO provider;
         if (StrUtil.isNotBlank(cachedId)) {

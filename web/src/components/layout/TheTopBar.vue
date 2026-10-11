@@ -76,7 +76,7 @@ function handleCommand(command: string): void {
         </LwButton>
         <div
           class="w-8 h-8 rounded-lg flex items-center justify-center font-bold shadow-sm"
-          style="background-color: var(--lw-primary); color: #fff"
+          style="background-color: var(--lw-primary); color: var(--lw-on-primary)"
         >
           <svg width="18" height="18" viewBox="0 0 32 32" fill="none" aria-hidden="true">
             <path d="M9 22V10h3v9h6v3H9z" fill="currentColor" />
@@ -114,7 +114,7 @@ function handleCommand(command: string): void {
       <el-dropdown trigger="click" @command="handleCommand">
         <div
           class="w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shadow-sm cursor-pointer transition-transform duration-200 hover:scale-105"
-          style="background-color: var(--lw-secondary); color: #fff"
+          style="background-color: var(--lw-secondary); color: var(--lw-on-primary)"
         >
           {{ initials }}
         </div>

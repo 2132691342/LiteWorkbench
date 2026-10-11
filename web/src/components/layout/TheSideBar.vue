@@ -114,7 +114,7 @@ function handleClick(menu: MenuVO): void {
         style="background-color: var(--lw-primary)"
       >
         <div class="absolute inset-0 bg-white opacity-10" />
-        <div class="relative z-10" style="color: #fff">
+        <div class="relative z-10" style="color: var(--lw-on-primary)">
           <div class="text-xs font-bold mb-1">{{ t('app.title') }}</div>
           <div class="text-[10px] opacity-90 leading-relaxed mb-3">{{ t('app.slogan') }}</div>
           <div class="text-[10px] font-mono opacity-80">

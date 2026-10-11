@@ -3,9 +3,6 @@ package com.liteworkbench.domain.constant;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
-import java.util.Arrays;
-import java.util.Objects;
-
 /** 归一化后的运行事件类型 */
 @Getter
 @AllArgsConstructor
@@ -27,15 +24,4 @@ public enum EventTypeEnum {
     private final String code;
     /** 事件描述 */
     private final String description;
-
-    /** 按类型码查找，未知类型归为 CUSTOM */
-    public static EventTypeEnum ofCode(String code) {
-        if (Objects.isNull(code)) {
-            return CUSTOM;
-        }
-        return Arrays.stream(values())
-                .filter(item -> item.getCode().equals(code))
-                .findFirst()
-                .orElse(CUSTOM);
-    }
 }

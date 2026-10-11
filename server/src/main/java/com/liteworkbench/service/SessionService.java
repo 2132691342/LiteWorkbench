@@ -1,11 +1,11 @@
 package com.liteworkbench.service;
 
-import cn.hutool.core.date.LocalDateTimeUtil;
 import cn.hutool.core.util.StrUtil;
 import com.liteworkbench.common.BizException;
 import com.liteworkbench.common.ErrorCodeEnum;
 import com.liteworkbench.common.IdGenerator;
 import com.liteworkbench.common.PageResult;
+import com.liteworkbench.common.TimeUtil;
 import com.liteworkbench.domain.constant.IdPrefixConst;
 import com.liteworkbench.domain.constant.SessionConst;
 import com.liteworkbench.domain.constant.StateEnum;
@@ -113,9 +113,9 @@ public class SessionService {
         vo.setMessageCount(session.getMessageCount());
         vo.setRunCount(session.getRunCount());
         vo.setTotalTokens(session.getTotalTokens());
-        vo.setLastActiveAt(toMillis(session.getLastActiveAt()));
+        vo.setLastActiveAt(TimeUtil.toMillis(session.getLastActiveAt()));
         vo.setState(session.getState());
-        vo.setCreatedAt(toMillis(session.getCreatedAt()));
+        vo.setCreatedAt(TimeUtil.toMillis(session.getCreatedAt()));
         return vo;
     }
 
@@ -125,11 +125,9 @@ public class SessionService {
         vo.setRunId(message.getRunId());
         vo.setRoleCode(message.getRoleCode());
         vo.setContent(message.getContent());
-        vo.setCreatedAt(toMillis(message.getCreatedAt()));
+        vo.setCreatedAt(TimeUtil.toMillis(message.getCreatedAt()));
         return vo;
     }
 
-    private Long toMillis(java.time.LocalDateTime time) {
-        return Objects.isNull(time) ? null : LocalDateTimeUtil.toEpochMilli(time);
-    }
+
 }

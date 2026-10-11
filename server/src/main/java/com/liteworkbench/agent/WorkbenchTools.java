@@ -34,31 +34,32 @@ public class WorkbenchTools {
 
     private final ToolGate toolGate;
     private final PythonRuntime pythonRuntime;
-    private final RuntimeProperties runtimeProperties;
     private final ToolOutputCapture capture;
+    /** 工作区根目录，运行期不变 */
+    private final Path workDir;
 
     public WorkbenchTools(ToolGate toolGate, PythonRuntime pythonRuntime,
                           RuntimeProperties runtimeProperties, ToolOutputCapture capture) {
         this.toolGate = toolGate;
         this.pythonRuntime = pythonRuntime;
-        this.runtimeProperties = runtimeProperties;
         this.capture = capture;
+        this.workDir = Paths.get(runtimeProperties.getDataDir(), "workspace").toAbsolutePath().normalize();
     }
 
     /** 执行 Python 脚本 */
     @Tool(name = "python_exec", description = "执行一段 Python 代码并返回标准输出；报错时返回完整 traceback，可据此修正后重试")
     public String pythonExec(
             @ToolParam(name = "code", description = "要执行的 Python 源码") String code,
-            @ToolParam(name = "timeoutSeconds", description = "超时秒数，默认 120，上限 300", required = false)
+            @ToolParam(name = "timeoutSeconds", description = "超时秒数，默认 60，上限 300", required = false)
             Integer timeoutSeconds) {
-        if (!ensureEnabled("python_exec")) {
+        if (!toolGate.isEnabled("python_exec")) {
             return error("工具 python_exec 已被禁用");
         }
         try {
             var result = pythonRuntime.execute(new ExecRequest(code,
-                    Objects.nonNull(timeoutSeconds) ? timeoutSeconds : DEFAULT_TOOL_TIMEOUT, workDir()));
+                    Objects.nonNull(timeoutSeconds) ? timeoutSeconds : DEFAULT_TOOL_TIMEOUT, workDir));
             String output = result.success()
-                    ? orEmptyNote(result.stdout())
+                    ? (StrUtil.isBlank(result.stdout()) ? "（无标准输出）" : result.stdout())
                     : error("exitCode=" + result.exitCode() + "\nstdout:\n" + result.stdout()
                             + "\nstderr:\n" + result.stderr());
             capture.record("python_exec", output);
@@ -72,7 +73,7 @@ public class WorkbenchTools {
     @Tool(name = "file_read", description = "读取工作区内文本文件的全部内容")
     public String fileRead(
             @ToolParam(name = "path", description = "相对工作区根目录的路径") String path) {
-        if (!ensureEnabled("file_read")) {
+        if (!toolGate.isEnabled("file_read")) {
             return error("工具 file_read 已被禁用");
         }
         try {
@@ -93,7 +94,7 @@ public class WorkbenchTools {
     public String fileWrite(
             @ToolParam(name = "path", description = "相对工作区根目录的路径") String path,
             @ToolParam(name = "content", description = "要写入的文本内容") String content) {
-        if (!ensureEnabled("file_write")) {
+        if (!toolGate.isEnabled("file_write")) {
             return error("工具 file_write 已被禁用");
         }
         try {
@@ -114,7 +115,7 @@ public class WorkbenchTools {
     @Tool(name = "http_get", description = "对给定 URL 发起 GET 请求，返回响应文本（截断至 8000 字符）")
     public String httpGet(
             @ToolParam(name = "url", description = "完整 http(s) 地址") String url) {
-        if (!ensureEnabled("http_get")) {
+        if (!toolGate.isEnabled("http_get")) {
             return error("工具 http_get 已被禁用");
         }
         try {
@@ -129,14 +130,8 @@ public class WorkbenchTools {
         }
     }
 
-    /** 工具启用检查，未注册的调用名视为禁用 */
-    private boolean ensureEnabled(String toolName) {
-        return toolGate.isEnabled(toolName);
-    }
-
     /** 把相对路径限定到工作区，拒绝越界 */
     private Path resolve(String relative) {
-        Path workDir = workDir();
         Path target = workDir.resolve(Objects.toString(relative, "")).normalize();
         if (!target.startsWith(workDir)) {
             throw new BizException(ErrorCodeEnum.PYTHON_UNSAFE_PATH, relative);
@@ -144,16 +139,7 @@ public class WorkbenchTools {
         return target;
     }
 
-    /** 工作区根目录 */
-    private Path workDir() {
-        return Paths.get(runtimeProperties.getDataDir(), "workspace").toAbsolutePath().normalize();
-    }
-
     private String error(String message) {
         return "ERROR: " + message;
-    }
-
-    private String orEmptyNote(String stdout) {
-        return StrUtil.isBlank(stdout) ? "（无标准输出）" : stdout;
     }
 }

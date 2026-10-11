@@ -95,17 +95,24 @@
         <neverBlock>true</neverBlock>
     </appender>
 
-    <!-- Agent 链路专用日志，additivity 关闭避免重复落全量文件 -->
+    <!-- Agent 链路专用日志：另进 agent 文件，同时照常进全量与检索索引 -->
     <logger name="com.liteworkbench.agent" level="INFO" additivity="false">
         <appender-ref ref="FILE_AGENT"/>
+        <appender-ref ref="ASYNC_ALL"/>
+        <appender-ref ref="ASYNC_ERROR"/>
+        <appender-ref ref="ASYNC_REDISEARCH"/>
     </logger>
     <logger name="com.liteworkbench.runtime" level="INFO" additivity="false">
         <appender-ref ref="FILE_AGENT"/>
+        <appender-ref ref="ASYNC_ALL"/>
+        <appender-ref ref="ASYNC_ERROR"/>
+        <appender-ref ref="ASYNC_REDISEARCH"/>
     </logger>
     <logger name="com.liteworkbench.service.RunService" level="INFO" additivity="false">
         <appender-ref ref="FILE_AGENT"/>
         <appender-ref ref="ASYNC_ALL"/>
         <appender-ref ref="ASYNC_ERROR"/>
+        <appender-ref ref="ASYNC_REDISEARCH"/>
     </logger>
 
     <logger name="org.springframework" level="WARN"/>

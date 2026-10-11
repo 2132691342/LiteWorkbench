@@ -71,7 +71,7 @@ const chartValues = [8, 16, 12, 24, 20, 32, 28, 40]
         <div class="flex flex-col gap-4">
           <div class="flex gap-4">
             <div class="flex-1 space-y-2">
-              <div class="h-16 rounded-lg flex items-center justify-center font-bold text-sm shadow-sm" style="background: var(--lw-primary); color: #fff">
+              <div class="h-16 rounded-lg flex items-center justify-center font-bold text-sm shadow-sm" style="background: var(--lw-primary); color: var(--lw-on-primary)">
                 主色
               </div>
               <div class="flex justify-between text-xs font-mono" style="color: var(--lw-ink-muted)">
@@ -79,7 +79,7 @@ const chartValues = [8, 16, 12, 24, 20, 32, 28, 40]
               </div>
             </div>
             <div class="flex-1 space-y-2">
-              <div class="h-16 rounded-lg flex items-center justify-center font-bold text-sm shadow-sm" style="background: var(--lw-secondary); color: #fff">
+              <div class="h-16 rounded-lg flex items-center justify-center font-bold text-sm shadow-sm" style="background: var(--lw-secondary); color: var(--lw-on-primary)">
                 辅助色
               </div>
               <div class="flex justify-between text-xs font-mono" style="color: var(--lw-ink-muted)">

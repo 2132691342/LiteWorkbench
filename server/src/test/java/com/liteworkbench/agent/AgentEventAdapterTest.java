@@ -6,15 +6,11 @@ import io.agentscope.core.event.TextBlockDeltaEvent;
 import io.agentscope.core.event.ToolCallStartEvent;
 import io.agentscope.core.event.ToolResultEndEvent;
 import io.agentscope.core.event.ExceedMaxItersEvent;
-import io.agentscope.core.message.Msg;
 import io.agentscope.core.message.ToolResultState;
-import io.agentscope.core.message.UserMessage;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** 事件归一：SDK 事件 → 工作台事件，未识别类型落 custom */
 class AgentEventAdapterTest {
@@ -63,15 +59,20 @@ class AgentEventAdapterTest {
     }
 
     @Test
-    void unknownEventShouldFallBackToCustom() {
-        Msg msg = new UserMessage("hi");
+    void thinkingDeltaShouldTruncateWhenTooLong() {
+        String oversized = "x".repeat(5000);
+        RunEventDTO event = adapter.adapt(new io.agentscope.core.event.ThinkingBlockDeltaEvent("r1", "b1", oversized),
+                "RUN_1", "SESS_1", 2, new ToolOutputCapture());
+        assertEquals(EventTypeEnum.THINKING_DELTA.getCode(), event.eventType());
+        assertEquals("thinking", event.blockType());
+        assertEquals(4096, event.textDelta().length());
+    }
+
+    @Test
+    void agentStartShouldMapToRunStart() {
         RunEventDTO event = adapter.adapt(new io.agentscope.core.event.AgentStartEvent("n", "s", "reply-1"),
                 "RUN_1", "SESS_1", 1, new ToolOutputCapture());
-        // AgentStartEvent 在映射表内，属 run.start；custom 兜底由 ofCode 校验
         assertEquals(EventTypeEnum.RUN_START.getCode(), event.eventType());
         assertNull(event.blockType());
-        assertNotNull(msg);
-        assertEquals(EventTypeEnum.CUSTOM, EventTypeEnum.ofCode("not.exists"));
-        assertTrue(EventTypeEnum.CUSTOM.getCode().equals("custom"));
     }
 }

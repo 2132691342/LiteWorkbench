@@ -4,11 +4,15 @@ import { useI18n } from 'vue-i18n'
 import LwButton from '@/components/ui/LwButton.vue'
 import LwCard from '@/components/ui/LwCard.vue'
 import LwTag from '@/components/ui/LwTag.vue'
-import PasswordDialog from './PasswordDialog.vue'
+import ProviderPanel from '@/components/settings/ProviderPanel.vue'
+import ToolPanel from '@/components/settings/ToolPanel.vue'
+import { usePermission } from '@/composables/usePermission'
 import { useUserStore } from '@/stores/user'
+import PasswordDialog from './PasswordDialog.vue'
 
-/** 设置：账户信息展示与安全操作 */
+/** 设置：账户信息、安全操作，以及有权限时可见的平台级配置（供应方 / 工具） */
 const { t } = useI18n()
+const { hasPerm } = usePermission()
 const userStore = useUserStore()
 
 const passwordVisible = ref(false)
@@ -45,13 +49,16 @@ const passwordVisible = ref(false)
 
       <LwCard :title="t('settings.security')">
         <p class="text-sm" style="color: var(--lw-ink-muted)">
-          登录态由 Sa-Token 管理，令牌存于 Redis 并可随时作废。
+          {{ t('settings.securityDesc') }}
         </p>
         <div>
           <LwButton variant="ghost" @click="passwordVisible = true">{{ t('app.changePassword') }}</LwButton>
         </div>
       </LwCard>
     </div>
+
+    <ProviderPanel v-if="hasPerm('wb:provider:list')" />
+    <ToolPanel v-if="hasPerm('wb:tool:list')" />
 
     <PasswordDialog v-model="passwordVisible" />
   </div>

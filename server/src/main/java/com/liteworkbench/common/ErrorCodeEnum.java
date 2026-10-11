@@ -3,9 +3,6 @@ package com.liteworkbench.common;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
-import java.util.Arrays;
-import java.util.Objects;
-
 /** 错误码枚举：code 为 String，分段见 docs/ERROR-CODES.md */
 @Getter
 @AllArgsConstructor
@@ -96,15 +93,4 @@ public enum ErrorCodeEnum {
     private final int httpStatus;
     /** 面向人的提示 */
     private final String message;
-
-    /** 按业务码查找，找不到返回 null */
-    public static ErrorCodeEnum ofCode(String code) {
-        if (Objects.isNull(code)) {
-            return null;
-        }
-        return Arrays.stream(values())
-                .filter(item -> item.getCode().equals(code))
-                .findFirst()
-                .orElse(null);
-    }
 }

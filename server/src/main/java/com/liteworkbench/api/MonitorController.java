@@ -1,6 +1,7 @@
 package com.liteworkbench.api;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import com.liteworkbench.anno.Idempotent;
 import com.liteworkbench.common.R;
 import com.liteworkbench.domain.constant.PermConst;
 import com.liteworkbench.domain.vo.HealthRESP;
@@ -47,6 +48,7 @@ public class MonitorController {
     }
 
     /** 重新探测 Python 运行时 */
+    @Idempotent(prefix = "runtime:reprobe", ttl = 5)
     @SaCheckPermission(PermConst.MONITOR_PYTHON_REPROBE)
     @PostMapping("/runtime/python/reprobe")
     public R<PythonStatusVO> reprobe() {

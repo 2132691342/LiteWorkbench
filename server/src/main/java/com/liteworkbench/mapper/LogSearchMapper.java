@@ -33,6 +33,8 @@ public class LogSearchMapper {
     private static final String KEY_PREFIX = "lw:log:";
     /** 文档保留 30 天，靠键 TTL 过期 + Redisearch GC 清理索引 */
     private static final Duration DOC_TTL = Duration.ofDays(30L);
+    /** RediSearch 查询语法特殊字符 */
+    private static final String SPECIAL_CHARS = ",.<>{}[]\"':;!@#$%^&*()-+=~| ";
 
     private final StringRedisTemplate redisTemplate;
 
@@ -98,7 +100,7 @@ public class LogSearchMapper {
             query.append(" @ts:[").append(from).append(' ').append(to).append(']');
         }
         if (StrUtil.isNotBlank(keyword)) {
-            query.append(" @message:(").append(StrUtil.removeAll(keyword, '"')).append(')');
+            query.append(" @message:(").append(escape(keyword)).append(')');
         }
         long offset = (page - 1) * size;
         Object reply = redisTemplate.execute((RedisConnection connection) ->
@@ -135,6 +137,18 @@ public class LogSearchMapper {
             result.add(vo);
         }
         return result;
+    }
+
+    /** 查询串转义：RediSearch 语法特殊字符全部加反斜杠，防止语法错误与查询注入 */
+    private String escape(String raw) {
+        StringBuilder escaped = new StringBuilder(raw.length() + 8);
+        for (char ch : raw.toCharArray()) {
+            if (SPECIAL_CHARS.indexOf(ch) >= 0) {
+                escaped.append('\\');
+            }
+            escaped.append(ch);
+        }
+        return escaped.toString();
     }
 
     /** 回复字段统一转文本，字节数组按 UTF-8 解码 */

@@ -1,5 +1,6 @@
 package com.liteworkbench.aspect;
 
+import cn.hutool.core.util.StrUtil;
 import cn.hutool.crypto.digest.DigestUtil;
 import cn.hutool.json.JSONUtil;
 import com.liteworkbench.anno.Idempotent;
@@ -16,18 +17,23 @@ import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
-/** 幂等切面：SETNX 占位，命中即抛 REPEAT_SUBMIT */
+/** 幂等切面：SETNX 占位，命中即抛 REPEAT_SUBMIT 并在响应头回传占位键 */
 @Slf4j
 @Aspect
 @Component
 @RequiredArgsConstructor
 public class IdempotentAspect {
+
+    /** 命中重复提交时回传的响应头 */
+    public static final String HEADER_IDEM_KEY = "X-Lw-Idem-Key";
 
     private static final String PLACEHOLDER = "1";
 
@@ -38,15 +44,26 @@ public class IdempotentAspect {
     public Object around(ProceedingJoinPoint point, Idempotent idempotent) throws Throwable {
         String userId = LoginContext.userId();
         String digest = digestArgs(point.getArgs());
-        String key = RedisKeyConst.idem(idempotent.prefix(), userId, digest);
+        String key = StrUtil.format(RedisKeyConst.IDEM, idempotent.prefix(), userId, digest);
         Boolean acquired = stringRedisTemplate.opsForValue()
                 .setIfAbsent(key, PLACEHOLDER, Duration.ofSeconds(idempotent.ttl()));
         if (!Boolean.TRUE.equals(acquired)) {
             log.warn("[idem.repeat] prefix={} userId={} method={}", idempotent.prefix(), userId,
                     point.getSignature().getName());
+            writeIdemHeader(key);
             throw new BizException(ErrorCodeEnum.REPEAT_SUBMIT);
         }
         return point.proceed();
+    }
+
+    /** 命中重复提交时把占位键写入响应头，便于客户端定位原始请求 */
+    private void writeIdemHeader(String key) {
+        if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attributes) {
+            HttpServletResponse response = attributes.getResponse();
+            if (Objects.nonNull(response)) {
+                response.setHeader(HEADER_IDEM_KEY, key);
+            }
+        }
     }
 
     /** 业务参数摘要：剔除 Servlet 上下文对象后取 MD5 */

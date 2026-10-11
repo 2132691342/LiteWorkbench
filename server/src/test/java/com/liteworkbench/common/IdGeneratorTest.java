@@ -4,11 +4,10 @@ import com.liteworkbench.domain.constant.IdPrefixConst;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** ULID 生成器：前缀、长度与匹配规则 */
+/** ULID 生成器：前缀、长度与格式 */
 class IdGeneratorTest {
 
     @Test
@@ -28,12 +27,5 @@ class IdGeneratorTest {
     @Test
     void rawShouldBeBareUlid() {
         assertEquals(26, IdGenerator.raw().length());
-    }
-
-    @Test
-    void matchesShouldJudgePrefixOwnership() {
-        String sessionId = IdGenerator.generate(IdPrefixConst.SESSION);
-        assertTrue(IdGenerator.matches(sessionId, IdPrefixConst.SESSION));
-        assertFalse(IdGenerator.matches(sessionId, IdPrefixConst.RUN));
     }
 }

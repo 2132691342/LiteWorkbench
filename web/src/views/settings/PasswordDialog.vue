@@ -57,7 +57,7 @@ async function submit(): Promise<void> {
         <span class="lw-label">{{ t('settings.confirmPassword') }}</span>
         <input v-model="form.confirmPassword" type="password" class="lw-input" autocomplete="new-password" />
       </label>
-      <p v-if="errorMessage" class="text-xs px-3 py-2 rounded-control" style="color: var(--lw-error); background: rgba(212, 106, 106, 0.1)">
+      <p v-if="errorMessage" class="text-xs px-3 py-2 rounded-control" style="color: var(--lw-error-ink); background: var(--lw-error-tint)">
         {{ errorMessage }}
       </p>
     </form>

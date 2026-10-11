@@ -29,10 +29,11 @@
 |---|---|
 | `views/` | 路由页：登录、仪表盘、工作台、文件、技能、日志、监控、设置、系统管理、组件库 |
 | `components/layout/` | 顶栏、侧栏、外壳 |
-| `components/ui/` | 基础件：`LwButton`、`LwCard`、`LwEmpty`、`LwSkeleton`、`LwErrorBar`、`LwTag` |
-| `components/charts/` | ECharts 封装（面积图、环形图、柱状图） |
+| `components/ui/` | 基础件：`LwButton`、`LwCard`、`LwEmpty`、`LwSkeleton`、`LwErrorBar`、`LwTag`、`LwPageState` |
+| `components/charts/` | ECharts 封装（面积图、环形图、柱状图），色值经 `utils/theme.ts` 读令牌 |
+| `components/settings/` | 平台级配置面板：`ProviderPanel`、`ToolPanel` |
 | `stores/` | Pinia setup store |
-| `composables/` | 复用逻辑：SSE 订阅、分页、Toast、权限判断 |
+| `composables/` | 复用逻辑：`useRunStream`（SSE 订阅）、`usePermission`（权限判断） |
 | `styles/tokens.css` | 唯一色值来源 |
 | `locales/` | 中英双语 |
 
@@ -52,6 +53,8 @@
 | `/system/role` | 角色管理 | `system:role:list` |
 | `/system/menu` | 菜单管理 | `system:menu:list` |
 | `/showcase` | 组件库 | 登录 |
+
+设置页内嵌两个平台级分区，按权限点显示：**模型供应方**（`wb:provider:*`）与**工具管理**（`wb:tool:*`），普通用户看不到这两块。
 
 路由分静态（登录、404）与动态（其余，含 `/showcase` 组件库演示页，后端 `menu/user-tree` 下发后 `router.addRoute` 注册）。
 
@@ -90,12 +93,14 @@ const { hasPerm, hasRole } = usePermission()
 ```ts
 // 流式对话：POST /chat/stream 以 fetch 发起，读取 ReadableStream 解析 SSE 帧
 // （携带 Authorization 头，故不用原生 EventSource）
-useRunStream({
-  onEvent: (e) => runStore.apply(e),   // e 为 RunEvent，含 seq/type/payload
-  onEnd:   () => runStore.finish(),
-  onError: (err) => toast.error(err),
+const runStream = useRunStream()
+runStream.start({ sessionId, content }, {
+  onEvent: (e) => runStore.applyEvent(e),        // e 为 RunEvent，含 seq/type/payload
+  onEnd: (aborted) => runStore.finishStream(aborted, suffix),
+  onError: (err) => runStore.failStream(err),
 })
-// 回放：GET /run/events/{runId} 按 seq 拉全量事件走同一 reducer
+// 回放：GET /run/events/{runId} 按 seq 拉全量事件，走同一 reducer 重建时间线
+await runStore.replay(runId)
 ```
 
 ### 按钮五态
@@ -131,8 +136,9 @@ useRunStream({
 
 ## 约束
 
-- 组件内禁止硬编码色值，一律用 `var(--lw-*)`。
-- 组件内禁止硬编码中文，一律走 i18n。
+- 组件内禁止硬编码色值，一律用 `var(--lw-*)`；图表等 canvas 渲染场景经 `utils/theme.ts` 运行时读取令牌。
+- 组件内禁止硬编码中文，一律走 i18n；`/showcase` 设计样例页例外，其说明文案与令牌定义同步维护。
+- 大对象一律 `shallowRef`，事件驱动渲染避免整树深比较。
 - 所有请求走 `src/api/index.ts`；异步操作必须有 loading / error / empty 三态。
 - 按钮一律使用 `LwButton`，`el-button` 仅允许出现在 Element Plus 内部组件中。
 - 破坏性操作（删除、停用、重置密码）必须二次确认。

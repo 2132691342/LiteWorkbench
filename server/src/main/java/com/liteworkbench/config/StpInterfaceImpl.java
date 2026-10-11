@@ -48,7 +48,7 @@ public class StpInterfaceImpl implements StpInterface {
             stringRedisTemplate.opsForList().rightPushAll(cacheKey, perms);
         }
         stringRedisTemplate.expire(cacheKey, Duration.ofSeconds(authProperties.getPermCacheSeconds()));
-        return Objects.isNull(perms) ? CollUtil.newArrayList() : perms;
+        return perms;
     }
 
     /** 返回用户角色码集合，取会话中的登录快照 */

@@ -1,6 +1,5 @@
 package com.liteworkbench.common;
 
-import cn.hutool.core.util.StrUtil;
 import com.github.f4b6a3.ulid.UlidCreator;
 import com.liteworkbench.domain.constant.IdPrefixConst;
 
@@ -23,10 +22,5 @@ public final class IdGenerator {
     /** 生成不带前缀的裸 ULID，用于 Redisearch 文档与临时对象 */
     public static String raw() {
         return UlidCreator.getUlid().toString();
-    }
-
-    /** 判断 ID 是否属于某个业务前缀 */
-    public static boolean matches(String id, IdPrefixConst prefix) {
-        return StrUtil.startWith(id, prefix.getPrefix() + "_");
     }
 }

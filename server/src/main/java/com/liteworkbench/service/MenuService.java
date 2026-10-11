@@ -47,14 +47,7 @@ public class MenuService {
 
     /** 用户权限标识集合 */
     public List<String> permsOf(String userId) {
-        List<String> perms = sysMenuMapper.selectPermCodesByUserId(userId);
-        return Objects.isNull(perms) ? CollUtil.newArrayList() : perms;
-    }
-
-    /** 用户已授权菜单 ID 集合 */
-    public List<String> menuIdsOf(String userId) {
-        List<String> ids = sysMenuMapper.selectMenuIdsByUserId(userId);
-        return Objects.isNull(ids) ? CollUtil.newArrayList() : ids;
+        return sysMenuMapper.selectPermCodesByUserId(userId);
     }
 
     /** 菜单详情 */

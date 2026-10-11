@@ -11,13 +11,11 @@ import com.liteworkbench.domain.constant.IdPrefixConst;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
@@ -208,10 +206,5 @@ public class LocalPythonRuntime implements PythonRuntime {
         } catch (Exception e) {
             log.warn("[python.kill] 进程树终止异常 {}", e.getMessage());
         }
-    }
-
-    /** 供健康探测复用 */
-    public Duration probeTimeout() {
-        return Duration.ofSeconds(PROBE_TIMEOUT_SECONDS);
     }
 }

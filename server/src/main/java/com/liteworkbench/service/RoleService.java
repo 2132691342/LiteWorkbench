@@ -2,12 +2,12 @@ package com.liteworkbench.service;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollUtil;
-import cn.hutool.core.date.LocalDateTimeUtil;
 import cn.hutool.core.util.StrUtil;
 import com.liteworkbench.common.BizException;
 import com.liteworkbench.common.ErrorCodeEnum;
 import com.liteworkbench.common.IdGenerator;
 import com.liteworkbench.common.PageResult;
+import com.liteworkbench.common.TimeUtil;
 import com.liteworkbench.config.StpInterfaceImpl;
 import com.liteworkbench.domain.constant.IdPrefixConst;
 import com.liteworkbench.domain.constant.RoleCodeConst;
@@ -60,8 +60,7 @@ public class RoleService {
     /** 已授权菜单 ID */
     public List<String> menuIds(String roleId) {
         require(roleId);
-        List<String> menuIds = sysRoleMapper.selectMenuIdsByRoleId(roleId);
-        return Objects.isNull(menuIds) ? CollUtil.newArrayList() : menuIds;
+        return sysRoleMapper.selectMenuIdsByRoleId(roleId);
     }
 
     /** 新建角色 */
@@ -142,8 +141,7 @@ public class RoleService {
         RoleVO vo = new RoleVO();
         BeanUtil.copyProperties(role, vo);
         vo.setBuiltin(RoleCodeConst.isBuiltin(role.getRoleCode()));
-        vo.setCreatedAt(Objects.isNull(role.getCreatedAt())
-                ? null : LocalDateTimeUtil.toEpochMilli(role.getCreatedAt()));
+        vo.setCreatedAt(TimeUtil.toMillis(role.getCreatedAt()));
         return vo;
     }
 }

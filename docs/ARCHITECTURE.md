@@ -46,13 +46,14 @@
 | `service` | `UserService` / `RoleService` / `MenuService` | RBAC 主数据维护与授权关系 |
 | `service` | `RunService` | 会话 → 运行 → 事件流主链路编排：SSE、攒批落库、中断、回放 |
 | `service` | `SessionService` / `ProviderService` / `SkillService` / `FileService` / `ToolService` / `SettingService` / `MonitorService` | 会话、供应方、技能、文件、工具、设置与监控的业务编排 |
-| `agent` | `AgentRuntime` | 按会话构建 ReActAgent，注入模型、工具、技能 |
-| `agent` | `AgentEventAdapter` | 把 AgentScope `AgentEvent` 归一化为工作台 `RunEvent` |
+| `agent` | `AgentScopeAgentRuntime` | 每次运行装配 ReActAgent（复用缓存的 Model 实例），注入工具与技能 |
+| `agent` | `AgentEventAdapter` | 把 AgentScope `AgentEvent` 归一化为工作台 `RunEventDTO` |
+| `agent` | `ModelFactory` | 按供应方构建并缓存模型实例，解密密钥，三级模型名兜底 |
 | `agent` | `WorkbenchTools` | 内置工具集：`python_exec`、`file_read`、`file_write`、`http_get` |
-| `runtime` | `PythonRuntime` | Python 解释器探测、脚本落盘、进程执行、超时与进程树终止 |
+| `runtime` | `LocalPythonRuntime` | Python 解释器探测、脚本落盘、进程执行、超时与进程树终止 |
 | `mapper` | `LogSearchMapper` | Redisearch 索引创建、写入、检索 |
 | `observability` | `RedisearchLogAppender` | Logback 扩展，异步把日志送达 Redisearch |
-| `observability` | `WorkbenchHealthIndicator` | 各中间件健康探测 |
+| `service` | `MonitorService` | 各中间件健康探测与仪表盘汇总统计 |
 | `mq` | `LogProducer` / `LogConsumer` | 日志投递削峰，失败降级为本地文件 |
 | `aspect` | `IdempotentAspect` | `@Idempotent` 写接口防重提交 |
 | `common` | `LoginContext` / `StpInterfaceImpl` | 请求线程的用户身份载体，权限点解析 |
@@ -107,8 +108,8 @@ POST /api/v1/chat/stream
   ├─ 1 校验会话归属（user_id），获取会话级运行锁   SessionService
   ├─ 2 创建 Run（queued）+ 写入用户消息 wb_message(user)      RunService
   ├─ 3 建立 SseEmitter                      RunController
-  ├─ 4 构建 ReActAgent                      AgentRuntime.build(session)
-  ├─ 5 订阅 agent.streamEvents              AgentEventAdapter
+  ├─ 4 构建 ReActAgent（Model 实例按 provider+model 缓存复用）   AgentScopeAgentRuntime
+  ├─ 5 组装历史消息（wb_message 最近 20 条）→ 订阅 agent.streamEvents
   │     ├─ 归一化事件 → seq 递增
   │     ├─ 批量攒批写入 wb_event
   │     └─ 同步推送 SSE
@@ -127,7 +128,7 @@ AgentScope 的 `AgentEvent` 是开放结构，不做第二套记账，只在出�
 | `ThinkingBlockDeltaEvent` | `thinking.delta` | `thinking` |
 | `ToolCallStartEvent` | `tool.call`（start 阶段） | `tool_call` |
 | `ToolCallEndEvent` | `tool.call`（end 阶段） | `tool_call` |
-| `ToolResultStartEvent` / `ToolResultEndEvent` | `tool.result` | `tool_result` |
+| `ToolResultEndEvent` | `tool.result` | `tool_result` |
 | `ModelCallStartEvent` / `ModelCallEndEvent` | `model.call` | — |
 | `AgentResultEvent` | `run.result` | `text` |
 | `ExceedMaxItersEvent` | `run.exceed` | — |
@@ -140,7 +141,8 @@ AgentScope 的 `AgentEvent` 是开放结构，不做第二套记账，只在出�
 
 | 规则 | 说明 |
 |---|---|
-| 推送攒批 | 文本增量逐条推会把连接线程打满，按 **16ms 窗口**合帧后推送；落库仍按 100 条 / 200ms |
+| 推送合帧 | 文本增量逐条推会把连接线程打满，批内连续**同类型**增量（`text.delta` / `thinking.delta`）合并为一帧后推送（`textDelta` 拼接、`seq` 取批内最后一条）；类型切换不合并；落库仍按 100 条 / 200ms 保持逐条 |
+| 单帧截断 | 单条增量超 4KB 截断，完整正文以 `run.result` 为准 |
 | 中断优先 | `run.result`（completed）与中断标记同时到达时，**中断裁决优先**，终态记 `aborted` |
 | 用量单一入账 | Token 用量只从 `run.result` 一处累加，`model.call` 与 `run.end` 不重复计数 |
 
@@ -149,12 +151,13 @@ AgentScope 的 `AgentEvent` 是开放结构，不做第二套记账，只在出�
 ```
 POST /api/v1/run/abort/{runId}
   → 校验运行归属（user_id）与状态
-  → Redis 写 lw:run:{runId}:abort = 1
-  → 事件流订阅侧检测到标记，取消订阅
-  → Run 置为 aborted，推送 run.end
+  → Redis 写 lw:run:{runId}:abort = 1（跨实例与孤儿运行的中断凭据）
+  → 有活动实例：释放订阅（Reactor dispose → doOnCancel）→ 终态记 aborted
+  → 无活动实例（进程重启后的孤儿运行）：直接结算为 aborted
+  → 推送 run.end
 ```
 
-中断靠标记位而非线程中断，避免半写状态。
+中断靠释放订阅 + 标记位双路径，不做线程中断，避免半写状态。
 
 ### 5.4 幂等
 
@@ -162,7 +165,7 @@ POST /api/v1/run/abort/{runId}
 POST 写接口（带 @Idempotent）
   ├─ 1 取 LoginContext 的 userId 与请求体摘要
   ├─ 2 SETNX lw:idem:{prefix}:{userId}:{digest}，TTL 默认 10s
-  ├─ 3 命中 → 抛 REPEAT_SUBMIT（2501）
+  ├─ 3 命中 → 响应头 X-Lw-Idem-Key 回传占位键 + 抛 REPEAT_SUBMIT（2501）
   └─ 4 未命中 → 放行，正常处理
 ```
 
@@ -181,7 +184,7 @@ MQ 不可用时降级为跳过索引，不阻塞主流程。
 
 | 点 | 做法 |
 |---|---|
-| Agent 实例 | 按 `provider + model` 缓存单例，会话隔离靠 `RuntimeContext` |
+| Agent 实例 | Model 按 `provider + model` 缓存复用；ReActAgent 每次运行构建（构建成本低，天然无跨会话状态） |
 | 登录态 | Sa-Token 会话与权限缓存进 Redis，权限查询一次后缓存 10 分钟 |
 | 事件写入 | 攒批（100 条或 200ms）批量 insert，降低写放大 |
 | SSE | 独立线程池，超时 30min，心跳 15s |

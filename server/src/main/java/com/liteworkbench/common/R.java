@@ -7,7 +7,6 @@ import org.slf4j.MDC;
 
 import java.io.Serial;
 import java.io.Serializable;
-import java.util.Objects;
 
 /** 统一响应信封：code 为 String，"0" 表示成功，非 "0" 为错误码 */
 @Data
@@ -56,10 +55,5 @@ public class R<T> implements Serializable {
         R<T> r = fail(errorCode);
         r.setMessage(message);
         return r;
-    }
-
-    /** 是否成功 */
-    public boolean isSuccess() {
-        return Objects.equals(ErrorCodeEnum.SUCCESS.getCode(), this.code);
     }
 }

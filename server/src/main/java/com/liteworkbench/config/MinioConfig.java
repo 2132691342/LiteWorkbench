@@ -1,7 +1,5 @@
 package com.liteworkbench.config;
 
-import com.liteworkbench.common.BizException;
-import com.liteworkbench.common.ErrorCodeEnum;
 import io.minio.BucketExistsArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
@@ -38,10 +36,5 @@ public class MinioConfig {
                 log.warn("[minio.init] 桶初始化失败，文件功能不可用 {}", e.getMessage());
             }
         };
-    }
-
-    /** 统一异常入口 */
-    public static BizException wrap(Exception e) {
-        return new BizException(ErrorCodeEnum.STORAGE_UNAVAILABLE, e.getMessage());
     }
 }

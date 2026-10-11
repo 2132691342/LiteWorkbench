@@ -2,13 +2,13 @@ package com.liteworkbench.service;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollUtil;
-import cn.hutool.core.date.LocalDateTimeUtil;
 import cn.hutool.core.util.StrUtil;
 import com.liteworkbench.common.BizException;
 import com.liteworkbench.common.ErrorCodeEnum;
 import com.liteworkbench.common.IdGenerator;
 import com.liteworkbench.common.PageResult;
 import com.liteworkbench.common.PasswordUtil;
+import com.liteworkbench.common.TimeUtil;
 import com.liteworkbench.config.AuthProperties;
 import com.liteworkbench.config.StpInterfaceImpl;
 import com.liteworkbench.domain.constant.IdPrefixConst;
@@ -186,10 +186,8 @@ public class UserService {
         UserVO vo = new UserVO();
         BeanUtil.copyProperties(user, vo);
         vo.setRoleIds(sysUserMapper.selectRoleIdsByUserId(user.getUserId()));
-        vo.setLastLoginAt(Objects.isNull(user.getLastLoginAt())
-                ? null : LocalDateTimeUtil.toEpochMilli(user.getLastLoginAt()));
-        vo.setCreatedAt(Objects.isNull(user.getCreatedAt())
-                ? null : LocalDateTimeUtil.toEpochMilli(user.getCreatedAt()));
+        vo.setLastLoginAt(TimeUtil.toMillis(user.getLastLoginAt()));
+        vo.setCreatedAt(TimeUtil.toMillis(user.getCreatedAt()));
         return vo;
     }
 }

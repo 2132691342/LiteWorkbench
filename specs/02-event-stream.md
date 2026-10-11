@@ -23,10 +23,9 @@
 | `TextBlockDeltaEvent` | `text.delta` | `text` |
 | `ToolCallStartEvent` | `tool.call`（phase=start） | `tool_call` |
 | `ToolCallEndEvent` | `tool.call`（phase=end） | `tool_call` |
-| `ToolResultStartEvent` | `tool.result` | `tool_result` |
 | `ToolResultEndEvent` | `tool.result` | `tool_result` |
-| `ModelCallStartEvent` | `model.call` | — |
-| `ModelCallEndEvent` | `model.call` | — |
+| `ModelCallStartEvent` | `model.call`（phase=start） | — |
+| `ModelCallEndEvent` | `model.call`（phase=end，携带用量） | — |
 | `AgentResultEvent` | `run.result` | `text` |
 | `ExceedMaxItersEvent` | `run.exceed` | — |
 | `AgentEndEvent` | `run.end` | — |
@@ -72,18 +71,19 @@ GET /api/v1/run/events/{runId}?afterSeq=0
 
 ### 推送
 
-文本增量逐条直推会把连接线程打满，也会让客户端每条都触发一次重排。推送按 **16ms 窗口合帧**：窗口内的 `text.delta` 合并为一条 `textDelta` 后发出，`seq` 以合并前最后一条为准。落库攒批（100 条 / 200ms）与推送合帧互相独立。
+文本增量逐条直推会把连接线程打满，也会让客户端每条都触发一次重排。事件先按 **100 条 / 200ms** 攒批，推送时对批内**连续且同类型**的 `text.delta` / `thinking.delta` 合帧：`textDelta` 拼接为一条、`seq` 取批内最后一条；类型切换（text ↔ thinking）与其余事件原样推送，保证时间线区域边界不丢。落库保持逐条，回放粒度不受合帧影响。
 
 累积快照不随每个 delta 下发，避免 O(n²) 的文本拷贝。
 
 ### 中断
 
 ```
-POST /api/v1/run/abort/{runId} → Redis 写标记
-  → 订阅侧检测 → 取消订阅 → 发 run.end(status=aborted)
+POST /api/v1/run/abort/{runId} → Redis 写标记（跨实例与孤儿运行的中断凭据）
+  → 有活动实例：释放订阅（dispose → doOnCancel）→ run.end(status=aborted)
+  → 无活动实例（进程重启后的孤儿运行）：直接结算为 aborted
 ```
 
-`run.result`（completed）与中断标记在同一窗口内同时到达时，**中断裁决优先**，终态记 `aborted`，不写助手消息。
+`run.result`（completed）与中断同时到达时，**中断裁决优先**，终态记 `aborted`，不写助手消息。
 
 ## 取舍
 
@@ -97,4 +97,4 @@ POST /api/v1/run/abort/{runId} → Redis 写标记
 
 - `run.end` 与 `error` 必有且仅有其一。
 - 事件 `payload` 必须脱敏，不得含密钥。
-- 单条 `textDelta` 超过 4KB 时截断，完整内容以 `run.result` 为准。
+- 单条增量（`text.delta` / `thinking.delta`）超过 4KB 时截断，完整内容以 `run.result` 为准。

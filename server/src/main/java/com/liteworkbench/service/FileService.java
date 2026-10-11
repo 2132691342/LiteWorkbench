@@ -1,11 +1,11 @@
 package com.liteworkbench.service;
 
-import cn.hutool.core.date.LocalDateTimeUtil;
 import cn.hutool.core.util.StrUtil;
 import com.liteworkbench.common.BizException;
 import com.liteworkbench.common.ErrorCodeEnum;
 import com.liteworkbench.common.IdGenerator;
 import com.liteworkbench.common.PageResult;
+import com.liteworkbench.common.TimeUtil;
 import com.liteworkbench.config.StorageProperties;
 import com.liteworkbench.domain.constant.IdPrefixConst;
 import com.liteworkbench.domain.dto.UploadFileDTO;
@@ -24,7 +24,6 @@ import org.springframework.stereotype.Service;
 import java.io.InputStream;
 import java.time.Duration;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Objects;
@@ -167,8 +166,7 @@ public class FileService {
         vo.setContentType(file.getContentType());
         vo.setCategory(file.getCategory());
         vo.setCreatedBy(file.getCreatedBy());
-        vo.setCreatedAt(Objects.isNull(file.getCreatedAt())
-                ? null : LocalDateTimeUtil.toEpochMilli(file.getCreatedAt()));
+        vo.setCreatedAt(TimeUtil.toMillis(file.getCreatedAt()));
         return vo;
     }
 }

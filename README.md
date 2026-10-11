@@ -34,7 +34,7 @@ LiteWorkbench 解决的是"Agent 跑起来之后我看不见它在干什么"的�
 |---|---|---|
 | 共享库 + `user_id` 行级隔离 | 单实例 Postgres 即可支撑多用户，运维零增量 | 查询必须带用户条件，靠规范与代码审查兜底 |
 | 事件流作为唯一事实来源 | 运行可回放、可审计、前端只需一个 reducer | 事件量大，需要裁剪与批量写 |
-| Agent 无状态，会话靠 RuntimeContext 隔离 | Agent 可以是单例 Bean，省内存 | 上下文必须落库，不能只靠内存 |
+| Agent 无状态，上下文由 `wb_message` 显式组装 | 模型实例可跨会话复用，会话状态只有一份（库） | 每轮要读一次历史消息 |
 | 阻塞式 MVC + SseEmitter，不用 WebFlux | MyBatis/JDBC/进程执行都是阻塞的，不用来回切调度器 | 单实例并发受线程池限制 |
 | 日志同时落文件与 Redisearch | 排查有完整原文，检索有索引 | 写入路径变长，用异步队列兜底 |
 | 按业务前缀 + ULID 做主键 | ID 自带类型信息，分布式可生成，字典序近似时间序 | 比雪花 ID 长，索引体积略大 |
@@ -48,7 +48,7 @@ LiteWorkbench 解决的是"Agent 跑起来之后我看不见它在干什么"的�
 | Web | Spring Boot Web | 3.5.12 | MVC + SseEmitter |
 | 持久 | MyBatis Spring Boot Starter | 3.0.4 | SQL 映射，XML 管理 |
 | 工具 | Hutool | 5.8.36 | 字符串/集合/日期/加解密 |
-| Agent | AgentScope Core + Harness | 2.0.3 | ReActAgent、Toolkit、事件流 |
+| Agent | AgentScope Core + 模型扩展 | 2.0.3 | ReActAgent、Toolkit、事件流（不引 harness 与官方 starter） |
 | 模型 | AgentScope OpenAI / Anthropic / Ollama 扩展 | 2.0.3 | OpenAI 兼容、Claude、本地 Ollama |
 | 认证 | Sa-Token | 1.42.0 | 登录、权限注解、会话管理 |
 | ID | ulid-creator | 5.1.0 | ULID 生成 |
@@ -91,7 +91,7 @@ LiteWorkbench/
 │       ├── application.yaml
 │       └── logback-spring.xml
 ├── web/                         前端
-│   └── src/{api,views,components,stores,composables,styles,locales,router,types}
+│   └── src/{api,views,components,stores,composables,styles,locales,router,types,utils}
 ├── docs/                        项目级文档
 ├── specs/                       子系统规格
 └── deploy/                      容器与编排
@@ -147,6 +147,7 @@ npm run build    # 产物在 web/dist
 | [docs/ERROR-CODES.md](docs/ERROR-CODES.md) | 错误码分段与处理约定 |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | 本地开发、构建、测试 |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | 容器部署、配置、运维 |
+| [docs/RUNBOOK.md](docs/RUNBOOK.md) | 排障手册：分诊路径与场景处置 |
 | [specs/](specs/) | 子系统规格，一篇一个子系统 |
 
 阅读顺序：**README（是什么） → ARCHITECTURE（怎么分层） → specs（每个子系统怎么实现） → AGENTS.md（写代码前查规范） → DESIGN.md（写页面前查视觉）**。

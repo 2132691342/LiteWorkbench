@@ -119,7 +119,7 @@ Redisearch 的 `idx:lw:log` 索引在应用启动时幂等创建。
 | `liteworkbench-agent.log` | 按天，Agent 链路专用 | 30 天 |
 | Redisearch `idx:lw:log` | 按时间 | 30 天，启动时清理 |
 
-Redisearch 索引文档带 TTL 语义，清理由定时任务按 `ts` 范围删除。
+Redisearch 索引文档键带 30 天 TTL，过期由 Redis 自动回收；不做定时清理任务。
 
 ## 10. 备份
 

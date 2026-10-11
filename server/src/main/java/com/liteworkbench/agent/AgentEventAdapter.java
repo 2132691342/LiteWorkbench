@@ -1,6 +1,5 @@
 package com.liteworkbench.agent;
 
-import cn.hutool.json.JSONUtil;
 import com.liteworkbench.domain.constant.EventTypeEnum;
 import com.liteworkbench.domain.dto.RunEventDTO;
 import io.agentscope.core.event.AgentEndEvent;
@@ -42,7 +41,7 @@ public class AgentEventAdapter {
         } else if (event instanceof ThinkingBlockDeltaEvent delta) {
             type = EventTypeEnum.THINKING_DELTA;
             blockType = "thinking";
-            textDelta = delta.getDelta();
+            textDelta = truncate(delta.getDelta());
         } else if (event instanceof TextBlockDeltaEvent delta) {
             type = EventTypeEnum.TEXT_DELTA;
             blockType = "text";
@@ -79,7 +78,8 @@ public class AgentEventAdapter {
         } else if (event instanceof AgentResultEvent result) {
             type = EventTypeEnum.RUN_RESULT;
             blockType = "text";
-            payload.put("text", extractText(result.getResult()));
+            Msg text = result.getResult();
+            payload.put("text", Objects.isNull(text) ? "" : Objects.toString(text.getTextContent(), ""));
         } else if (event instanceof ExceedMaxItersEvent exceed) {
             type = EventTypeEnum.RUN_EXCEED;
             payload.put("maxIters", exceed.getMaxIters());
@@ -98,21 +98,11 @@ public class AgentEventAdapter {
                 textDelta, payload, occurredAt);
     }
 
-    /** 提取消息中的正文文本 */
-    private String extractText(Msg msg) {
-        return Objects.isNull(msg) ? "" : Objects.toString(msg.getTextContent(), "");
-    }
-
     /** 单帧增量超 4KB 截断，完整正文以 run.result 为准 */
     private String truncate(String delta) {
         if (Objects.isNull(delta) || delta.length() <= TEXT_DELTA_MAX) {
             return delta;
         }
         return delta.substring(0, TEXT_DELTA_MAX);
-    }
-
-    /** payload 序列化为 jsonb 字符串 */
-    public String payloadToJson(Map<String, Object> payload) {
-        return JSONUtil.toJsonStr(payload);
     }
 }

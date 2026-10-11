@@ -31,7 +31,7 @@ server/src/main/resources/
   mapper/*.xml  db/schema.sql  logback-spring.xml  application.yaml
 
 web/src/
-  api/ assets/ components/{layout,ui,charts,<domain>}/ composables/
+  api/ components/{layout,ui,charts}/ composables/
   locales/ router/ stores/ styles/ types/ utils/ views/
 ```
 
@@ -110,11 +110,15 @@ npm run typecheck  # vue-tsc --noEmit
 
 只保留有针对性、覆盖复杂流程与长链路的测试，不写琐碎断言。
 
-| 类型 | 位置 | 覆盖 |
+| 类型 | 文件 | 覆盖 |
 |---|---|---|
-| 单元 | `server/src/test/java/...` | ULID 生成、事件归一、输出裁剪、技能触发词匹配、权限码匹配 |
-| 集成 | `server/src/test/java/.../integration` | 会话 → 运行 → 事件落库 → 回放；登录 → 鉴权 → 数据归属 |
-| 契约 | `server/src/test/java/.../contract` | SSE 事件序列与字段完整性 |
+| 单元 | `common/IdGeneratorTest` | ULID 格式、前缀、非法输入 |
+| 单元 | `common/OutputSanitizerTest` | ANSI 与控制字符清理、保尾截断 |
+| 单元 | `service/SkillServiceTest` | 触发词匹配、摘要常驻、数量上限、开关旁路 |
+| 单元 | `service/RunEventFrameTest` | 推送合帧：同类型连续增量合并、类型切换不合并、seq 取尾 |
+| 契约 | `agent/AgentEventAdapterTest` | SDK 事件 → 工作台事件的映射与字段、超长截断、未知事件归一 custom |
+| 契约 | `api/SseFrameContractTest` | SSE 帧格式：`id` 为 seq、事件名 `run.event`、payload 为 JSON、心跳只发注释 |
+| 契约 | `config/PermissionContractTest` | 控制器注解与 `PermConst` 的权限点全部存在于菜单种子 |
 
 前端不写快照测试与纯渲染测试。
 
@@ -129,11 +133,11 @@ npm run typecheck  # vue-tsc --noEmit
 
 | 想改什么 | 改哪里 |
 |---|---|
-| 加一个工具 | `agent/WorkbenchTools.java` + `wb_tool` 初始化数据 |
-| 加一个模型供应方 | `agent/ModelFactory.java` + `wb_provider` 记录 |
-| 加一个权限点 | `sys_menu` 初始化数据（`menu_type=button`）+ 控制器注解 |
-| 加一个内置角色 | `domain/constant/RoleCodeConst.java` + `sys_role` 种子数据 |
-| 加一类日志检索字段 | `observability/RedisearchLogAppender.java` + 索引定义 |
-| 加一个前端页面 | `web/src/views/` + `router/index.ts` + `sys_menu` 记录 |
+| 加一个工具 | `agent/WorkbenchTools.java` + `resources/db/schema.sql` 的 `wb_tool` 种子 |
+| 加一个模型供应方协议 | `agent/ModelFactory.java` + `wb_provider` 记录 |
+| 加一个权限点 | `config/DataInitializer.java` 的 `MENU_SEEDS`（`menu_type=button`）+ 控制器注解 |
+| 加一个内置角色 | `domain/constant/RoleCodeConst.java` + `DataInitializer` 角色与授权 |
+| 加一类日志检索字段 | `observability/RedisearchLogAppender.java` + `mapper/LogSearchMapper.java` 索引定义 |
+| 加一个前端页面 | `web/src/views/` + `DataInitializer` 菜单种子（`component` 指向该文件） |
 | 改配色 | `web/src/styles/tokens.css`（唯一色值来源） |
 | 加一个写接口 | 控制器加 `@SaCheckPermission` + `@Idempotent` + `@PostMapping` |

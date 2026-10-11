@@ -37,13 +37,6 @@
         ORDER BY m.sort_no ASC
     </select>
 
-    <select id="selectMenuIdsByUserId" resultType="string">
-        SELECT DISTINCT rm.menu_id
-        FROM sys_role_menu rm
-        INNER JOIN sys_user_role ur ON ur.role_id = rm.role_id
-        WHERE ur.user_id = #{userId}
-    </select>
-
     <select id="selectPermCodesByUserId" resultType="string">
         SELECT DISTINCT m.perm_code
         FROM sys_menu m

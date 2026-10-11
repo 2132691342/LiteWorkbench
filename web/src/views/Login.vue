@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Lock, User } from '@element-plus/icons-vue'
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import LwButton from '@/components/ui/LwButton.vue'
@@ -16,11 +16,24 @@ const form = reactive({ username: 'admin', password: '' })
 const loading = ref(false)
 const errorMessage = ref('')
 
-const features = [
-  { title: '运行可观测', desc: 'Run / Step / Event 三层时间线，工具调用全程可见。', icon: 'M13 2 3 14h9l-1 8 10-12h-9l1-8z' },
-  { title: '多角色权限', desc: '用户 / 角色 / 菜单三段式 RBAC，按钮级权限点。', icon: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z' },
-  { title: '模型自由', desc: 'OpenAI 兼容、Anthropic 与本地 Ollama，页面改配置立即生效。', icon: 'M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20M2 12h20' },
-]
+/** 品牌区三条能力说明，文案走 i18n */
+const features = computed(() => [
+  {
+    title: t('login.featureObserve'),
+    desc: t('login.featureObserveDesc'),
+    icon: 'M13 2 3 14h9l-1 8 10-12h-9l1-8z',
+  },
+  {
+    title: t('login.featureRbac'),
+    desc: t('login.featureRbacDesc'),
+    icon: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
+  },
+  {
+    title: t('login.featureModel'),
+    desc: t('login.featureModelDesc'),
+    icon: 'M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20M2 12h20',
+  },
+])
 
 /** 提交登录，成功后回到来源页或仪表盘 */
 async function handleSubmit(): Promise<void> {
@@ -138,7 +151,7 @@ async function handleSubmit(): Promise<void> {
           </label>
 
           <p v-if="errorMessage" class="text-xs font-medium px-3 py-2 rounded-control"
-             style="color: var(--lw-error); background: rgba(212, 106, 106, 0.1)">
+             style="color: var(--lw-error-ink); background: var(--lw-error-tint)">
             {{ errorMessage }}
           </p>
 
@@ -148,8 +161,7 @@ async function handleSubmit(): Promise<void> {
         </form>
 
         <p class="text-xs leading-relaxed" style="color: var(--lw-ink-muted)">
-          种子账号：<code class="font-mono">admin</code> 或 <code class="font-mono">demo</code>，默认密码
-          <code class="font-mono">admin123</code>
+          {{ t('login.seedTip') }}
         </p>
       </div>
     </section>

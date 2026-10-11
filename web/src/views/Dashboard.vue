@@ -1,25 +1,26 @@
 <script setup lang="ts">
 import { Coin, DataLine, TrendCharts } from '@element-plus/icons-vue'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import LwAreaChart from '@/components/charts/LwAreaChart.vue'
+import LwBarChart from '@/components/charts/LwBarChart.vue'
 import LwDonutChart from '@/components/charts/LwDonutChart.vue'
 import LwButton from '@/components/ui/LwButton.vue'
 import LwCard from '@/components/ui/LwCard.vue'
 import LwPageState from '@/components/ui/LwPageState.vue'
-import { monitorApi } from '@/api'
+import { useMonitorStore } from '@/stores/monitor'
 import { useUserStore } from '@/stores/user'
-import type { OverviewRESP } from '@/types/api'
 
 /** 仪表盘：指标卡 + 运行趋势 + 工具分布，数据源 /monitor/overview */
 const { t } = useI18n()
 const router = useRouter()
 const userStore = useUserStore()
+const monitorStore = useMonitorStore()
 
-const loading = ref(true)
-const error = ref('')
-const overview = ref<OverviewRESP | null>(null)
+const overview = computed(() => monitorStore.overview)
+const loading = computed(() => monitorStore.loading)
+const error = computed(() => monitorStore.error)
 
 const metrics = computed(() => [
   {
@@ -61,15 +62,7 @@ function formatTokens(value: number): string {
 }
 
 async function load(): Promise<void> {
-  loading.value = true
-  error.value = ''
-  try {
-    overview.value = await monitorApi.overview()
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : t('common.failed')
-  } finally {
-    loading.value = false
-  }
+  await monitorStore.loadOverview()
 }
 
 onMounted(load)
@@ -110,7 +103,7 @@ onMounted(load)
 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <LwCard :title="t('dashboard.tokenTrendTitle')" :desc="t('dashboard.trendDesc')">
-          <LwAreaChart
+          <LwBarChart
             :categories="tokenCategories"
             :values="tokenValues"
             :name="t('dashboard.metricTokens')"

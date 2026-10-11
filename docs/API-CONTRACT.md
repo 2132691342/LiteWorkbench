@@ -145,14 +145,14 @@ Content-Type: application/json
 
 公共字段：`seq`、`runId`、`sessionId`、`occurredAt`。
 
-**规则**：`run.end` 与 `error` 必有且仅有其一；客户端收到后关闭连接。心跳为注释行 `: ping`，15 秒一次。单帧 `text.delta` 超过 4KB 会被截断，完整正文以 `run.result` 为准。
+**规则**：`run.end` 与 `error` 必有且仅有其一；客户端收到后关闭连接。心跳为注释行 `: ping`，15 秒一次。单帧增量（`text.delta` / `thinking.delta`）超过 4KB 会被截断，完整正文以 `run.result` 为准；推送侧会对批内连续增量合帧（`textDelta` 拼接、`seq` 取最后一条）。
 
 ### 8.2 运行
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/api/v1/run/detail/{runId}` | 运行详情 |
-| GET | `/api/v1/run/events/{runId}` | 事件列表，支持 `afterSeq` 增量拉取 |
+| GET | `/api/v1/run/events/{runId}` | 事件列表，按 `seq` 升序，支持 `afterSeq` 增量拉取，单次上限 500 条 |
 | GET | `/api/v1/run/page` | 按 `sessionId` 查运行列表 |
 | POST | `/api/v1/run/abort/{runId}` | 中断运行 |
 

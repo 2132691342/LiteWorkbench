@@ -75,7 +75,7 @@ body {
 /* 变体 */
 .lw-btn--primary {
   background-color: var(--lw-primary);
-  color: #fff;
+  color: var(--lw-on-primary);
 }
 .lw-btn--primary:hover:not(:disabled):not(.is-loading) {
   background-color: var(--lw-primary-hover);
@@ -112,13 +112,13 @@ body {
 
 .lw-btn--danger {
   background-color: var(--lw-error);
-  color: #fff;
+  color: var(--lw-on-primary);
 }
 .lw-btn--danger:hover:not(:disabled) {
-  background-color: #c25555;
+  background-color: var(--lw-error-hover);
 }
 .lw-btn--danger:active:not(:disabled) {
-  background-color: #a94747;
+  background-color: var(--lw-error-active);
 }
 
 .lw-btn--text {
@@ -166,10 +166,10 @@ body {
 /* ===== Element Plus 主题对齐设计令牌 ===== */
 :root {
   --el-color-primary: var(--lw-primary);
-  --el-color-primary-light-3: #5b8ef4;
-  --el-color-primary-light-5: #8db1f8;
-  --el-color-primary-light-7: #bed3fb;
-  --el-color-primary-light-8: #d6e3fd;
+  --el-color-primary-light-3: var(--lw-primary-light-3);
+  --el-color-primary-light-5: var(--lw-primary-light-5);
+  --el-color-primary-light-7: var(--lw-primary-light-7);
+  --el-color-primary-light-8: var(--lw-primary-light-8);
   --el-color-primary-light-9: var(--lw-primary-tint);
   --el-color-primary-dark-2: var(--lw-primary-hover);
   --el-color-success: var(--lw-success);
@@ -244,7 +244,12 @@ body {
 
 /* ===== 骨架屏闪烁 ===== */
 .lw-skeleton {
-  background: linear-gradient(90deg, #eef2f7 25%, #f8fafc 37%, #eef2f7 63%);
+  background: linear-gradient(
+    90deg,
+    var(--lw-skeleton-a) 25%,
+    var(--lw-surface) 37%,
+    var(--lw-skeleton-a) 63%
+  );
   background-size: 400% 100%;
   animation: lw-shimmer 1.4s ease infinite;
   border-radius: 8px;

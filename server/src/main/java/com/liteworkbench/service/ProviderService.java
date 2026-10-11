@@ -1,11 +1,11 @@
 package com.liteworkbench.service;
 
-import cn.hutool.core.date.LocalDateTimeUtil;
 import cn.hutool.core.util.StrUtil;
 import com.liteworkbench.agent.ModelFactory;
 import com.liteworkbench.common.BizException;
 import com.liteworkbench.common.ErrorCodeEnum;
 import com.liteworkbench.common.IdGenerator;
+import com.liteworkbench.common.TimeUtil;
 import com.liteworkbench.domain.constant.IdPrefixConst;
 import com.liteworkbench.domain.dto.ProviderREQ;
 import com.liteworkbench.domain.entity.WbProviderDO;
@@ -17,7 +17,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 
@@ -136,7 +135,7 @@ public class ProviderService {
         vo.setHasApiKey(StrUtil.isNotBlank(provider.getApiKeyEnc()));
         vo.setDefaultModel(provider.getDefaultModel());
         vo.setEnabled(provider.getEnabled());
-        vo.setUpdatedAt(toMillis(provider.getUpdatedAt()));
+        vo.setUpdatedAt(TimeUtil.toMillis(provider.getUpdatedAt()));
         return vo;
     }
 
@@ -154,9 +153,5 @@ public class ProviderService {
         } catch (Exception e) {
             return "***";
         }
-    }
-
-    private Long toMillis(LocalDateTime time) {
-        return Objects.isNull(time) ? null : LocalDateTimeUtil.toEpochMilli(time);
     }
 }

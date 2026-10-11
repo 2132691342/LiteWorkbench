@@ -5,6 +5,7 @@ import type {
   ChatStreamREQ,
   FileVO,
   HealthRESP,
+  InvokeToolREQ,
   LogDocVO,
   LogSearchParams,
   LoginREQ,
@@ -184,8 +185,7 @@ export const runApi = {
 export const toolApi = {
   list: () => get<ToolVO[]>('/tool/list'),
   toggle: (toolId: string, enabled: boolean) => post<void>(`/tool/toggle/${toolId}`, null, { params: { enabled } }),
-  invoke: (toolName: string, data: { args: Record<string, unknown>; confirmed?: boolean; timeoutSeconds?: number }) =>
-    post<string>(`/tool/invoke/${toolName}`, data),
+  invoke: (toolName: string, data: InvokeToolREQ) => post<string>(`/tool/invoke/${toolName}`, data),
 }
 
 /* ===== 技能 ===== */

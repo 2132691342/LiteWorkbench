@@ -47,9 +47,6 @@ public interface SysMenuMapper {
     /** 用户可见的目录与菜单（不含权限点） */
     List<SysMenuDO> selectVisibleByUserId(@Param("userId") String userId);
 
-    /** 用户可见的全部菜单 ID，用于管理页回显 */
-    List<String> selectMenuIdsByUserId(@Param("userId") String userId);
-
     /** 用户权限标识集合 */
     List<String> selectPermCodesByUserId(@Param("userId") String userId);
 

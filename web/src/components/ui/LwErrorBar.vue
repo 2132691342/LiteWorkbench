@@ -17,7 +17,7 @@ const { t } = useI18n()
 <template>
   <div
     class="flex items-center justify-between gap-3 px-4 py-3 rounded-control border"
-    style="border-color: var(--lw-error); background: rgba(212, 106, 106, 0.08)"
+    style="border-color: var(--lw-error); background: var(--lw-error-tint)"
   >
     <div class="flex items-center gap-2 text-sm" style="color: var(--lw-error)">
       <el-icon><WarningFilled /></el-icon>

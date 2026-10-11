@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import * as echarts from 'echarts'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { chartAxis, chartTooltip, token } from '@/utils/theme'
 
 /** 面积图：主序列走品牌主色，渐变填充与网格按 DESIGN.md 约定 */
 const props = withDefaults(
@@ -24,28 +25,22 @@ let chart: echarts.ECharts | null = null
 
 /** 按设计令牌组装配置 */
 function buildOption(): echarts.EChartsOption {
+  const color = props.secondary ? token('--lw-secondary') : token('--lw-primary')
   return {
     grid: { left: 40, right: 16, top: 16, bottom: 28 },
-    tooltip: {
-      trigger: 'axis',
-      backgroundColor: '#ffffff',
-      borderColor: '#e2e8f0',
-      borderWidth: 1,
-      borderRadius: 8,
-      textStyle: { color: '#334155', fontSize: 12 },
-    },
+    tooltip: { trigger: 'axis', ...chartTooltip() },
     xAxis: {
       type: 'category',
       boundaryGap: false,
       data: props.categories,
-      axisLine: { lineStyle: { color: '#e2e8f0' } },
-      axisTick: { show: false },
-      axisLabel: { color: '#64748b', fontSize: 10 },
+      ...chartAxis(),
     },
     yAxis: {
       type: 'value',
-      splitLine: { lineStyle: { color: '#e2e8f0', type: 'dashed', opacity: 0.5 } },
-      axisLabel: { color: '#64748b', fontSize: 10 },
+      splitLine: {
+        lineStyle: { color: token('--lw-border'), type: 'dashed', opacity: 0.5 },
+      },
+      ...chartAxis(),
     },
     series: [
       {
@@ -54,20 +49,25 @@ function buildOption(): echarts.EChartsOption {
         smooth: true,
         symbol: 'none',
         data: props.values,
-        lineStyle: { color: props.secondary ? '#9333ea' : '#2563eb', width: 3 },
+        lineStyle: { color, width: 3 },
         areaStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            props.secondary
-              ? { offset: 0.05, color: 'rgba(147, 51, 234, 0.2)' }
-              : { offset: 0.05, color: 'rgba(37, 99, 235, 0.2)' },
-            props.secondary
-              ? { offset: 0.95, color: 'rgba(147, 51, 234, 0)' }
-              : { offset: 0.95, color: 'rgba(37, 99, 235, 0)' },
+            { offset: 0.05, color: withAlpha(color, 0.2) },
+            { offset: 0.95, color: withAlpha(color, 0) },
           ]),
         },
       },
     ],
   }
+}
+
+/** 十六进制色值转 rgba，用于渐变填充 */
+function withAlpha(color: string, alpha: number): string {
+  const hex = color.replace('#', '')
+  const r = parseInt(hex.slice(0, 2), 16)
+  const g = parseInt(hex.slice(2, 4), 16)
+  const b = parseInt(hex.slice(4, 6), 16)
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
 function resize(): void {

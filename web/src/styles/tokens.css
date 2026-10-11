@@ -27,6 +27,27 @@
   --lw-error: #d46a6a;
   --lw-info: var(--lw-primary);
 
+  /* 语义派生色：文字加深与交互态，集中在此定义 */
+  --lw-success-ink: #3d8f62;
+  --lw-warning-ink: #a97e33;
+  --lw-error-ink: #b45555;
+  --lw-error-hover: #c25555;
+  --lw-error-active: #a94747;
+  --lw-success-tint: rgba(90, 191, 138, 0.14);
+  --lw-warning-tint: rgba(214, 168, 92, 0.16);
+  --lw-error-tint: rgba(212, 106, 106, 0.14);
+  --lw-muted-tint: rgba(100, 116, 139, 0.12);
+
+  /* 主色派生色：仅供 Element Plus 主题映射 */
+  --lw-primary-light-3: #5b8ef4;
+  --lw-primary-light-5: #8db1f8;
+  --lw-primary-light-7: #bed3fb;
+  --lw-primary-light-8: #d6e3fd;
+
+  /* 主色之上的文字色与骨架屏底色 */
+  --lw-on-primary: #ffffff;
+  --lw-skeleton-a: #eef2f7;
+
   /* 阴影仅两级 */
   --lw-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
   --lw-shadow-md: 0 4px 12px rgba(15, 23, 42, 0.12);

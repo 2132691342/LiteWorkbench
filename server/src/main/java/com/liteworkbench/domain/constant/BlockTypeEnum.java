@@ -3,9 +3,6 @@ package com.liteworkbench.domain.constant;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
-import java.util.Arrays;
-import java.util.Objects;
-
 /** 事件内容块类型 */
 @Getter
 @AllArgsConstructor
@@ -21,15 +18,4 @@ public enum BlockTypeEnum {
     private final String code;
     /** 类型描述 */
     private final String description;
-
-    /** 按类型码查找 */
-    public static BlockTypeEnum ofCode(String code) {
-        if (Objects.isNull(code)) {
-            return null;
-        }
-        return Arrays.stream(values())
-                .filter(item -> item.getCode().equals(code))
-                .findFirst()
-                .orElse(null);
-    }
 }

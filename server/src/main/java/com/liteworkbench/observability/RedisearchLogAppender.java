@@ -25,6 +25,8 @@ public class RedisearchLogAppender extends AppenderBase<ILoggingEvent> {
 
     /** 单条消息入索引前截断长度 */
     private static final int MAX_MESSAGE_CHARS = 4000;
+    /** logger 名超长时只保留尾部 */
+    private static final int MAX_LOGGER_CHARS = 128;
     /** 告警限流间隔，毫秒 */
     private static final long WARN_INTERVAL_MS = 60_000L;
 
@@ -47,12 +49,14 @@ public class RedisearchLogAppender extends AppenderBase<ILoggingEvent> {
             if (message.length() > MAX_MESSAGE_CHARS) {
                 message = message.substring(0, MAX_MESSAGE_CHARS) + "...";
             }
+            String loggerName = Objects.toString(event.getLoggerName(), "");
             String exception = renderException(event.getThrowableProxy());
             target.publish(new LogPublisher.LogMessage(
                     IdGenerator.generate(IdPrefixConst.LOG),
                     event.getTimeStamp(),
                     event.getLevel().toString(),
-                    abbreviate(event.getLoggerName()),
+                    loggerName.length() > MAX_LOGGER_CHARS
+                            ? loggerName.substring(loggerName.length() - MAX_LOGGER_CHARS) : loggerName,
                     event.getThreadName(),
                     Objects.toString(MDC.get("traceId"), ""),
                     message,
@@ -77,8 +81,4 @@ public class RedisearchLogAppender extends AppenderBase<ILoggingEvent> {
         return stack.length() > MAX_MESSAGE_CHARS ? stack.substring(0, MAX_MESSAGE_CHARS) : stack;
     }
 
-    private String abbreviate(String loggerName) {
-        return Objects.toString(loggerName, "").length() > 128
-                ? loggerName.substring(loggerName.length() - 128) : Objects.toString(loggerName, "");
-    }
 }

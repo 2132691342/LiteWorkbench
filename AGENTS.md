@@ -56,7 +56,7 @@ public interface SessionConst {
 }
 ```
 
-枚举用 `@Getter` + `@AllArgsConstructor`，带 `code` 与 `description`，并提供 `ofCode` 静态查找。
+枚举用 `@Getter` + `@AllArgsConstructor`，带 `code` 与 `description`；只有确实需要按码反查的地方（如状态机判定）才提供 `ofCode`，没人调用的不写。
 
 **实体只用 `@Data` 不够**，按需要叠加构造与链式能力，`entity` 下的库表 / Redis / Redisearch 映射默认组合如下：
 
@@ -189,7 +189,7 @@ public R<String> create(@RequestBody @Valid UserREQ req) { ... }
 public R<String> create(@RequestBody @Valid UserREQ req) { ... }
 ```
 
-- 切面实现：`Redis SETNX lw:idem:{prefix}:{userId}:{参数摘要}`，命中即抛 `REPEAT_SUBMIT` 并在响应头回传原结果键；TTL 到期自动释放。
+- 切面实现：`Redis SETNX lw:idem:{prefix}:{userId}:{参数摘要}`，命中即抛 `REPEAT_SUBMIT` 并通过响应头 `X-Lw-Idem-Key` 回传占位键；TTL 到期自动释放。
 - 其他横切能力（操作审计、耗时打点）优先用注解 + 切面实现，不侵入 Service。
 
 ## 6. ID 规范
@@ -340,10 +340,10 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 |---|---|
 | groupId | `io.agentscope`（不是 `agentscope`） |
 | 只引 `agentscope-core` + 三个模型扩展 | `agentscope-harness` 会带入 kubernetes-client 等重型传递依赖，本项目不用 |
-| Spring Boot starter | 其编译基线是 Spring Boot 4.x，与本项目 3.5.12 不匹配，**禁止引入**，改在 `config` 包自建 `@Bean` |
+| Spring Boot starter | 其编译基线是 Spring Boot 4.x，与本项目 3.5.12 不匹配，**禁止引入**，在 `agent` 包自建装配（`AgentScopeAgentRuntime` / `ModelFactory`） |
 | 流式入口 | `ReActAgent.streamEvents(...)` 返回 `Flux<AgentEvent>`，事件类在 `io.agentscope.core.event.*` |
 | 工具定义 | `@Tool` + `@ToolParam` 标注，`Toolkit.registerTool(Object)` 注册 |
-| 废弃 API | `Memory`、`UserAgent`、旧 `io.agentscope.core.agent.Event` 均标注 `forRemoval`，禁用；上下文走 `AgentState` |
+| 废弃 API | `Memory`、`UserAgent`、旧 `io.agentscope.core.agent.Event` 均标注 `forRemoval`，禁用；上下文由 `wb_message` 显式组装，不依赖 SDK 状态存储 |
 | 协议转换扩展点 | `io.agentscope.core.formatter.Formatter`，用于 OpenAI / Anthropic / Ollama 三协议归一 |
 
 ### 15.2 Hutool

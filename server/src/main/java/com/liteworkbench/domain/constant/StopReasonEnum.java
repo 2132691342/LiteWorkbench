@@ -3,9 +3,6 @@ package com.liteworkbench.domain.constant;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
-import java.util.Arrays;
-import java.util.Objects;
-
 /** 运行停止原因 */
 @Getter
 @AllArgsConstructor
@@ -21,15 +18,4 @@ public enum StopReasonEnum {
     private final String code;
     /** 原因描述 */
     private final String description;
-
-    /** 按原因码查找 */
-    public static StopReasonEnum ofCode(String code) {
-        if (Objects.isNull(code)) {
-            return null;
-        }
-        return Arrays.stream(values())
-                .filter(item -> item.getCode().equals(code))
-                .findFirst()
-                .orElse(null);
-    }
 }

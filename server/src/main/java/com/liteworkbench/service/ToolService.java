@@ -68,8 +68,12 @@ public class ToolService {
                 new ToolOutputCapture());
         long start = System.currentTimeMillis();
         String output = switch (toolName) {
-            case "python_exec" -> tools.pythonExec(str(args, "code"),
-                    Objects.nonNull(req.getTimeoutSeconds()) ? req.getTimeoutSeconds() : intArg(args, "timeoutSeconds"));
+            case "python_exec" -> {
+                Integer argTimeout = CollUtil.isEmpty(args) ? null
+                        : (args.get("timeoutSeconds") instanceof Number number ? number.intValue() : null);
+                yield tools.pythonExec(str(args, "code"),
+                        Objects.nonNull(req.getTimeoutSeconds()) ? req.getTimeoutSeconds() : argTimeout);
+            }
             case "file_read" -> tools.fileRead(str(args, "path"));
             case "file_write" -> tools.fileWrite(str(args, "path"), str(args, "content"));
             case "http_get" -> tools.httpGet(str(args, "url"));
@@ -85,14 +89,6 @@ public class ToolService {
         }
         Object value = args.get(key);
         return Objects.toString(value, null);
-    }
-
-    private Integer intArg(Map<String, Object> args, String key) {
-        if (CollUtil.isEmpty(args)) {
-            return null;
-        }
-        Object value = args.get(key);
-        return value instanceof Number number ? number.intValue() : null;
     }
 
     private ToolVO toVO(WbToolDO tool) {

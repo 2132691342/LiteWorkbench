@@ -1,13 +1,13 @@
 package com.liteworkbench.service;
 
 import cn.dev33.satoken.stp.StpUtil;
-import cn.hutool.core.date.LocalDateTimeUtil;
 import cn.hutool.core.util.StrUtil;
 import com.liteworkbench.common.BizException;
 import com.liteworkbench.common.ErrorCodeEnum;
 import com.liteworkbench.common.LoginContext;
 import com.liteworkbench.common.LoginUser;
 import com.liteworkbench.common.PasswordUtil;
+import com.liteworkbench.common.TimeUtil;
 import com.liteworkbench.domain.constant.AuthConst;
 import com.liteworkbench.domain.constant.UserStateEnum;
 import com.liteworkbench.domain.entity.SysRoleDO;
@@ -114,8 +114,7 @@ public class AuthService {
         if (Objects.nonNull(user)) {
             vo.setEmail(user.getEmail());
             vo.setState(user.getState());
-            vo.setLastLoginAt(Objects.isNull(user.getLastLoginAt())
-                    ? null : LocalDateTimeUtil.toEpochMilli(user.getLastLoginAt()));
+            vo.setLastLoginAt(TimeUtil.toMillis(user.getLastLoginAt()));
         }
         return vo;
     }

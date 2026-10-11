@@ -11,6 +11,7 @@ import com.liteworkbench.common.ErrorCodeEnum;
 import com.liteworkbench.common.IdGenerator;
 import com.liteworkbench.common.LoginContext;
 import com.liteworkbench.common.PageResult;
+import com.liteworkbench.common.TimeUtil;
 import com.liteworkbench.config.AgentProperties;
 import com.liteworkbench.domain.constant.EventTypeEnum;
 import com.liteworkbench.domain.constant.IdPrefixConst;
@@ -44,6 +45,7 @@ import reactor.core.Disposable;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -155,7 +157,7 @@ public class RunService {
         if (RunStatusEnum.isTerminal(run.getStatus())) {
             throw new BizException(ErrorCodeEnum.RUN_NOT_ABORTABLE, run.getStatus());
         }
-        redisTemplate.opsForValue().set(RedisKeyConst.runAbort(runId), "1",
+        redisTemplate.opsForValue().set(StrUtil.format(RedisKeyConst.RUN_ABORT, runId), "1",
                 Duration.ofSeconds(RunConst.ABORT_TTL_SECONDS));
         ActiveRun activeRun = active.remove(runId);
         if (Objects.nonNull(activeRun)) {
@@ -203,7 +205,7 @@ public class RunService {
         releaseLock(run.sessionId);
     }
 
-    /** 单批事件：先持久化再推送，落库失败不中断输出 */
+    /** 单批事件：先持久化再推送，落库失败不中断输出；推送侧对批内连续增量合帧 */
     private void deliver(ActiveRun run, List<RunEventDTO> batch) {
         if (batch.isEmpty()) {
             return;
@@ -213,10 +215,46 @@ public class RunService {
         } catch (Exception e) {
             log.error("[run.event.persist] runId={} 落库失败 {}", run.runId, e.getMessage());
         }
-        batch.forEach(event -> {
-            run.observe(event);
-            push(run, event);
-        });
+        batch.forEach(run::observe);
+        mergeFrames(batch).forEach(event -> push(run, event));
+    }
+
+    /** 推送合帧：批内连续同类型增量合并为一帧（textDelta 拼接、seq 取最后一条），其余事件原样 */
+    static List<RunEventDTO> mergeFrames(List<RunEventDTO> batch) {
+        List<RunEventDTO> frames = new ArrayList<>(batch.size());
+        RunEventDTO pending = null;
+        for (RunEventDTO event : batch) {
+            // 只有连续同类型的增量才能合并：text 与 thinking 在时间线上是两个区域
+            boolean mergeable = isDeltaFrame(event) && Objects.nonNull(pending)
+                    && pending.eventType().equals(event.eventType());
+            if (Objects.nonNull(pending) && !mergeable) {
+                frames.add(pending);
+                pending = null;
+            }
+            if (isDeltaFrame(event)) {
+                pending = Objects.isNull(pending) ? event : appendDelta(pending, event);
+            } else {
+                frames.add(event);
+            }
+        }
+        if (Objects.nonNull(pending)) {
+            frames.add(pending);
+        }
+        return frames;
+    }
+
+    private static boolean isDeltaFrame(RunEventDTO event) {
+        return EventTypeEnum.TEXT_DELTA.getCode().equals(event.eventType())
+                || EventTypeEnum.THINKING_DELTA.getCode().equals(event.eventType());
+    }
+
+    private static RunEventDTO appendDelta(RunEventDTO pending, RunEventDTO next) {
+        String merged = Objects.toString(pending.textDelta(), StrUtil.EMPTY)
+                + Objects.toString(next.textDelta(), StrUtil.EMPTY);
+        Map<String, Object> payload = new HashMap<>(next.payload());
+        payload.put("delta", merged);
+        return new RunEventDTO(next.runId(), next.sessionId(), next.seq(), next.eventType(),
+                next.blockType(), merged, payload, next.occurredAt());
     }
 
     /** 推送 SSE 帧；客户端断开时中断运行 */
@@ -312,7 +350,7 @@ public class RunService {
     }
 
     private void writeAssistantMessage(ActiveRun run) {
-        String answer = run.answerText();
+        String answer = run.answer.toString();
         if (StrUtil.isBlank(answer)) {
             return;
         }
@@ -322,7 +360,7 @@ public class RunService {
 
     private void pushSynthetic(ActiveRun run, String eventType, Map<String, Object> payload) {
         RunEventDTO event = new RunEventDTO(run.runId, run.sessionId,
-                run.seqSnapshot() + 1, eventType, null, null, payload, System.currentTimeMillis());
+                run.seq + 1, eventType, null, null, payload, System.currentTimeMillis());
         push(run, event);
     }
 
@@ -451,9 +489,9 @@ public class RunService {
         vo.setInputTokens(run.getInputTokens());
         vo.setOutputTokens(run.getOutputTokens());
         vo.setDurationMs(run.getDurationMs());
-        vo.setStartedAt(Objects.isNull(run.getStartedAt()) ? null : LocalDateTimeUtil.toEpochMilli(run.getStartedAt()));
-        vo.setEndedAt(Objects.isNull(run.getEndedAt()) ? null : LocalDateTimeUtil.toEpochMilli(run.getEndedAt()));
-        vo.setCreatedAt(Objects.isNull(run.getCreatedAt()) ? null : LocalDateTimeUtil.toEpochMilli(run.getCreatedAt()));
+        vo.setStartedAt(TimeUtil.toMillis(run.getStartedAt()));
+        vo.setEndedAt(TimeUtil.toMillis(run.getEndedAt()));
+        vo.setCreatedAt(TimeUtil.toMillis(run.getCreatedAt()));
         return vo;
     }
 
@@ -513,14 +551,6 @@ public class RunService {
             } else if (EventTypeEnum.RUN_EXCEED.getCode().equals(event.eventType())) {
                 exceeded.set(true);
             }
-        }
-
-        String answerText() {
-            return answer.toString();
-        }
-
-        long seqSnapshot() {
-            return seq;
         }
     }
 }
