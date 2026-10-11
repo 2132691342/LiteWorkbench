@@ -155,7 +155,7 @@ Redisearch 索引文档键带 30 天 TTL，过期由 Redis 自动回收；不做
 
 流水线定义在 `.github/workflows/ci.yml`，三个阶段串行：`backend`（编译 + 测试）→ `frontend`（类型检查 + 构建）→ `release`（仅 `main` 的 push 触发）。
 
-发布动作：构建镜像推送到 GHCR（`:latest` 与 `:<sha>` 两个 tag），再 SSH 到云主机 `47.108.73.153` 执行 `docker compose -f docker-compose.app.yaml pull && up -d`。
+发布动作：构建镜像推送到 GHCR（`:latest` 与 `:<sha>` 两个 tag），同步仓库内 `deploy/docker-compose.app.yaml` 到云主机 `47.108.73.153`（编排以仓库为唯一事实源，含对外端口 24399），再 SSH 执行 `docker compose -f docker-compose.app.yaml pull && up -d`。
 
 | Secret | 用途 |
 |---|---|

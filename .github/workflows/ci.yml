@@ -68,6 +68,16 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/liteworkbench:latest
             ghcr.io/${{ github.repository_owner }}/liteworkbench:${{ github.sha }}
 
+      - name: 同步应用编排到云主机
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          source: deploy/docker-compose.app.yaml
+          target: ${{ secrets.SSH_APP_DIR }}
+          strip_components: 1
+
       - name: 到云主机拉起新镜像
         uses: appleboy/ssh-action@v1
         with:
