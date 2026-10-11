@@ -57,11 +57,9 @@ public class ToolService {
         if (!Boolean.TRUE.equals(tool.getEnabled())) {
             throw new BizException(ErrorCodeEnum.TOOL_DISABLED, toolName);
         }
-        if ("danger".equals(tool.getRiskLevel())) {
-            throw new BizException(ErrorCodeEnum.FORBIDDEN, "危险工具需页面确认流程，暂不支持手工执行");
-        }
-        if ("confirm".equals(tool.getRiskLevel()) && !Boolean.TRUE.equals(req.getConfirmed())) {
-            throw new BizException(ErrorCodeEnum.FORBIDDEN, "该工具有副作用，需要显式确认");
+        if (!"safe".equals(tool.getRiskLevel()) && !Boolean.TRUE.equals(req.getConfirmed())) {
+            // confirm / danger 工具有副作用，页面必须显式确认；Agent 路径由启用开关统一闸门
+            throw new BizException(ErrorCodeEnum.TOOL_CONFIRM_REQUIRED, tool.getToolLabel());
         }
         Map<String, Object> args = req.getArgs();
         WorkbenchTools tools = new WorkbenchTools(toolGate, pythonRuntime, runtimeProperties,

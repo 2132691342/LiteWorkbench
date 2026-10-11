@@ -88,9 +88,10 @@ docker run -d --name liteworkbench -p 24399:8080 \
 | 种子账号 | `admin`（超级管理员）、`demo`（普通用户），初始密码 `admin123` |
 | 内置角色 | `super_admin`、`admin`、`user`（代码常量定义，不可删除改码） |
 | 菜单树 | 仪表盘、工作台、文件、技能、日志、监控、设置、系统管理（含按钮权限点） |
-| 内置工具 | Python 执行、文件读写、HTTP 请求 |
+| 内置工具 | Python 执行、文件读写、HTTP 请求（固定 ID 幂等重放） |
+| 内置供应方 | `ollama` 本地供应方（无密钥，指向宿主机 Ollama） |
 
-Redisearch 的 `idx:lw:log` 索引在应用启动时幂等创建。
+Redisearch 的 `idx:lw:log` 索引在应用启动时幂等创建。启动自检（`StartupGuardService`）会探测五大组件：核心组件（PostgreSQL / Redis）不可用且 `LITEWORKBENCH_DEGRADATION_ALLOW_START=false` 时终止启动，否则降级放行并打 warn。
 
 ## 7. 升级与回滚
 
@@ -162,8 +163,10 @@ Redisearch 索引文档键带 30 天 TTL，过期由 Redis 自动回收；不做
 | `SSH_HOST` | 云主机地址 |
 | `SSH_USER` | 登录用户 |
 | `SSH_KEY` | SSH 私钥 |
-| `SSH_APP_DIR` | 主机上存放 `docker-compose.app.yaml` 的目录 |
+| `SSH_APP_DIR` | 主机上存放 `docker-compose.app.yaml` 的目录，当前值 `/opt/liteworkbench` |
 | `GITHUB_TOKEN` | 内置，用于登录 GHCR |
+
+前置条件：仓库 Actions 需处于启用状态（Settings → Actions → Allow all actions），且四个 SSH Secret 配置齐全；流水线一次未跑或 secret 缺失时云主机不会有新镜像。GHCR 镜像跟随仓库可见性：仓库为 public 时镜像可匿名拉取，若改为 private 需在云主机先 `docker login ghcr.io`。
 
 中间件不在 CI 中重建，只在主机上单独维护；应用与中间件靠 `liteworkbench_default` 网络互通。
 

@@ -6,6 +6,7 @@ import { ElMessageBox } from 'element-plus'
 import LwButton from '@/components/ui/LwButton.vue'
 import LwEmpty from '@/components/ui/LwEmpty.vue'
 import LwErrorBar from '@/components/ui/LwErrorBar.vue'
+import LwMarkdown from '@/components/ui/LwMarkdown.vue'
 import LwSkeleton from '@/components/ui/LwSkeleton.vue'
 import LwTag from '@/components/ui/LwTag.vue'
 import { runApi } from '@/api'
@@ -321,10 +322,10 @@ onMounted(async () => {
               </div>
               <div
                 v-if="message.content || message.streaming"
-                class="max-w-[80%] px-4 py-2.5 rounded-2xl rounded-bl-md text-sm leading-relaxed whitespace-pre-wrap border"
+                class="max-w-[80%] px-4 py-3 rounded-2xl rounded-bl-md border"
                 :style="{ background: 'var(--lw-surface-raised)', 'border-color': 'var(--lw-border)' }"
               >
-                {{ message.content }}<span v-if="message.streaming" class="lw-cursor">▍</span>
+                <LwMarkdown :content="message.content" /><span v-if="message.streaming" class="lw-cursor">▍</span>
               </div>
             </div>
           </template>

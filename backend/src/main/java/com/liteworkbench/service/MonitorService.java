@@ -5,6 +5,7 @@ import cn.hutool.core.thread.ExecutorBuilder;
 import cn.hutool.core.thread.ThreadUtil;
 import cn.hutool.core.util.StrUtil;
 import com.liteworkbench.domain.constant.EventTypeEnum;
+import com.liteworkbench.domain.constant.RunStatusEnum;
 import com.liteworkbench.domain.vo.HealthRESP;
 import com.liteworkbench.domain.vo.LogDocVO;
 import com.liteworkbench.domain.vo.OverviewRESP;
@@ -126,6 +127,7 @@ public class MonitorService {
         OverviewRESP resp = new OverviewRESP();
         resp.setSessionCount(sessionMapper.countAll());
         resp.setRunCount(runMapper.countAll());
+        resp.setSuccessRunCount(runMapper.countByState(RunStatusEnum.SUCCESS.getCode()));
         resp.setTodayRunCount(runMapper.countToday());
         resp.setTotalTokens(runMapper.sumTokens());
         resp.setRunTrend(toTrend(runMapper.runTrendByDay(7)));

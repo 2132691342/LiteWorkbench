@@ -151,13 +151,16 @@ AgentScope 的 `AgentEvent` 是开放结构，不做第二套记账，只在出�
 ```
 POST /api/v1/run/abort/{runId}
   → 校验运行归属（user_id）与状态
-  → Redis 写 lw:run:{runId}:abort = 1（跨实例与孤儿运行的中断凭据）
-  → 有活动实例：释放订阅（Reactor dispose → doOnCancel）→ 终态记 aborted
-  → 无活动实例（进程重启后的孤儿运行）：直接结算为 aborted
+  → 本进程有活动订阅：dispose（Reactor）→ doOnCancel → 终态记 aborted
+  → 本进程无活动订阅（进程重启后的孤儿运行）：直接结算为 aborted
   → 推送 run.end
 ```
 
-中断靠释放订阅 + 标记位双路径，不做线程中断，避免半写状态。
+中断靠释放订阅实现，不做线程中断，避免半写状态。运行注册表在进程内存（单实例部署），重启后的孤儿运行在 abort 时直接落终态。
+
+### 5.4 限流
+
+`@RateLimit` 注解 + 切面，Redis 固定窗口计数（`lw:rl:{prefix}:{主体}:{窗口号}`）：登录按 IP 每分钟 10 次防爆破，流式对话按用户每分钟 20 次控模型成本，超限抛 `RATE_LIMITED`（429）。
 
 ### 5.4 幂等
 

@@ -67,8 +67,8 @@ function handleCommand(command: string): void {
           variant="text"
           size="sm"
           class="lg:hidden"
-          :title="appStore.sidebarCollapsed ? t('app.expand') : t('app.collapse')"
-          @click="appStore.toggleSidebar()"
+          :title="t('app.expand')"
+          @click="appStore.openSidebar()"
         >
           <template #icon>
             <el-icon><component :is="appStore.sidebarCollapsed ? Expand : Fold" /></el-icon>

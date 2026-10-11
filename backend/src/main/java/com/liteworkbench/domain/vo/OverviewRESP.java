@@ -18,6 +18,8 @@ public class OverviewRESP implements Serializable {
     private Long sessionCount;
     /** 运行总数 */
     private Long runCount;
+    /** 成功运行数，成功率用 */
+    private Long successRunCount;
     /** 今日运行数 */
     private Long todayRunCount;
     /** 累计 token */

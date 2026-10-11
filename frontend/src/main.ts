@@ -6,6 +6,7 @@ import App from './App.vue'
 import { i18n } from './locales'
 import router from './router'
 import 'element-plus/dist/index.css'
+import 'highlight.js/styles/github.css'
 import 'virtual:uno.css'
 import '@/styles/index.css'
 

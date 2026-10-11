@@ -21,7 +21,7 @@ export default defineConfig({
     },
   },
   build: {
-    // 富文本、流程图、图表库体积较大，放宽告警阈值
+    // 图表库与语法高亮体积较大，放宽告警阈值
     chunkSizeWarningLimit: 2000,
     rollupOptions: {
       output: {

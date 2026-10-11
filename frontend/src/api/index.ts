@@ -30,7 +30,6 @@ import type {
   SessionPageREQ,
   SessionREQ,
   SessionVO,
-  SettingREQ,
   SkillREQ,
   SkillVO,
   ToolVO,
@@ -244,13 +243,6 @@ export const monitorApi = {
 
 export const logApi = {
   search: (params: LogSearchParams) => get<LogDocVO[]>('/log/search', params),
-}
-
-/* ===== 设置 ===== */
-
-export const settingApi = {
-  list: () => get<Record<string, string>>('/setting/list'),
-  update: (data: SettingREQ) => post<void>('/setting/update', [data]),
 }
 
 /* ===== SSE 流式对话 ===== */

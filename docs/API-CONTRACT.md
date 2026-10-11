@@ -166,7 +166,9 @@ Content-Type: application/json
 | POST | `/api/v1/tool/toggle/{toolId}` | 启停，权限 `wb:tool:toggle` |
 | POST | `/api/v1/tool/invoke/{toolName}` | 页面手工执行，用于调试，权限 `wb:tool:invoke` |
 
-`/tool/invoke/{toolName}` 请求体 `{ "args": { ... }, "confirmed": false }`：`safe` 工具直接执行；`confirm` 工具必须显式携带 `"confirmed": true`；`danger` 工具在页面确认流程实现前一律拒绝（`FORBIDDEN`）。接口加 `@Idempotent`，超时与参数校验同 Agent 内执行一致。
+`/tool/invoke/{toolName}` 请求体 `{ "args": { ... }, "confirmed": false }`：`safe` 工具直接执行；`confirm` / `danger` 工具必须显式携带 `"confirmed": true`，否则返回 409 `TOOL_CONFIRM_REQUIRED`（页面由确认勾选承接）。Agent 自主调用不走该闸门，统一由平台级启停开关控制。接口加 `@Idempotent`，超时与参数校验同 Agent 内执行一致。
+
+限流：登录接口按 IP 每分钟 10 次，`/chat/stream` 按用户每分钟 20 次（`@RateLimit` 固定窗口），超限返回 429 `RATE_LIMITED`。
 
 ## 10. 技能
 
@@ -212,14 +214,11 @@ Content-Type: application/json
 | GET | `/api/v1/runtime/python` | Python 运行时探测结果，权限 `monitor:health:list` |
 | POST | `/api/v1/runtime/python/reprobe` | 重新探测 Python 运行时，权限 `monitor:python:reprobe` |
 
-## 14. 设置
+`monitor/overview` 返回：`sessionCount` / `runCount` / `successRunCount` / `todayRunCount` / `totalTokens` / `runTrend` / `tokenTrend` / `toolDistribution`。
 
-| 方法 | 路径 | 说明 |
-|---|---|---|
-| GET | `/api/v1/setting/list` | 键值列表，登录即可用 |
-| POST | `/api/v1/setting/update` | 批量更新，登录即可用（仅本人） |
+## 14. 预留结构
 
-设置项为用户级键值（`wb_setting`），MVP 承载界面偏好与功能开关，异步任务（`wb_task`）与运行派生关系（`wb_run.relation`）为预留结构，本期不暴露接口。
+异步任务（`wb_task`）与运行派生关系（`wb_run.relation` / `parent_run_id`）为预留结构，本期不暴露接口。
 
 ## 15. 分页请求
 

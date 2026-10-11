@@ -30,7 +30,6 @@
 | `FILE_` | 文件 | `wb_file` |
 | `PROV_` | 模型供应方 | `wb_provider` |
 | `TASK_` | 异步任务（预留） | `wb_task` |
-| `SETG_` | 系统设置 | `wb_setting` |
 | `LOGD_` | 日志文档 | Redisearch `idx:lw:log` |
 
 ## 3. 审计字段
@@ -137,6 +136,7 @@
 | `stop_reason` | varchar(24) | `completed` `max_iters` `aborted` `error` |
 | `iter_count` | int | 迭代轮次 |
 | `input_tokens` / `output_tokens` | int | 用量 |
+| `created_at` | timestamptz | 创建时间 |
 | `started_at` / `ended_at` | timestamptz | 起止 |
 | `duration_ms` | bigint | 耗时 |
 
@@ -236,16 +236,6 @@
 | `retry_count` | int | 重试次数 |
 | `error_message` | text | 错误信息 |
 
-### 5.10 wb_setting
-
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `setting_id` | varchar(40) PK | `SETG_` |
-| `user_id` | varchar(40) | 归属用户 |
-| `setting_key` | varchar(64) | 键，用户内唯一 |
-| `setting_value` | text | 值 |
-| `value_type` | varchar(16) | `string` `int` `bool` `json` |
-
 ## 6. Redisearch 索引
 
 索引名 `idx:lw:log`，哈希文档，键前缀 `lw:log:`。
@@ -267,11 +257,11 @@
 
 | 键 | 类型 | 用途 |
 |---|---|---|
-| `lw:run:{runId}:abort` | string | 中断标记，TTL 1h |
 | `lw:lock:run:{sessionId}` | string | 会话串行锁，防并发运行 |
 | `lw:cache:provider:{code}` | string | 供应方配置 ID 缓存（命中后回源取详情），TTL 5min |
 | `lw:cache:perm:{userId}` | set | 用户权限标识缓存，TTL 10min |
 | `lw:idem:{prefix}:{userId}:{digest}` | string | 幂等占位，TTL 默认 10s |
+| `lw:rl:{prefix}:{主体}:{窗口号}` | string | 接口限流计数（@RateLimit 固定窗口），TTL 窗口 + 5s |
 | `satoken:login:session:{userId}` | — | Sa-Token 会话（库自带命名空间） |
 
 ## 8. 取舍

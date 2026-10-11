@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LwButton from '@/components/ui/LwButton.vue'
 import LwCard from '@/components/ui/LwCard.vue'
@@ -21,7 +21,11 @@ const toggling = ref('')
 const invokeVisible = ref(false)
 const invoking = ref(false)
 const invokeForm = ref({ toolName: '', args: '{}', confirmed: false })
+const invokeRisk = ref<'safe' | 'confirm' | 'danger'>('safe')
 const invokeOutput = ref('')
+
+/** 非 safe 工具必须显式确认后才能提交 */
+const needsConfirm = computed(() => invokeRisk.value !== 'safe')
 
 const RISK_TONE: Record<string, 'success' | 'warning' | 'error'> = {
   safe: 'success',
@@ -54,6 +58,7 @@ async function toggle(item: ToolVO): Promise<void> {
 
 function openInvoke(item: ToolVO): void {
   invokeForm.value = { toolName: item.toolName, args: '{}', confirmed: false }
+  invokeRisk.value = item.riskLevel
   invokeOutput.value = ''
   invokeVisible.value = true
 }
@@ -116,8 +121,11 @@ onMounted(load)
         <el-form-item :label="t('settings.tool.args')">
           <el-input v-model="invokeForm.args" type="textarea" :rows="5" spellcheck="false" />
         </el-form-item>
-        <el-form-item>
-          <el-checkbox v-model="invokeForm.confirmed">{{ t('settings.tool.confirmed') }}</el-checkbox>
+        <el-form-item v-if="needsConfirm">
+          <div class="w-full flex flex-col gap-1">
+            <el-checkbox v-model="invokeForm.confirmed">{{ t('settings.tool.confirmed') }}</el-checkbox>
+            <span class="text-xs" style="color: var(--lw-warning-ink)">{{ t('settings.tool.confirmWarn') }}</span>
+          </div>
         </el-form-item>
         <div
           v-if="invokeOutput"
@@ -129,7 +137,9 @@ onMounted(load)
       </el-form>
       <template #footer>
         <LwButton variant="ghost" @click="invokeVisible = false">{{ t('common.cancel') }}</LwButton>
-        <LwButton :loading="invoking" @click="submitInvoke">{{ t('common.submit') }}</LwButton>
+        <LwButton :loading="invoking" :disabled="needsConfirm && !invokeForm.confirmed" @click="submitInvoke">
+          {{ t('common.submit') }}
+        </LwButton>
       </template>
     </el-dialog>
   </LwCard>

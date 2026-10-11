@@ -293,6 +293,7 @@ export interface TrendPoint {
 export interface OverviewRESP {
   sessionCount: number
   runCount: number
+  successRunCount: number
   todayRunCount: number
   totalTokens: number
   runTrend: TrendPoint[]
@@ -320,13 +321,6 @@ export interface LogSearchParams {
   to?: number
   page?: number
   size?: number
-}
-
-/* ===== 设置 ===== */
-
-export interface SettingREQ {
-  settingKey: string
-  settingValue?: string
 }
 
 /* ===== 对话入参 ===== */

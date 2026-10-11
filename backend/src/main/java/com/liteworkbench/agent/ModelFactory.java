@@ -153,8 +153,4 @@ public class ModelFactory {
         System.arraycopy(key, 0, trimmed, 0, 16);
         return new SymmetricCrypto("AES/ECB/PKCS5Padding", trimmed);
     }
-
-    private String cachePrefix(String providerCode) {
-        return providerCode + ".";
-    }
 }

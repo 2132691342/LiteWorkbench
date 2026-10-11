@@ -1,6 +1,7 @@
 package com.liteworkbench.api;
 
 import com.liteworkbench.anno.Idempotent;
+import com.liteworkbench.anno.RateLimit;
 import com.liteworkbench.common.R;
 import com.liteworkbench.domain.dto.LoginREQ;
 import com.liteworkbench.domain.dto.PasswordREQ;
@@ -22,7 +23,8 @@ public class AuthController {
 
     private final AuthService authService;
 
-    /** 登录：登录名 + 密码 */
+    /** 登录：登录名 + 密码，按 IP 限流防爆破 */
+    @RateLimit(prefix = "auth:login", limit = 10, windowSeconds = 60, keyBy = RateLimit.KeyBy.IP)
     @PostMapping("/login")
     public R<LoginRESP> login(@RequestBody @Valid LoginREQ req) {
         return R.ok(authService.login(req));

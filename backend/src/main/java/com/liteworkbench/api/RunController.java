@@ -1,6 +1,7 @@
 package com.liteworkbench.api;
 
 import com.liteworkbench.anno.Idempotent;
+import com.liteworkbench.anno.RateLimit;
 import com.liteworkbench.common.PageResult;
 import com.liteworkbench.common.R;
 import com.liteworkbench.domain.dto.ChatStreamREQ;
@@ -31,7 +32,8 @@ public class RunController {
 
     private final RunService runService;
 
-    /** 流式对话，SSE 单通道 run.event，id 为 seq */
+    /** 流式对话，SSE 单通道 run.event，id 为 seq；按用户限流控成本 */
+    @RateLimit(prefix = "run:chat", limit = 20, windowSeconds = 60)
     @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter chatStream(@RequestBody @Valid ChatStreamREQ req) {
         SseEmitter emitter = new SseEmitter(RunConst.SSE_TIMEOUT_MS);

@@ -1,4 +1,4 @@
--- LiteWorkbench 库表定义：全部幂等，可重复执行；种子数据由 DataInitializer 写入
+-- LiteWorkbench 库表定义：全部幂等，可重复执行；账号/角色/菜单/供应方种子由 DataInitializer 写入，工具种子见文末
 -- 公共约定：主键 = 业务前缀_ULID；时间 timestamptz；逻辑删除 deleted；用户资源带 user_id
 
 -- ============================== 用户与权限 ==============================
@@ -238,20 +238,9 @@ CREATE TABLE IF NOT EXISTS wb_task (
 );
 CREATE INDEX IF NOT EXISTS idx_wb_task_owner ON wb_task (user_id, state);
 
--- 用户设置（用户级键值）
-CREATE TABLE IF NOT EXISTS wb_setting (
-    setting_id    varchar(40) PRIMARY KEY,
-    user_id       varchar(40) NOT NULL,
-    setting_key   varchar(64) NOT NULL,
-    setting_value text,
-    value_type    varchar(16) NOT NULL DEFAULT 'string',
-    updated_by    varchar(40),
-    updated_at    timestamptz
-);
-CREATE UNIQUE INDEX IF NOT EXISTS uk_wb_setting_key ON wb_setting (user_id, setting_key);
-
 -- ============================== 内置工具种子 ==============================
 
+-- 工具种子用固定 ID 而非 ULID：ON CONFLICT 幂等重放，重启不产生重复行
 INSERT INTO wb_tool (tool_id, tool_name, tool_label, category, risk_level, enabled)
 VALUES
     ('TOOL_00000000000000000000000001', 'python_exec', 'Python 执行', 'runtime', 'confirm', true),

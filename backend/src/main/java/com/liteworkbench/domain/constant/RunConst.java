@@ -15,6 +15,4 @@ public interface RunConst {
     long SSE_HEARTBEAT_MS = 15000L;
     /** 事件起始序号 */
     long EVENT_SEQ_START = 1L;
-    /** 中断标记过期时间，秒 */
-    long ABORT_TTL_SECONDS = 3600L;
 }

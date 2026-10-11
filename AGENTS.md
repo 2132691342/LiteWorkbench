@@ -139,7 +139,7 @@ public class RunService {
 
 ### 3.1 数据归属模型
 
-- 用户拥有的业务表（会话、运行、事件、消息、技能、文件、设置、任务）带 `user_id varchar(40)`（`USER_` 前缀），行级隔离。
+- 用户拥有的业务表（会话、运行、事件、消息、技能、文件、任务）带 `user_id varchar(40)`（`USER_` 前缀），行级隔离。
 - 平台级表不带 `user_id`，仅管理角色可写：`sys_menu`、`sys_user_role`、`sys_role_menu`、`wb_tool`、`wb_provider`。
 - 用户身份由 `common.LoginContext` 提供，禁止从请求体采信 `userId`；Service 在请求线程内一律 `LoginContext.userId()` 取当前用户。请求上下文之外（异步线程、MQ 消费）必须把 `userId` 作为第一个业务参数显式传递。
 - 用户拥有的资源，Mapper 查询条件必须显式携带 `user_id`（平台级表除外）。
@@ -190,6 +190,7 @@ public R<String> create(@RequestBody @Valid UserREQ req) { ... }
 ```
 
 - 切面实现：`Redis SETNX lw:idem:{prefix}:{userId}:{参数摘要}`，命中即抛 `REPEAT_SUBMIT` 并通过响应头 `X-Lw-Idem-Key` 回传占位键；TTL 到期自动释放。
+- 接口限流用 `@RateLimit` + 切面：`Redis 固定窗口 lw:rl:{prefix}:{主体}:{窗口号}`，登录按 IP 每分钟 10 次、流式对话按用户每分钟 20 次，超限抛 `RATE_LIMITED`。
 - 其他横切能力（操作审计、耗时打点）优先用注解 + 切面实现，不侵入 Service。
 
 ## 6. ID 规范
@@ -212,7 +213,6 @@ public R<String> create(@RequestBody @Valid UserREQ req) { ... }
 | `FILE_` | 文件对象 |
 | `PROV_` | 模型供应方 |
 | `TASK_` | 异步任务（预留） |
-| `SETG_` | 系统设置 |
 | `LOGD_` | 日志文档（Redisearch） |
 
 ## 7. 字段规范

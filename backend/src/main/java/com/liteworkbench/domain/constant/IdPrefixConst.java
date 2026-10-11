@@ -32,8 +32,6 @@ public enum IdPrefixConst {
     PROVIDER("PROV"),
     /** 异步任务 */
     TASK("TASK"),
-    /** 系统设置 */
-    SETTING("SETG"),
     /** 日志文档 */
     LOG("LOGD"),
     ;

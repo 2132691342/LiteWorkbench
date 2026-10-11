@@ -57,6 +57,10 @@ public interface WbRunMapper {
     @Select("SELECT count(*) FROM wb_run")
     long countAll();
 
+    /** 按状态统计运行数，成功率用 */
+    @Select("SELECT count(*) FROM wb_run WHERE state = #{state}")
+    long countByState(@Param("state") String state);
+
     /** 今日运行数 */
     @Select("SELECT count(*) FROM wb_run WHERE created_at >= date_trunc('day', now())")
     long countToday();

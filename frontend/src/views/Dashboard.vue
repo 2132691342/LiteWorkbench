@@ -22,6 +22,14 @@ const overview = computed(() => monitorStore.overview)
 const loading = computed(() => monitorStore.loading)
 const error = computed(() => monitorStore.error)
 
+/** 成功率 = 成功运行 / 运行总数，无运行时显示占位 */
+const successRate = computed(() => {
+  const total = overview.value?.runCount ?? 0
+  if (total <= 0) return '-'
+  const success = overview.value?.successRunCount ?? 0
+  return `${Math.round((success / total) * 100)}%`
+})
+
 const metrics = computed(() => [
   {
     key: 'metricRuns',
@@ -39,8 +47,8 @@ const metrics = computed(() => [
   },
   {
     key: 'metricSuccess',
-    value: String(overview.value?.runCount ?? 0),
-    delta: t('dashboard.metricSuccessDesc'),
+    value: successRate.value,
+    delta: `${t('dashboard.successCount')}: ${overview.value?.successRunCount ?? 0}`,
     icon: TrendCharts,
     tone: 'var(--lw-ink)',
   },

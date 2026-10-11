@@ -149,14 +149,12 @@ public class RunService {
                 .stream().map(this::toEventDTO).toList();
     }
 
-    /** 中断运行：写标记 → dispose 订阅 → 取消信号统一走 settleAborted */
+    /** 中断运行：dispose 订阅，取消信号统一走 settleAborted；无活动实例的孤儿运行直接落终态 */
     public void abort(String runId) {
         WbRunDO run = getOwned(runId);
         if (RunStatusEnum.isTerminal(run.getState())) {
             throw new BizException(ErrorCodeEnum.RUN_NOT_ABORTABLE, run.getState());
         }
-        redisTemplate.opsForValue().set(StrUtil.format(RedisKeyConst.RUN_ABORT, runId), "1",
-                Duration.ofSeconds(RunConst.ABORT_TTL_SECONDS));
         ActiveRun activeRun = active.remove(runId);
         if (Objects.nonNull(activeRun)) {
             activeRun.disposable.dispose();
