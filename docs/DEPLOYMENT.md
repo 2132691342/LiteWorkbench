@@ -38,6 +38,17 @@ podman-compose -f docker-compose.yaml up -d
 
 编排同时挂在 `postgres`、`redis`、`minio`、`rabbitmq` 四个服务上，容器崩溃自动重启。网络名为 `workbaby-infra_default`，应用容器必须加入同一网络才能按主机名互访。
 
+### 3.1 共享中间件的所有权与禁改清单
+
+中间件是**跨项目共享基础设施**（历史归属 workbaby-infra 项目），编排原件在主机 `/opt/workbaby-infra/docker-compose.yml`（只读参照），运行编排与数据卷在 `/root/workbaby-infra`（卷 `workbaby-infra_pgdata` / `workbaby-infra_minio_data`）。任何部署与运维操作必须遵守：
+
+| 规则 | 说明 |
+|---|---|
+| 只碰自己的 | 允许操作的容器只有 `liteworkbench`，目录只有 `/opt/liteworkbench`；中间件容器一律不 stop / rm / restart |
+| 网络禁止 rm | 严禁对 `workbaby-infra_default` 执行 `network rm`（Podman 会连带销毁挂载的容器）；需要改挂载只允许对单个容器 `network disconnect` + `network connect` |
+| DNS 污染的安全修法 | aardvark-dns 残留记录导致主机名解析到旧 IP 时，对涉事容器逐个 disconnect + connect 重建记录，不动网络本身 |
+| 新项目接入 | 要么作为 guest 加入 `workbaby-infra_default`（只加自己容器，不碰现有），要么用自己的编排开独立栈（独立网络 + 独立卷，端口错开）；绝不复用/修改共享栈的容器定义 |
+
 ## 4. 应用镜像
 
 ```bash
