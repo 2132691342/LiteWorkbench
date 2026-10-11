@@ -27,7 +27,7 @@ services:
       LITEWORKBENCH_LOG_DIR: /var/log/liteworkbench
       LITEWORKBENCH_RUNTIME_DATA_DIR: /var/lib/liteworkbench
     ports:
-      - "8080:8080"
+      - "24399:8080"
     volumes:
       - app_logs:/var/log/liteworkbench
       - app_data:/var/lib/liteworkbench

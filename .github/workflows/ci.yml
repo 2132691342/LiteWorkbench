@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  server:
+  backend:
     name: 后端构建与测试
     runs-on: ubuntu-latest
     steps:
@@ -17,10 +17,10 @@ jobs:
           java-version: '17'
           cache: maven
       - name: Maven 编译与测试
-        working-directory: server
+        working-directory: backend
         run: mvn -B -DskipTests=false package
 
-  web:
+  frontend:
     name: 前端构建与类型检查
     runs-on: ubuntu-latest
     steps:
@@ -29,20 +29,20 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-          cache-dependency-path: web/package-lock.json
+          cache-dependency-path: frontend/package-lock.json
       - name: 安装依赖
-        working-directory: web
+        working-directory: frontend
         run: npm install --no-audit --no-fund
       - name: 类型检查
-        working-directory: web
+        working-directory: frontend
         run: npm run typecheck
       - name: 构建
-        working-directory: web
+        working-directory: frontend
         run: npm run build
 
   release:
     name: 构建镜像并发布到云主机
-    needs: [server, web]
+    needs: [backend, frontend]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:

@@ -67,7 +67,7 @@ LiteWorkbench 解决的是"Agent 跑起来之后我看不见它在干什么"的�
 
 ```
 LiteWorkbench/
-├── server/                      后端（Maven 单模块）
+├── backend/                     后端（Maven 单模块）
 │   └── src/main/java/com/liteworkbench/
 │       ├── api/                 控制器，只做参数校验与响应封装
 │       ├── service/             业务流程编排
@@ -90,7 +90,7 @@ LiteWorkbench/
 │       ├── db/schema.sql
 │       ├── application.yaml
 │       └── logback-spring.xml
-├── web/                         前端
+├── frontend/                    前端
 │   └── src/{api,views,components,stores,composables,styles,locales,router,types,utils}
 ├── docs/                        项目级文档
 ├── specs/                       子系统规格
@@ -110,7 +110,7 @@ docker compose -f deploy/docker-compose.yaml up -d
 ### 5.2 后端
 
 ```bash
-cd server
+cd backend
 mvn -DskipTests package
 java -jar target/lite-workbench-server.jar
 ```
@@ -120,10 +120,10 @@ java -jar target/lite-workbench-server.jar
 ### 5.3 前端
 
 ```bash
-cd web
+cd frontend
 npm install
-npm run dev      # http://localhost:5173，已代理 /api 到 8080
-npm run build    # 产物在 web/dist
+npm run dev      # http://localhost:5173，已代理 /api 到 8080（生产对外端口 24399）
+npm run build    # 产物在 frontend/dist
 ```
 
 ### 5.4 初始账号

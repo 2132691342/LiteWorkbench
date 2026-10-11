@@ -166,7 +166,7 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 
 信封 `code` 一律为 `String`（如 `"0"`、`"3001"`），与 HTTP 状态码的 int 区分；网络交互字段全部使用包装类型。
 
-前端映射（`web/src/api/index.ts`）：按 `code` 取 `locales` 中的提示文案，`401` 触发重新登录，`403` 提示无权限并停留当前页，`5xx` 允许重试一次。
+前端映射（`frontend/src/api/index.ts`）：按 `code` 取 `locales` 中的提示文案，`401` 触发重新登录，`403` 提示无权限并停留当前页，`5xx` 允许重试一次。
 
 ## 17. 取舍
 

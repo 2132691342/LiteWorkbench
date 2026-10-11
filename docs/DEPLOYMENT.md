@@ -11,7 +11,7 @@
 ## 2. 拓扑
 
 ```
-Browser ──► liteworkbench:8080 (Spring Boot 内置静态资源 + REST/SSE)
+Browser ──► liteworkbench:24399（宿主机）→ 容器 8080（Spring Boot 内置静态资源 + REST/SSE）
                 │
                 ├─► postgres:5432      业务数据（含用户与权限）
                 ├─► redisearch:6379    缓存 + 登录态 + 日志索引
@@ -40,7 +40,7 @@ docker compose -f deploy/docker-compose.yaml up -d
 
 ```bash
 docker build -f deploy/Dockerfile -t liteworkbench:latest .
-docker run -d --name liteworkbench -p 8080:8080 \
+docker run -d --name liteworkbench -p 24399:8080 \
   --network liteworkbench_default \
   -e LITEWORKBENCH_DATASOURCE_URL=jdbc:postgresql://postgres:5432/postgres \
   -e LITEWORKBENCH_DATASOURCE_PASSWORD=admin_public \
@@ -153,7 +153,7 @@ Redisearch 索引文档键带 30 天 TTL，过期由 Redis 自动回收；不做
 
 ## 12. CI/CD
 
-流水线定义在 `.github/workflows/ci.yml`，三个阶段串行：`server`（编译 + 测试）→ `web`（类型检查 + 构建）→ `release`（仅 `main` 的 push 触发）。
+流水线定义在 `.github/workflows/ci.yml`，三个阶段串行：`backend`（编译 + 测试）→ `frontend`（类型检查 + 构建）→ `release`（仅 `main` 的 push 触发）。
 
 发布动作：构建镜像推送到 GHCR（`:latest` 与 `:<sha>` 两个 tag），再 SSH 到云主机 `47.108.73.153` 执行 `docker compose -f docker-compose.app.yaml pull && up -d`。
 

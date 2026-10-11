@@ -23,14 +23,14 @@ Maven 本地仓库默认 `~/.m2/repository`；若已有 `D:/MavenFiles`，用 `-
 ## 3. 目录约定
 
 ```
-server/src/main/java/com/liteworkbench/
+backend/src/main/java/com/liteworkbench/
   api/ service/ mapper/ domain/{entity,dto,vo,constant}/
   config/ anno/ aspect/ mq/{producer,consumer}/ agent/ runtime/
   observability/ common/
-server/src/main/resources/
+backend/src/main/resources/
   mapper/*.xml  db/schema.sql  logback-spring.xml  application.yaml
 
-web/src/
+frontend/src/
   api/ components/{layout,ui,charts}/ composables/
   locales/ router/ stores/ styles/ types/ utils/ views/
 ```
@@ -46,7 +46,7 @@ web/src/
 ## 4. 后端
 
 ```bash
-cd server
+cd backend
 mvn -DskipTests package            # 打包
 mvn spring-boot:run                # 直接运行
 mvn test                           # 跑测试
@@ -92,10 +92,10 @@ mvn test                           # 跑测试
 ### 5.2 命令
 
 ```bash
-cd web
+cd frontend
 npm install
 npm run dev        # 5173，/api 代理到 8080
-npm run build      # 产物 web/dist
+npm run build      # 产物 frontend/dist
 npm run typecheck  # vue-tsc --noEmit
 ```
 
@@ -138,6 +138,6 @@ npm run typecheck  # vue-tsc --noEmit
 | 加一个权限点 | `config/DataInitializer.java` 的 `MENU_SEEDS`（`menu_type=button`）+ 控制器注解 |
 | 加一个内置角色 | `domain/constant/RoleCodeConst.java` + `DataInitializer` 角色与授权 |
 | 加一类日志检索字段 | `observability/RedisearchLogAppender.java` + `mapper/LogSearchMapper.java` 索引定义 |
-| 加一个前端页面 | `web/src/views/` + `DataInitializer` 菜单种子（`component` 指向该文件） |
-| 改配色 | `web/src/styles/tokens.css`（唯一色值来源） |
+| 加一个前端页面 | `frontend/src/views/` + `DataInitializer` 菜单种子（`component` 指向该文件） |
+| 改配色 | `frontend/src/styles/tokens.css`（唯一色值来源） |
 | 加一个写接口 | 控制器加 `@SaCheckPermission` + `@Idempotent` + `@PostMapping` |

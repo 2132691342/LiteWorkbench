@@ -1,6 +1,6 @@
 # DATA-MODEL
 
-库表结构、Redisearch 索引、ID 规范、审计字段。DDL 实现在 `server/src/main/resources/db/schema.sql`。
+库表结构、Redisearch 索引、ID 规范、审计字段。DDL 实现在 `backend/src/main/resources/db/schema.sql`。
 
 ---
 
@@ -133,7 +133,7 @@
 | `relation` | varchar(16) | `original` / `retry` / `fork` / `recovery`，MVP 恒为 `original`，`parent_run_id` 同为预留 |
 | `prompt` | text | 本次输入 |
 | `model_name` | varchar(64) | 实际使用模型 |
-| `status` | varchar(16) | `queued` `running` `success` `failed` `aborted` |
+| `state` | varchar(16) | `queued` `running` `success` `failed` `aborted` |
 | `stop_reason` | varchar(24) | `completed` `max_iters` `aborted` `error` |
 | `iter_count` | int | 迭代轮次 |
 | `input_tokens` / `output_tokens` | int | 用量 |
@@ -147,6 +147,7 @@
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | `event_id` | varchar(40) PK | `EVNT_` |
+| `user_id` | varchar(40) | 归属用户 |
 | `run_id` / `session_id` | varchar(40) | 归属 |
 | `seq` | int | 运行内序号，从 1 递增 |
 | `event_type` | varchar(32) | 归一后的事件类型 |
@@ -162,6 +163,7 @@
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | `message_id` | varchar(40) PK | `MESG_` |
+| `user_id` | varchar(40) | 归属用户 |
 | `session_id` / `run_id` | varchar(40) | 归属 |
 | `role_code` | varchar(16) | `user` `assistant` `tool` |
 | `content` | text | 正文 |
@@ -230,7 +232,7 @@
 | `user_id` | varchar(40) | 归属用户 |
 | `task_type` | varchar(32) | 任务类型 |
 | `payload` | jsonb | 参数 |
-| `status` | varchar(16) | `pending` `running` `success` `failed` |
+| `state` | varchar(16) | `pending` `running` `success` `failed` |
 | `retry_count` | int | 重试次数 |
 | `error_message` | text | 错误信息 |
 

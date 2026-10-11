@@ -1,0 +1,267 @@
+/* 全局样式：五态按钮、Element Plus 主题覆盖、过渡与滚动条 */
+@import './tokens.css';
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--lw-surface);
+  color: var(--lw-ink);
+  font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ===== 五态按钮：HOVER 放大、PRESSED 缩小、LOADING 锁宽 ===== */
+.lw-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  transition: all var(--lw-dur) var(--lw-ease);
+}
+
+.lw-btn:hover:not(:disabled):not(.is-loading) {
+  transform: scale(1.05);
+  box-shadow: var(--lw-shadow-md);
+}
+
+.lw-btn:active:not(:disabled):not(.is-loading) {
+  transform: scale(0.95);
+  box-shadow: none;
+}
+
+.lw-btn:disabled {
+  cursor: not-allowed;
+  background: var(--lw-surface-disabled);
+  color: var(--lw-ink-disabled);
+  border-color: var(--lw-border);
+  transform: none;
+  box-shadow: none;
+}
+
+.lw-btn.is-loading {
+  pointer-events: none;
+  cursor: progress;
+}
+
+.lw-btn.is-loading .lw-btn__label {
+  visibility: hidden;
+}
+
+.lw-btn.is-loading .lw-btn__spinner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 变体 */
+.lw-btn--primary {
+  background-color: var(--lw-primary);
+  color: var(--lw-on-primary);
+}
+.lw-btn--primary:hover:not(:disabled):not(.is-loading) {
+  background-color: var(--lw-primary-hover);
+}
+.lw-btn--primary:active:not(:disabled):not(.is-loading) {
+  background-color: var(--lw-primary-active);
+}
+
+.lw-btn--secondary {
+  background-color: transparent;
+  border-color: var(--lw-secondary);
+  color: var(--lw-secondary);
+}
+.lw-btn--secondary:hover:not(:disabled) {
+  background-color: var(--lw-secondary-tint);
+}
+.lw-btn--secondary:active:not(:disabled) {
+  color: var(--lw-secondary-hover);
+  border-color: var(--lw-secondary-hover);
+}
+
+.lw-btn--ghost {
+  background-color: transparent;
+  border-color: var(--lw-primary);
+  color: var(--lw-primary);
+}
+.lw-btn--ghost:hover:not(:disabled) {
+  background-color: var(--lw-primary-tint);
+}
+.lw-btn--ghost:active:not(:disabled) {
+  border-color: var(--lw-primary-active);
+  color: var(--lw-primary-active);
+}
+
+.lw-btn--danger {
+  background-color: var(--lw-error);
+  color: var(--lw-on-primary);
+}
+.lw-btn--danger:hover:not(:disabled) {
+  background-color: var(--lw-error-hover);
+}
+.lw-btn--danger:active:not(:disabled) {
+  background-color: var(--lw-error-active);
+}
+
+.lw-btn--text {
+  background-color: transparent;
+  color: var(--lw-primary);
+  padding-left: 8px;
+  padding-right: 8px;
+}
+.lw-btn--text:hover:not(:disabled) {
+  background-color: var(--lw-primary-tint);
+}
+
+/* 尺寸 */
+.lw-btn--sm {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+.lw-btn--md {
+  height: 40px;
+  padding: 0 16px;
+  font-size: 14px;
+}
+.lw-btn--lg {
+  height: 48px;
+  padding: 0 24px;
+  font-size: 16px;
+}
+
+.lw-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: lw-spin 0.7s linear infinite;
+}
+
+@keyframes lw-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ===== Element Plus 主题对齐设计令牌 ===== */
+:root {
+  --el-color-primary: var(--lw-primary);
+  --el-color-primary-light-3: var(--lw-primary-light-3);
+  --el-color-primary-light-5: var(--lw-primary-light-5);
+  --el-color-primary-light-7: var(--lw-primary-light-7);
+  --el-color-primary-light-8: var(--lw-primary-light-8);
+  --el-color-primary-light-9: var(--lw-primary-tint);
+  --el-color-primary-dark-2: var(--lw-primary-hover);
+  --el-color-success: var(--lw-success);
+  --el-color-warning: var(--lw-warning);
+  --el-color-danger: var(--lw-error);
+  --el-color-error: var(--lw-error);
+  --el-border-radius-base: 8px;
+  --el-border-color: var(--lw-border);
+  --el-text-color-primary: var(--lw-ink);
+  --el-text-color-regular: var(--lw-ink);
+  --el-text-color-secondary: var(--lw-ink-muted);
+  --el-fill-color-blank: var(--lw-surface-raised);
+}
+
+.el-button {
+  font-weight: 600;
+}
+
+.el-button:not(.is-disabled):hover {
+  transform: scale(1.05);
+  transition: all var(--lw-dur) var(--lw-ease);
+}
+
+.el-button:not(.is-disabled):active {
+  transform: scale(0.95);
+}
+
+.el-table {
+  --el-table-border-color: var(--lw-border);
+  --el-table-header-bg-color: var(--lw-surface);
+  --el-table-row-hover-bg-color: var(--lw-primary-tint);
+}
+
+.el-dialog {
+  border-radius: 12px;
+}
+
+.el-dialog__title {
+  font-weight: 700;
+  color: var(--lw-ink);
+}
+
+/* ===== 路由与内容过渡 ===== */
+.lw-fade-enter-active,
+.lw-fade-leave-active {
+  transition: opacity var(--lw-dur) var(--lw-ease);
+}
+
+.lw-fade-enter-from,
+.lw-fade-leave-to {
+  opacity: 0;
+}
+
+/* ===== 滚动条 ===== */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--lw-border-strong);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--lw-ink-disabled);
+}
+
+::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+/* ===== 骨架屏闪烁 ===== */
+.lw-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--lw-skeleton-a) 25%,
+    var(--lw-surface) 37%,
+    var(--lw-skeleton-a) 63%
+  );
+  background-size: 400% 100%;
+  animation: lw-shimmer 1.4s ease infinite;
+  border-radius: 8px;
+}
+
+@keyframes lw-shimmer {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
