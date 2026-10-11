@@ -93,4 +93,24 @@ jobs:
             podman-compose -f docker-compose.app.yaml pull
             podman rm -f liteworkbench 2>/dev/null || true
             podman-compose -f docker-compose.app.yaml up -d
+            # 端口映射与就绪自检：端口未发布或应用未就绪时显式失败并打印现场
+            sleep 5
+            echo "=== 端口映射 ==="
+            podman port liteworkbench || true
+            ready=0
+            for i in $(seq 1 36); do
+              if curl -fsS http://127.0.0.1:24399/actuator/health >/dev/null 2>&1; then
+                ready=1
+                break
+              fi
+              sleep 5
+            done
+            if [ "$ready" != "1" ]; then
+              echo "=== 应用未就绪，容器与日志现场 ==="
+              podman ps --format '{{.Names}} | {{.Status}} | {{.Ports}}'
+              podman logs --tail 80 liteworkbench || true
+              ss -lntp 2>/dev/null | grep 24399 || echo "24399 未监听"
+              exit 1
+            fi
+            echo "liteworkbench ready on :24399"
             podman image prune -f
