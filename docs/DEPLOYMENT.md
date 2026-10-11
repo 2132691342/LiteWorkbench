@@ -23,8 +23,10 @@ Browser ──► liteworkbench:24399（宿主机）→ 容器 8080（Spring Boo
 
 ## 3. 中间件
 
+云主机（Ubuntu 20.04，2GB 内存）运行时为 **Podman 3.4.2 + podman-compose**，无 Docker；本地开发可用 Docker 命令，语义一致。
+
 ```bash
-docker compose -f deploy/docker-compose.yaml up -d
+podman-compose -f docker-compose.yaml up -d
 ```
 
 | 服务 | 镜像（华为云 SWR） | 端口 | 凭据 |
@@ -34,16 +36,18 @@ docker compose -f deploy/docker-compose.yaml up -d
 | minio | `pgsty/minio:RELEASE.2026-04-17` | 9000 / 9001 | minioadmin / minioadminpublic |
 | rabbitmq | `rabbitmq:4-management` | 5672 / 15672 | admin / admin_public |
 
-编排同时挂在 `postgres`、`redis`、`minio`、`rabbitmq` 四个服务上，容器崩溃自动重启。
+编排同时挂在 `postgres`、`redis`、`minio`、`rabbitmq` 四个服务上，容器崩溃自动重启。网络名为 `workbaby-infra_default`，应用容器必须加入同一网络才能按主机名互访。
 
 ## 4. 应用镜像
 
 ```bash
-docker build -f deploy/Dockerfile -t liteworkbench:latest .
-docker run -d --name liteworkbench -p 24399:8080 \
-  --network liteworkbench_default \
+podman build -f deploy/Dockerfile -t liteworkbench:latest .
+podman run -d --name liteworkbench -p 24399:8080 \
+  --network workbaby-infra_default \
+  --memory 1152m \
   -e LITEWORKBENCH_DATASOURCE_URL=jdbc:postgresql://postgres:5432/postgres \
   -e LITEWORKBENCH_DATASOURCE_PASSWORD=admin_public \
+  -e LITEWORKBENCH_REDIS_HOST=redis \
   -e LITEWORKBENCH_REDIS_PASSWORD=admin_public \
   -e LITEWORKBENCH_STORAGE_ACCESS_KEY=minioadmin \
   -e LITEWORKBENCH_STORAGE_SECRET_KEY=minioadminpublic \
@@ -52,7 +56,7 @@ docker run -d --name liteworkbench -p 24399:8080 \
   liteworkbench:latest
 ```
 
-`--network` 指向 compose 创建的网络（`docker network ls` 查实际名称），使 `postgres`、`redisearch` 等主机名可解析。构建为三阶段：Maven 编译后端 → Node 编译前端并拷入 `static/` → 运行时镜像只放 JRE 与 jar。
+`--network` 指向中间件编排所在网络（`podman network ls` 查实际名称），使 `postgres`、`redis` 等主机名可解析。`--memory 1152m` 与编排内 `mem_limit` 一致：2GB 小主机上给中间件留足余量，JVM `MaxRAMPercentage=70` 据此收敛堆上限。构建为三阶段：Maven 编译后端 → Node 编译前端并拷入 `static/` → 运行时镜像基于指定 SWR 镜像 `openjdk:17-jdk-alpine`，容器内直接安装 python3 / curl / tzdata。
 
 ## 5. 配置项
 
@@ -97,7 +101,7 @@ Redisearch 的 `idx:lw:log` 索引在应用启动时幂等创建。启动自检�
 
 | 动作 | 步骤 |
 |---|---|
-| 升级 | `docker compose pull` → 重新 `docker run`，schema 由幂等 DDL 自动补齐 |
+| 升级 | CI 推新镜像 → 主机 `podman-compose pull` → `up -d`，schema 由幂等 DDL 自动补齐 |
 | 回滚 | 换回旧镜像 tag；涉及新增列时不删列，保证旧版本可读 |
 | 用户数据导出 | `pg_dump` 按 `user_id` 过滤导出 |
 
@@ -156,7 +160,7 @@ Redisearch 索引文档键带 30 天 TTL，过期由 Redis 自动回收；不做
 
 流水线定义在 `.github/workflows/ci.yml`，三个阶段串行：`backend`（编译 + 测试）→ `frontend`（类型检查 + 构建）→ `release`（仅 `main` 的 push 触发）。
 
-发布动作：构建镜像推送到 GHCR（`:latest` 与 `:<sha>` 两个 tag），同步仓库内 `deploy/docker-compose.app.yaml` 到云主机 `47.108.73.153`（编排以仓库为唯一事实源，含对外端口 24399），再 SSH 执行 `docker compose -f docker-compose.app.yaml pull && up -d`。
+发布动作：构建镜像推送到 GHCR（`:latest` 与 `:<sha>` 两个 tag），同步仓库内 `deploy/docker-compose.app.yaml` 到云主机 `47.108.73.153`（编排以仓库为唯一事实源，含对外端口 24399），再 SSH 执行 `podman-compose -f docker-compose.app.yaml pull && up -d`（主机为 Podman 运行时）。
 
 | Secret | 用途 |
 |---|---|
@@ -164,6 +168,7 @@ Redisearch 索引文档键带 30 天 TTL，过期由 Redis 自动回收；不做
 | `SSH_USER` | 登录用户 |
 | `SSH_KEY` | SSH 私钥 |
 | `SSH_APP_DIR` | 主机上存放 `docker-compose.app.yaml` 的目录，当前值 `/opt/liteworkbench` |
+| `LITEWORKBENCH_SECURITY_SECRET` | 应用密钥加解密因子（供应方 API Key AES 加密），32 位以上随机串 |
 | `GITHUB_TOKEN` | 内置，用于登录 GHCR |
 
 前置条件：仓库 Actions 需处于启用状态（Settings → Actions → Allow all actions），且四个 SSH Secret 配置齐全；流水线一次未跑或 secret 缺失时云主机不会有新镜像。GHCR 镜像跟随仓库可见性：仓库为 public 时镜像可匿名拉取，若改为 private 需在云主机先 `docker login ghcr.io`。

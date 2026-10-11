@@ -13,9 +13,9 @@ RUN npm install --no-audit --no-fund
 COPY frontend .
 RUN npm run build
 
-FROM eclipse-temurin:17-jre-alpine
+FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/openjdk:17-jdk-alpine
 WORKDIR /app
-# 内置 Python 运行时（唯一预置脚本运行时）
+# 内置 Python 运行时（唯一预置脚本运行时），所需工具直接在镜像内下载
 RUN apk add --no-cache python3 curl tzdata
 COPY --from=backend-build /build/backend/target/lite-workbench-server.jar app.jar
 COPY --from=frontend-build /build/frontend/dist ./static/

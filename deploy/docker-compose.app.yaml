@@ -1,21 +1,25 @@
 # LiteWorkbench 应用编排：只跑应用容器，中间件由 docker-compose.yaml 单独维护
+# 目标主机运行时为 Podman 3.4.2 + podman-compose（无 Docker）
 # 用法（目标主机）：
 #   export LITEWORKBENCH_IMAGE=ghcr.io/2132691342/liteworkbench:latest
-#   docker compose -f docker-compose.app.yaml pull && docker compose -f docker-compose.app.yaml up -d
+#   export LITEWORKBENCH_SECURITY_SECRET=<32 位以上随机串>
+#   podman-compose -f docker-compose.app.yaml pull && podman-compose -f docker-compose.app.yaml up -d
 services:
   liteworkbench:
     image: ${LITEWORKBENCH_IMAGE:-ghcr.io/2132691342/liteworkbench:latest}
     container_name: liteworkbench
     restart: always
-    # 与中间件编排同一网络，postgres / redisearch / minio / rabbitmq 主机名可直接解析
-    # 网络名若不同，先 docker network ls 确认后修改
+    # 与中间件编排同一网络，postgres / redis / minio / rabbitmq 主机名可直接解析
+    # 网络名若不同，先 podman network ls 确认后修改
     networks:
-      - liteworkbench_default
+      - workbaby-infra_default
+    # 2GB 小主机：容器限内存，JVM MaxRAMPercentage=70 据此收敛堆上限
+    mem_limit: 1152m
     environment:
       LITEWORKBENCH_DATASOURCE_URL: jdbc:postgresql://postgres:5432/postgres
       LITEWORKBENCH_DATASOURCE_USERNAME: postgres
       LITEWORKBENCH_DATASOURCE_PASSWORD: ${LITEWORKBENCH_DATASOURCE_PASSWORD:-admin_public}
-      LITEWORKBENCH_REDIS_HOST: redisearch
+      LITEWORKBENCH_REDIS_HOST: redis
       LITEWORKBENCH_REDIS_PASSWORD: ${LITEWORKBENCH_REDIS_PASSWORD:-admin_public}
       LITEWORKBENCH_STORAGE_ENDPOINT: http://minio:9000
       LITEWORKBENCH_STORAGE_ACCESS_KEY: ${LITEWORKBENCH_STORAGE_ACCESS_KEY:-minioadmin}
@@ -33,7 +37,7 @@ services:
       - app_data:/var/lib/liteworkbench
 
 networks:
-  liteworkbench_default:
+  workbaby-infra_default:
     external: true
 
 volumes:

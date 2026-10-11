@@ -87,6 +87,8 @@ jobs:
           script: |
             cd ${{ secrets.SSH_APP_DIR }}
             export LITEWORKBENCH_IMAGE=ghcr.io/${{ github.repository_owner }}/liteworkbench:latest
-            docker compose -f docker-compose.app.yaml pull
-            docker compose -f docker-compose.app.yaml up -d
-            docker image prune -f
+            export LITEWORKBENCH_SECURITY_SECRET=${{ secrets.LITEWORKBENCH_SECURITY_SECRET }}
+            # 目标主机运行时为 Podman + podman-compose，无 Docker
+            podman-compose -f docker-compose.app.yaml pull
+            podman-compose -f docker-compose.app.yaml up -d
+            podman image prune -f
