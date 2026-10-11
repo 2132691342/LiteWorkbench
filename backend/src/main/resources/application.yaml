@@ -55,6 +55,8 @@ spring:
 mybatis:
   mapper-locations: classpath:mapper/*.xml
   type-aliases-package: com.liteworkbench.domain.entity
+  # LocalDateTime ↔ timestamptz 全局映射，覆盖默认处理器
+  type-handlers-package: com.liteworkbench.common
   configuration:
     map-underscore-to-camel-case: true
     default-fetch-size: 100
