@@ -1,6 +1,10 @@
 package com.liteworkbench.domain.entity;
 
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.experimental.Accessors;
 
 import java.io.Serial;
 import java.io.Serializable;
@@ -8,6 +12,10 @@ import java.time.LocalDateTime;
 
 /** 菜单与权限点实体，平台级表 */
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@Accessors(chain = true)
 public class SysMenuDO implements Serializable {
 
     @Serial

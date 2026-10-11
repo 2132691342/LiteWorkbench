@@ -35,6 +35,7 @@ import io.agentscope.core.message.AssistantMessage;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.message.UserMessage;
 import jakarta.annotation.PreDestroy;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -56,6 +57,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /** 运行主链路：SSE 流式对话、事件攒批落库、中断与回放 */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class RunService {
 
     /** 历史消息条数上限 */
@@ -82,22 +84,6 @@ public class RunService {
         thread.setDaemon(true);
         return thread;
     });
-
-    public RunService(AgentRuntime agentRuntime, ModelFactory modelFactory, SessionService sessionService,
-                      SkillService skillService, AgentProperties agentProperties, WbRunMapper runMapper,
-                      WbEventMapper eventMapper, WbMessageMapper messageMapper, WbSessionMapper sessionMapper,
-                      StringRedisTemplate redisTemplate) {
-        this.agentRuntime = agentRuntime;
-        this.modelFactory = modelFactory;
-        this.sessionService = sessionService;
-        this.skillService = skillService;
-        this.agentProperties = agentProperties;
-        this.runMapper = runMapper;
-        this.eventMapper = eventMapper;
-        this.messageMapper = messageMapper;
-        this.sessionMapper = sessionMapper;
-        this.redisTemplate = redisTemplate;
-    }
 
     /** 流式对话：锁会话 → 落运行与用户消息 → 订阅事件流（攒批落库 + 推送）→ 终态收尾 */
     public String chatStream(ChatStreamREQ req, RunSink sink) {

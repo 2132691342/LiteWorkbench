@@ -1,6 +1,10 @@
 package com.liteworkbench.domain.entity;
 
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.experimental.Accessors;
 
 import java.io.Serial;
 import java.io.Serializable;
@@ -8,6 +12,10 @@ import java.time.LocalDateTime;
 
 /** 会话消息实体，映射 wb_message */
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@Accessors(chain = true)
 public class WbMessageDO implements Serializable {
 
     @Serial

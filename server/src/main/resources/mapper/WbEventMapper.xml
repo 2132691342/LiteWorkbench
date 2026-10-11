@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 仅保留批量插入；单条查询走 WbEventMapper 注解 -->
 <mapper namespace="com.liteworkbench.mapper.WbEventMapper">
 
     <insert id="insertBatch">
@@ -12,11 +13,4 @@
              CAST(#{item.payload} AS jsonb), #{item.occurredAt})
         </foreach>
     </insert>
-
-    <select id="selectByRunAfterSeq" resultType="com.liteworkbench.domain.entity.WbEventDO">
-        SELECT * FROM wb_event
-        WHERE run_id = #{runId} AND seq &gt; #{afterSeq}
-        ORDER BY seq ASC
-        LIMIT #{size}
-    </select>
 </mapper>

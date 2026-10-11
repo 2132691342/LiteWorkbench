@@ -1,8 +1,10 @@
 package com.liteworkbench.mapper;
 
+import cn.hutool.core.util.NumberUtil;
 import cn.hutool.core.util.StrUtil;
 import com.liteworkbench.domain.vo.LogDocVO;
 import com.liteworkbench.observability.LogPublisher;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -10,9 +12,8 @@ import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -25,6 +26,7 @@ import java.util.Objects;
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class LogSearchMapper {
 
     private static final String INDEX = "idx:lw:log";
@@ -34,16 +36,11 @@ public class LogSearchMapper {
 
     private final StringRedisTemplate redisTemplate;
 
-    public LogSearchMapper(StringRedisTemplate redisTemplate) {
-        this.redisTemplate = redisTemplate;
-    }
-
     /** 幂等创建索引，已存在则跳过 */
     public boolean ensureIndex() {
         return Boolean.TRUE.equals(redisTemplate.execute((RedisConnection connection) -> {
             try {
-                Object info = connection.execute("FT.INFO", bytes(INDEX));
-                if (Objects.nonNull(info)) {
+                if (Objects.nonNull(connection.execute("FT.INFO", args(INDEX)))) {
                     log.info("[log.index] 索引已存在 {}", INDEX);
                     return true;
                 }
@@ -51,18 +48,18 @@ public class LogSearchMapper {
                 // 索引不存在，走创建
             }
             try {
-                connection.execute("FT.CREATE", bytes(INDEX),
-                        bytes("ON"), bytes("HASH"),
-                        bytes("PREFIX"), bytes("1"), bytes(KEY_PREFIX),
-                        bytes("SCHEMA"),
-                        bytes("log_id"), bytes("TAG"),
-                        bytes("ts"), bytes("NUMERIC"), bytes("SORTABLE"),
-                        bytes("level"), bytes("TAG"),
-                        bytes("logger"), bytes("TAG"),
-                        bytes("thread"), bytes("TAG"),
-                        bytes("trace_id"), bytes("TAG"),
-                        bytes("message"), bytes("TEXT"),
-                        bytes("exception"), bytes("TEXT"));
+                connection.execute("FT.CREATE", args(INDEX,
+                        "ON", "HASH",
+                        "PREFIX", "1", KEY_PREFIX,
+                        "SCHEMA",
+                        "log_id", "TAG",
+                        "ts", "NUMERIC", "SORTABLE",
+                        "level", "TAG",
+                        "logger", "TAG",
+                        "thread", "TAG",
+                        "trace_id", "TAG",
+                        "message", "TEXT",
+                        "exception", "TEXT"));
                 log.info("[log.index] 索引创建成功 {}", INDEX);
                 return true;
             } catch (Exception e) {
@@ -78,10 +75,10 @@ public class LogSearchMapper {
         doc.put("log_id", message.logId());
         doc.put("ts", String.valueOf(message.ts()));
         doc.put("level", message.level());
-        doc.put("logger", Objects.toString(message.logger(), ""));
-        doc.put("thread", Objects.toString(message.thread(), ""));
-        doc.put("trace_id", Objects.toString(message.traceId(), ""));
-        doc.put("message", Objects.toString(message.message(), ""));
+        doc.put("logger", StrUtil.nullToEmpty(message.logger()));
+        doc.put("thread", StrUtil.nullToEmpty(message.thread()));
+        doc.put("trace_id", StrUtil.nullToEmpty(message.traceId()));
+        doc.put("message", StrUtil.nullToEmpty(message.message()));
         if (StrUtil.isNotBlank(message.exception())) {
             doc.put("exception", message.exception());
         }
@@ -95,41 +92,31 @@ public class LogSearchMapper {
                                  long from, long to, long page, long size) {
         StringBuilder query = new StringBuilder();
         if (StrUtil.isNotBlank(level)) {
-            query.append(" @level:{").append(level.toUpperCase()).append("}");
+            query.append(" @level:{").append(level.toUpperCase()).append('}');
         }
         if (from > 0 && to > 0) {
             query.append(" @ts:[").append(from).append(' ').append(to).append(']');
         }
         if (StrUtil.isNotBlank(keyword)) {
-            query.append(" @message:(").append(keyword.replace("\"", "")).append(")");
+            query.append(" @message:(").append(StrUtil.removeAll(keyword, '"')).append(')');
         }
         long offset = (page - 1) * size;
-        List<Object> args = new ArrayList<>();
-        args.add(bytes(INDEX));
-        args.add(bytes(query.toString()));
-        args.add(bytes("SORTBY"));
-        args.add(bytes("ts"));
-        args.add(bytes("DESC"));
-        args.add(bytes("LIMIT"));
-        args.add(bytes(String.valueOf(offset)));
-        args.add(bytes(String.valueOf(size)));
-
         Object reply = redisTemplate.execute((RedisConnection connection) ->
-                connection.execute("FT.SEARCH", args.toArray(new byte[0][])));
+                connection.execute("FT.SEARCH", args(INDEX, query.toString(),
+                        "SORTBY", "ts", "DESC", "LIMIT",
+                        String.valueOf(offset), String.valueOf(size))));
         return parseReply(reply);
     }
 
     /** 解析 FT.SEARCH 回复：[total, key, [field, value, ...], ...] */
     private List<LogDocVO> parseReply(Object reply) {
         List<LogDocVO> result = new ArrayList<>();
-        if (!(reply instanceof List<?> rows) || rows.size() < 1) {
+        if (!(reply instanceof List<?> rows) || rows.isEmpty()) {
             return result;
         }
         for (int i = 1; i < rows.size(); i++) {
-            if (!(rows.get(i) instanceof List<?> row) || row.size() < 2) {
-                continue;
-            }
-            if (!(row.get(1) instanceof List<?> fields)) {
+            if (!(rows.get(i) instanceof List<?> row) || row.size() < 2
+                    || !(row.get(1) instanceof List<?> fields)) {
                 continue;
             }
             Map<String, String> doc = new LinkedHashMap<>();
@@ -138,7 +125,7 @@ public class LogSearchMapper {
             }
             LogDocVO vo = new LogDocVO();
             vo.setLogId(doc.get("log_id"));
-            vo.setTs(parseLong(doc.get("ts")));
+            vo.setTs(NumberUtil.parseLong(doc.get("ts"), System.currentTimeMillis()));
             vo.setLevel(doc.get("level"));
             vo.setLogger(doc.get("logger"));
             vo.setThread(doc.get("thread"));
@@ -150,22 +137,18 @@ public class LogSearchMapper {
         return result;
     }
 
+    /** 回复字段统一转文本，字节数组按 UTF-8 解码 */
     private String text(Object value) {
-        if (value instanceof byte[] bytes) {
-            return new String(bytes, StandardCharsets.UTF_8);
+        if (value instanceof byte[] raw) {
+            return StrUtil.str(raw, StandardCharsets.UTF_8);
         }
-        return Objects.toString(value, "");
+        return Objects.isNull(value) ? StrUtil.EMPTY : value.toString();
     }
 
-    private long parseLong(String value) {
-        try {
-            return Long.parseLong(value);
-        } catch (Exception e) {
-            return LocalDateTime.now().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
-        }
-    }
-
-    private byte[] bytes(String value) {
-        return value.getBytes(StandardCharsets.UTF_8);
+    /** Redisearch 原始命令只收字节数组参数，字符串参数统一转码 */
+    private byte[][] args(String... values) {
+        return Arrays.stream(values)
+                .map(value -> StrUtil.bytes(value, StandardCharsets.UTF_8))
+                .toArray(byte[][]::new);
     }
 }

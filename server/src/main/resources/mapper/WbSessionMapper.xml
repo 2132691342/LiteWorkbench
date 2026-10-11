@@ -1,12 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 仅保留动态 SQL；单表增删改查走 WbSessionMapper 注解 -->
 <mapper namespace="com.liteworkbench.mapper.WbSessionMapper">
-
-    <sql id="Base_Column_List">
-        session_id, user_id, title, provider_code, model_name, system_prompt,
-        message_count, run_count, total_tokens, last_active_at, state,
-        created_by, created_at, updated_by, updated_at, deleted, remark
-    </sql>
 
     <update id="update">
         UPDATE wb_session
@@ -21,15 +16,6 @@
             updated_at = now()
         </set>
         WHERE session_id = #{sessionId} AND user_id = #{userId} AND deleted = false
-    </update>
-
-    <update id="updateStats">
-        UPDATE wb_session
-        SET message_count = message_count + #{messageDelta},
-            run_count = run_count + #{runDelta},
-            total_tokens = total_tokens + #{tokenDelta},
-            last_active_at = now()
-        WHERE session_id = #{sessionId}
     </update>
 
     <sql id="Page_Condition">

@@ -1,16 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 仅保留动态 SQL 与多表关联；单表增删改查走 SysRoleMapper 注解 -->
 <mapper namespace="com.liteworkbench.mapper.SysRoleMapper">
 
     <sql id="Base_Column_List">
         role_id, role_code, role_name, sort_no, state,
         created_by, created_at, updated_by, updated_at, deleted, remark
     </sql>
-
-    <insert id="insert">
-        INSERT INTO sys_role (role_id, role_code, role_name, sort_no, state, created_by, remark)
-        VALUES (#{roleId}, #{roleCode}, #{roleName}, #{sortNo}, #{state}, #{createdBy}, #{remark})
-    </insert>
 
     <update id="update">
         UPDATE sys_role
@@ -24,19 +20,6 @@
         </set>
         WHERE role_id = #{roleId} AND deleted = false
     </update>
-
-    <select id="selectById" resultType="com.liteworkbench.domain.entity.SysRoleDO">
-        SELECT <include refid="Base_Column_List"/>
-        FROM sys_role
-        WHERE role_id = #{roleId} AND deleted = false
-    </select>
-
-    <select id="selectList" resultType="com.liteworkbench.domain.entity.SysRoleDO">
-        SELECT <include refid="Base_Column_List"/>
-        FROM sys_role
-        WHERE deleted = false AND state = 'normal'
-        ORDER BY sort_no ASC, created_at ASC
-    </select>
 
     <select id="selectPage" resultType="com.liteworkbench.domain.entity.SysRoleDO">
         SELECT <include refid="Base_Column_List"/>
@@ -60,15 +43,6 @@
         </if>
     </select>
 
-    <select id="countByCode" resultType="long">
-        SELECT COUNT(1)
-        FROM sys_role
-        WHERE role_code = #{roleCode} AND deleted = false
-        <if test="excludeId != null and excludeId != ''">
-            AND role_id &lt;&gt; #{excludeId}
-        </if>
-    </select>
-
     <select id="selectByUserId" resultType="com.liteworkbench.domain.entity.SysRoleDO">
         SELECT r.role_id, r.role_code, r.role_name, r.sort_no, r.state,
                r.created_by, r.created_at, r.updated_by, r.updated_at, r.deleted, r.remark
@@ -85,18 +59,6 @@
         WHERE ur.role_id = #{roleId}
     </select>
 
-    <update id="deleteById">
-        UPDATE sys_role
-        SET deleted = true, state = 'disabled', updated_by = #{updatedBy}, updated_at = now()
-        WHERE role_id = #{roleId} AND deleted = false
-    </update>
-
-    <select id="selectMenuIdsByRoleId" resultType="string">
-        SELECT menu_id
-        FROM sys_role_menu
-        WHERE role_id = #{roleId}
-    </select>
-
     <insert id="insertRoleMenus">
         INSERT INTO sys_role_menu (role_id, menu_id, created_by)
         VALUES
@@ -105,10 +67,6 @@
         </foreach>
         ON CONFLICT (role_id, menu_id) DO NOTHING
     </insert>
-
-    <delete id="deleteRoleMenus">
-        DELETE FROM sys_role_menu WHERE role_id = #{roleId}
-    </delete>
 
     <select id="selectUserIdsByRoleId" resultType="string">
         SELECT ur.user_id

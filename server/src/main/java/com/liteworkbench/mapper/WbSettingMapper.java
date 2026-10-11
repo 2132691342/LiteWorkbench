@@ -1,6 +1,7 @@
 package com.liteworkbench.mapper;
 
 import com.liteworkbench.domain.entity.WbSettingDO;
+import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
@@ -12,6 +13,15 @@ import java.util.List;
 public interface WbSettingMapper {
 
     /** 幂等写入：存在则更新值 */
+    @Insert("""
+            INSERT INTO wb_setting (setting_id, user_id, setting_key, setting_value, value_type,
+                                    updated_by, updated_at)
+            VALUES (#{settingId}, #{userId}, #{settingKey}, #{settingValue}, #{valueType},
+                    #{updatedBy}, now())
+            ON CONFLICT (user_id, setting_key)
+            DO UPDATE SET setting_value = #{settingValue}, value_type = #{valueType},
+                          updated_by = #{updatedBy}, updated_at = now()
+            """)
     int upsert(WbSettingDO setting);
 
     /** 用户全量设置 */

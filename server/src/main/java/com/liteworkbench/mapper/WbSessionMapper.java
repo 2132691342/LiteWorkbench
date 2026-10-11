@@ -7,6 +7,7 @@ import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 import java.util.List;
 
@@ -44,6 +45,14 @@ public interface WbSessionMapper {
     WbSessionDO selectByIdAndUser(@Param("userId") String userId, @Param("sessionId") String sessionId);
 
     /** 追加会话统计：消息数 / 运行数 / token / 最近活跃 */
+    @Update("""
+            UPDATE wb_session
+            SET message_count = message_count + #{messageDelta},
+                run_count = run_count + #{runDelta},
+                total_tokens = total_tokens + #{tokenDelta},
+                last_active_at = now()
+            WHERE session_id = #{sessionId}
+            """)
     int updateStats(@Param("sessionId") String sessionId,
                     @Param("messageDelta") int messageDelta,
                     @Param("runDelta") int runDelta,

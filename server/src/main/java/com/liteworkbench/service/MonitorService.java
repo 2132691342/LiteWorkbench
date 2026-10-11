@@ -14,6 +14,7 @@ import com.liteworkbench.mapper.WbSessionMapper;
 import com.liteworkbench.runtime.PythonRuntime;
 import io.minio.BucketExistsArgs;
 import io.minio.MinioClient;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
@@ -36,6 +37,7 @@ import java.util.concurrent.TimeUnit;
 /** 健康探测与仪表盘汇总 */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class MonitorService {
 
     private static final DateTimeFormatter DAY_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd");
@@ -56,22 +58,6 @@ public class MonitorService {
         thread.setDaemon(true);
         return thread;
     });
-
-    public MonitorService(JdbcTemplate jdbcTemplate, RedisConnectionFactory redisConnectionFactory,
-                          MinioClient minioClient, ConnectionFactory rabbitConnectionFactory,
-                          PythonRuntime pythonRuntime, WbSessionMapper sessionMapper,
-                          WbRunMapper runMapper, WbEventMapper eventMapper,
-                          LogSearchMapper logSearchMapper) {
-        this.jdbcTemplate = jdbcTemplate;
-        this.redisConnectionFactory = redisConnectionFactory;
-        this.minioClient = minioClient;
-        this.rabbitConnectionFactory = rabbitConnectionFactory;
-        this.pythonRuntime = pythonRuntime;
-        this.sessionMapper = sessionMapper;
-        this.runMapper = runMapper;
-        this.eventMapper = eventMapper;
-        this.logSearchMapper = logSearchMapper;
-    }
 
     /** Redisearch 日志检索，按时间倒序分页；索引不可用时降级为空结果 */
     public List<LogDocVO> searchLogs(String keyword, String level, long from, long to, long page, long size) {

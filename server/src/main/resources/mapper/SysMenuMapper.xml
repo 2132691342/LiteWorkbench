@@ -1,18 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 仅保留动态 SQL 与多表关联；单表增删改查走 SysMenuMapper 注解 -->
 <mapper namespace="com.liteworkbench.mapper.SysMenuMapper">
-
-    <sql id="Base_Column_List">
-        menu_id, parent_id, menu_name, menu_type, route_path, component, icon, perm_code,
-        sort_no, visible, state, created_by, created_at, updated_by, updated_at, deleted, remark
-    </sql>
-
-    <insert id="insert">
-        INSERT INTO sys_menu (menu_id, parent_id, menu_name, menu_type, route_path, component,
-                              icon, perm_code, sort_no, visible, state, created_by, remark)
-        VALUES (#{menuId}, #{parentId}, #{menuName}, #{menuType}, #{routePath}, #{component},
-                #{icon}, #{permCode}, #{sortNo}, #{visible}, #{state}, #{createdBy}, #{remark})
-    </insert>
 
     <update id="update">
         UPDATE sys_menu
@@ -33,19 +22,6 @@
         </set>
         WHERE menu_id = #{menuId} AND deleted = false
     </update>
-
-    <select id="selectById" resultType="com.liteworkbench.domain.entity.SysMenuDO">
-        SELECT <include refid="Base_Column_List"/>
-        FROM sys_menu
-        WHERE menu_id = #{menuId} AND deleted = false
-    </select>
-
-    <select id="selectAll" resultType="com.liteworkbench.domain.entity.SysMenuDO">
-        SELECT <include refid="Base_Column_List"/>
-        FROM sys_menu
-        WHERE deleted = false
-        ORDER BY sort_no ASC, created_at ASC
-    </select>
 
     <select id="selectVisibleByUserId" resultType="com.liteworkbench.domain.entity.SysMenuDO">
         SELECT DISTINCT m.menu_id, m.parent_id, m.menu_name, m.menu_type, m.route_path, m.component,
@@ -89,16 +65,4 @@
             AND menu_id &lt;&gt; #{excludeId}
         </if>
     </select>
-
-    <select id="countChildren" resultType="long">
-        SELECT COUNT(1)
-        FROM sys_menu
-        WHERE parent_id = #{parentId} AND deleted = false
-    </select>
-
-    <update id="deleteById">
-        UPDATE sys_menu
-        SET deleted = true, updated_by = #{updatedBy}, updated_at = now()
-        WHERE menu_id = #{menuId} AND deleted = false
-    </update>
 </mapper>

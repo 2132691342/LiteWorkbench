@@ -16,6 +16,12 @@ public interface WbEventMapper {
     int insertBatch(@Param("list") List<WbEventDO> events);
 
     /** 按 seq 增量回放 */
+    @Select("""
+            SELECT * FROM wb_event
+            WHERE run_id = #{runId} AND seq > #{afterSeq}
+            ORDER BY seq ASC
+            LIMIT #{size}
+            """)
     List<WbEventDO> selectByRunAfterSeq(@Param("runId") String runId,
                                         @Param("afterSeq") long afterSeq,
                                         @Param("size") long size);

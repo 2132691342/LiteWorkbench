@@ -58,6 +58,29 @@ public interface SessionConst {
 
 枚举用 `@Getter` + `@AllArgsConstructor`，带 `code` 与 `description`，并提供 `ofCode` 静态查找。
 
+**实体只用 `@Data` 不够**，按需要叠加构造与链式能力，`entity` 下的库表 / Redis / Redisearch 映射默认组合如下：
+
+```java
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@Accessors(chain = true)
+public class SysUserDO implements Serializable { ... }
+```
+
+| 注解 | 作用 | 何时去掉 |
+|---|---|---|
+| `@Data` | getter / setter / 常用方法 | 几乎不去；只读对象换 `@Getter` |
+| `@Builder` | 链式建造，装配处少写多行 setter | 字段全由 ORM 回填、无需手工构造时可去 |
+| `@NoArgsConstructor` | MyBatis 反射回填必需 | 不去 |
+| `@AllArgsConstructor` | 与 `@Builder` 配套 | 不去 |
+| `@Accessors(chain = true)` | setter 返回自身，连续赋值 | 不希望 setter 有返回值时去掉 |
+
+字段带默认值时必须加 `@Builder.Default`，否则 Builder 会吞掉初始值。
+
+`vo` / `dto` 至少保留 `@Data` 与无参构造（不可变传输对象用 `record`，不加任何 Lombok 注解）；调用方需要链式装配时，再按上表叠加 `@Builder` 与 `@Accessors`。
+
 ### 2.2 其他包
 
 | 包 | 命名 |
@@ -70,6 +93,45 @@ public interface SessionConst {
 | `aspect` | `XxxAspect.java` |
 | `mq.producer` | `XxxProducer.java` |
 | `mq.consumer` | `XxxConsumer.java` |
+
+### 2.3 Mapper：注解优先，XML 兜底
+
+单表增删改查一律写注解，只有确实需要动态标签或长 SQL 时才落 XML，**不允许默认建 XML**。
+
+| 形态 | 判据 | 写法 |
+|---|---|---|
+| 单表 insert / update / delete / select，无分支 | 静态 SQL | `@Insert` / `@Update` / `@Delete` / `@Select`，SQL 用 `"""` 文本块 |
+| 含 `<if>` / `<choose>` / `<foreach>` / `<set>` | 动态拼接 | XML |
+| 多表 join、聚合统计、窗口函数 | SQL 长且需要可读性 | XML |
+
+同一个 Mapper 允许注解与 XML 共存：XML 里只留上述复杂语句，且不得与注解方法重名。
+
+原本靠 `<if>` 做的可空判断，迁注解时改用 SQL 空值兜底，保持语句静态：
+
+```java
+@Select("""
+        SELECT COUNT(1) FROM sys_user
+        WHERE username = #{username} AND deleted = false
+          AND (#{excludeId} IS NULL OR #{excludeId} = '' OR user_id <> #{excludeId})
+        """)
+long countByUsername(@Param("username") String username, @Param("excludeId") String excludeId);
+```
+
+### 2.4 依赖注入：构造注入
+
+一律**构造注入**，配合 `@RequiredArgsConstructor`，字段保持 `private final`。禁止 `@Autowired` 字段注入，禁止为每个依赖手写构造器。
+
+```java
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class RunService {
+    private final WbRunMapper runMapper;
+    private final Map<String, ActiveRun> active = new ConcurrentHashMap<>(); // 已初始化的 final 不进构造器
+}
+```
+
+需要 JDK 能力或 Hutool 已有能力时**直接调用**，不为其写单行私有包装方法；只有真正被多处复用的转换才抽方法（如 Redisearch 参数批量转码）。
 
 ## 3. 角色与权限
 

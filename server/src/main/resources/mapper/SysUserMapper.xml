@@ -1,18 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 仅保留动态 SQL；单表增删改查走 SysUserMapper 注解 -->
 <mapper namespace="com.liteworkbench.mapper.SysUserMapper">
 
     <sql id="Base_Column_List">
         user_id, username, password_hash, password_salt, nickname, email, avatar_url,
         last_login_at, state, created_by, created_at, updated_by, updated_at, deleted, remark
     </sql>
-
-    <insert id="insert">
-        INSERT INTO sys_user (user_id, username, password_hash, password_salt, nickname,
-                              email, avatar_url, state, created_by, remark)
-        VALUES (#{userId}, #{username}, #{passwordHash}, #{passwordSalt}, #{nickname},
-                #{email}, #{avatarUrl}, #{state}, #{createdBy}, #{remark})
-    </insert>
 
     <update id="update">
         UPDATE sys_user
@@ -27,43 +21,6 @@
         </set>
         WHERE user_id = #{userId} AND deleted = false
     </update>
-
-    <update id="updatePassword">
-        UPDATE sys_user
-        SET password_hash = #{passwordHash}, password_salt = #{passwordSalt},
-            updated_by = #{updatedBy}, updated_at = now()
-        WHERE user_id = #{userId} AND deleted = false
-    </update>
-
-    <update id="updateLastLogin">
-        UPDATE sys_user
-        SET last_login_at = now()
-        WHERE user_id = #{userId} AND deleted = false
-    </update>
-
-    <update id="updateState">
-        UPDATE sys_user
-        SET state = #{state}, updated_by = #{updatedBy}, updated_at = now()
-        WHERE user_id = #{userId} AND deleted = false
-    </update>
-
-    <update id="deleteById">
-        UPDATE sys_user
-        SET deleted = true, state = 'disabled', updated_by = #{updatedBy}, updated_at = now()
-        WHERE user_id = #{userId} AND deleted = false
-    </update>
-
-    <select id="selectById" resultType="com.liteworkbench.domain.entity.SysUserDO">
-        SELECT <include refid="Base_Column_List"/>
-        FROM sys_user
-        WHERE user_id = #{userId} AND deleted = false
-    </select>
-
-    <select id="selectByUsername" resultType="com.liteworkbench.domain.entity.SysUserDO">
-        SELECT <include refid="Base_Column_List"/>
-        FROM sys_user
-        WHERE username = #{username} AND deleted = false
-    </select>
 
     <select id="selectPage" resultType="com.liteworkbench.domain.entity.SysUserDO">
         SELECT <include refid="Base_Column_List"/>
@@ -93,21 +50,6 @@
         </if>
     </select>
 
-    <select id="countByUsername" resultType="long">
-        SELECT COUNT(1)
-        FROM sys_user
-        WHERE username = #{username} AND deleted = false
-        <if test="excludeId != null and excludeId != ''">
-            AND user_id &lt;&gt; #{excludeId}
-        </if>
-    </select>
-
-    <select id="selectRoleIdsByUserId" resultType="string">
-        SELECT role_id
-        FROM sys_user_role
-        WHERE user_id = #{userId}
-    </select>
-
     <insert id="insertUserRoles">
         INSERT INTO sys_user_role (user_id, role_id, created_by)
         VALUES
@@ -116,8 +58,4 @@
         </foreach>
         ON CONFLICT (user_id, role_id) DO NOTHING
     </insert>
-
-    <delete id="deleteUserRoles">
-        DELETE FROM sys_user_role WHERE user_id = #{userId}
-    </delete>
 </mapper>

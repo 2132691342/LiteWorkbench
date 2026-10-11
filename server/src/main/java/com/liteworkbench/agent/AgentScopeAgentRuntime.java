@@ -14,6 +14,7 @@ import io.agentscope.core.message.UserMessage;
 import io.agentscope.core.model.ExecutionConfig;
 import io.agentscope.core.model.Model;
 import io.agentscope.core.tool.Toolkit;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
@@ -26,6 +27,7 @@ import java.util.Objects;
 /** AgentRuntime 的 AgentScope 实现：按运行装配 ReActAgent，模型实例按 供应方+模型 缓存 */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class AgentScopeAgentRuntime implements AgentRuntime {
 
     /** 模型调用超时 */
@@ -37,17 +39,6 @@ public class AgentScopeAgentRuntime implements AgentRuntime {
     private final RuntimeProperties runtimeProperties;
     private final PythonRuntime pythonRuntime;
     private final AgentEventAdapter adapter;
-
-    public AgentScopeAgentRuntime(ModelFactory modelFactory, ToolGate toolGate,
-                                  AgentProperties agentProperties, RuntimeProperties runtimeProperties,
-                                  PythonRuntime pythonRuntime, AgentEventAdapter adapter) {
-        this.modelFactory = modelFactory;
-        this.toolGate = toolGate;
-        this.agentProperties = agentProperties;
-        this.runtimeProperties = runtimeProperties;
-        this.pythonRuntime = pythonRuntime;
-        this.adapter = adapter;
-    }
 
     @Override
     public Flux<RunEventDTO> stream(RunContext context) {

@@ -1,18 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 仅保留动态 SQL 与聚合查询；单表增删改查走 WbRunMapper 注解 -->
 <mapper namespace="com.liteworkbench.mapper.WbRunMapper">
-
-    <update id="updateTerminal">
-        UPDATE wb_run
-        SET status = #{status},
-            stop_reason = #{stopReason},
-            iter_count = #{iterCount},
-            input_tokens = #{inputTokens},
-            output_tokens = #{outputTokens},
-            ended_at = now(),
-            duration_ms = #{durationMs}
-        WHERE run_id = #{runId}
-    </update>
 
     <sql id="Page_Condition">
         <where>

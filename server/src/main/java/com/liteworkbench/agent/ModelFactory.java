@@ -15,6 +15,7 @@ import io.agentscope.core.model.Model;
 import io.agentscope.extensions.model.anthropic.AnthropicChatModel;
 import io.agentscope.extensions.model.ollama.OllamaChatModel;
 import io.agentscope.extensions.model.openai.OpenAIChatModel;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
@@ -27,6 +28,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /** 按平台级供应方配置构建并缓存模型实例，覆盖 OpenAI / Anthropic / Ollama 三条通用协议 */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class ModelFactory {
 
     /** 供应方配置缓存 TTL */
@@ -39,14 +41,6 @@ public class ModelFactory {
 
     /** provider|model -> Model 实例 */
     private final Map<String, Model> modelCache = new ConcurrentHashMap<>();
-
-    public ModelFactory(ProviderStore providerStore, AgentProperties agentProperties,
-                        SecurityProperties securityProperties, StringRedisTemplate redisTemplate) {
-        this.providerStore = providerStore;
-        this.agentProperties = agentProperties;
-        this.securityProperties = securityProperties;
-        this.redisTemplate = redisTemplate;
-    }
 
     /** 取模型实例，带二级缓存：Redis 存配置快照，本地存构建好的 Model */
     public Model get(String providerCode, String modelName) {

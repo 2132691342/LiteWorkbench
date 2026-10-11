@@ -32,6 +32,13 @@ public interface WbRunMapper {
     int markRunning(@Param("runId") String runId);
 
     /** 写入终态与用量 */
+    @Update("""
+            UPDATE wb_run
+            SET status = #{status}, stop_reason = #{stopReason}, iter_count = #{iterCount},
+                input_tokens = #{inputTokens}, output_tokens = #{outputTokens},
+                ended_at = now(), duration_ms = #{durationMs}
+            WHERE run_id = #{runId}
+            """)
     int updateTerminal(WbRunDO run);
 
     /** 按主键查询 */
