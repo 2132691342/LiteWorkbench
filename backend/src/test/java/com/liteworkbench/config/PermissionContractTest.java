@@ -9,7 +9,6 @@ import com.liteworkbench.api.ProviderController;
 import com.liteworkbench.api.RoleController;
 import com.liteworkbench.api.RunController;
 import com.liteworkbench.api.SessionController;
-import com.liteworkbench.api.SettingController;
 import com.liteworkbench.api.SkillController;
 import com.liteworkbench.api.ToolController;
 import com.liteworkbench.api.UserController;
@@ -31,7 +30,7 @@ class PermissionContractTest {
     private static final List<Class<?>> CONTROLLERS = List.of(
             AuthController.class, UserController.class, RoleController.class, MenuController.class,
             SessionController.class, RunController.class, ToolController.class, SkillController.class,
-            FileController.class, ProviderController.class, SettingController.class, MonitorController.class);
+            FileController.class, ProviderController.class, MonitorController.class);
 
     @Test
     void controllerPermissionsShouldExistInMenuSeeds() {
