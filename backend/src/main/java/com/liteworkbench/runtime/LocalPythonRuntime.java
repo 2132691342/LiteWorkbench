@@ -21,10 +21,7 @@ import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
-/**
- * 本机 Python 运行时：探测顺序 配置路径 → 数据目录内置解释器 → PATH，
- * 执行带超时与进程树终止，输出清洗后保尾截断。
- */
+/** 本机 Python 运行时：探测解释器，执行带超时与进程树终止，输出清洗后保尾截断 */
 @Slf4j
 @Component
 public class LocalPythonRuntime implements PythonRuntime {

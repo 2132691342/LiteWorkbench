@@ -10,8 +10,12 @@
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
+    "@antv/x6": "^2.18.1",
     "@element-plus/icons-vue": "2.3.1",
+    "@wangeditor/editor": "^5.1.23",
+    "@wangeditor/editor-for-vue": "^5.1.12",
     "axios": "1.6.8",
+    "docx-preview": "^0.4.1",
     "echarts": "5.5.0",
     "element-plus": "2.9.0",
     "highlight.js": "11.10.0",
@@ -19,7 +23,9 @@
     "pinia": "2.1.7",
     "vue": "3.4.34",
     "vue-i18n": "9.10.2",
-    "vue-router": "4.3.2"
+    "vue-pdf-embed": "^2.1.7",
+    "vue-router": "4.3.2",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/markdown-it": "14.1.2",

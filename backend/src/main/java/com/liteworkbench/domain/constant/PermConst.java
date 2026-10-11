@@ -1,9 +1,6 @@
 package com.liteworkbench.domain.constant;
 
-/**
- * 权限标识常量，格式 域:资源:动作。
- * 一经发布不得改名，废弃只做下线处理。
- */
+/** 权限标识常量，格式 域:资源:动作，一经发布不得改名 */
 public interface PermConst {
 
     // 用户
@@ -44,6 +41,34 @@ public interface PermConst {
 
     // 工作台 · 文件（其余动作登录即可用）
     String WB_FILE_DELETE = "wb:file:delete";
+
+    // 工作台 · 知识库
+    String WB_KB_LIST = "wb:kb:list";
+    String WB_KB_CREATE = "wb:kb:create";
+    String WB_KB_UPDATE = "wb:kb:update";
+    String WB_KB_DELETE = "wb:kb:delete";
+    String WB_KB_UPLOAD = "wb:kb:upload";
+    String WB_KB_SEARCH = "wb:kb:search";
+
+    // 工作台 · 创作文档
+    String WB_DOC_LIST = "wb:doc:list";
+    String WB_DOC_CREATE = "wb:doc:create";
+    String WB_DOC_UPDATE = "wb:doc:update";
+    String WB_DOC_DELETE = "wb:doc:delete";
+    String WB_DOC_SEARCH = "wb:doc:search";
+
+    // 工作台 · 提示词
+    String WB_PROMPT_LIST = "wb:prompt:list";
+    String WB_PROMPT_CREATE = "wb:prompt:create";
+    String WB_PROMPT_UPDATE = "wb:prompt:update";
+    String WB_PROMPT_DELETE = "wb:prompt:delete";
+
+    // 工作台 · 工作流
+    String WB_FLOW_LIST = "wb:flow:list";
+    String WB_FLOW_CREATE = "wb:flow:create";
+    String WB_FLOW_UPDATE = "wb:flow:update";
+    String WB_FLOW_DELETE = "wb:flow:delete";
+    String WB_FLOW_RUN = "wb:flow:run";
 
     // 工作台 · 模型供应方
     String WB_PROVIDER_LIST = "wb:provider:list";

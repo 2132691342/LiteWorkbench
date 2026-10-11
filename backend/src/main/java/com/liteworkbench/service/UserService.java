@@ -39,6 +39,7 @@ public class UserService {
     private final SysRoleMapper sysRoleMapper;
     private final StpInterfaceImpl stpInterface;
     private final AuthProperties authProperties;
+    private final MenuService menuService;
 
     /** 分页查询 */
     public PageResult<UserVO> page(UserPageREQ req) {
@@ -108,6 +109,7 @@ public class UserService {
                 sysUserMapper.insertUserRoles(exists.getUserId(), req.getRoleIds(), operatorId);
             }
             stpInterface.clearPermCache(exists.getUserId());
+            menuService.clearMenuCache(exists.getUserId());
         }
         log.info("[user.update] userId={} operatorId={}", exists.getUserId(), operatorId);
     }
@@ -144,6 +146,7 @@ public class UserService {
         sysUserMapper.deleteById(userId, operatorId);
         sysUserMapper.deleteUserRoles(userId);
         stpInterface.clearPermCache(userId);
+        menuService.clearMenuCache(userId);
         log.info("[user.delete] userId={} operatorId={}", userId, operatorId);
     }
 

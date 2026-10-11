@@ -25,6 +25,7 @@
 | 6000 | 文件 |
 | 7000 | 运行时 |
 | 8000 | 技能 |
+| 8600 | 知识库 |
 | 9000 | 系统与中间件 |
 
 ## 3. 通用 1000（0 为成功保留码）
@@ -138,7 +139,45 @@
 | 8002 | `SKILL_CODE_CONFLICT` | 409 | 技能标识已存在 |
 | 8003 | `SKILL_CONTENT_TOO_LONG` | 400 | 技能内容超过 8000 字上限 |
 
-## 15. 系统 9000
+## 15. 知识库 8600
+
+| 码 | 标识 | HTTP | 提示 |
+|---|---|---|---|
+| 8601 | `KB_NOT_FOUND` | 404 | 知识库不存在 |
+| 8602 | `KB_NAME_CONFLICT` | 409 | 知识库名已存在 |
+| 8603 | `KB_DOC_NOT_FOUND` | 404 | 知识库文档不存在 |
+| 8604 | `KB_DOC_TYPE_UNSUPPORTED` | 400 | 不支持的文档格式 |
+| 8605 | `KB_DOC_PARSE_FAILED` | 500 | 文档解析失败 |
+| 8606 | `KB_DOC_NOT_READY` | 409 | 文档尚未解析完成 |
+
+## 16. 创作文档 8700
+
+| 码 | 标识 | HTTP | 提示 |
+|---|---|---|---|
+| 8701 | `DOC_NOT_FOUND` | 404 | 文档不存在 |
+| 8702 | `DOC_TITLE_CONFLICT` | 409 | 同名文档已存在 |
+| 8703 | `DOC_CONTENT_TOO_LONG` | 400 | 正文超过 200000 字上限 |
+| 8704 | `DOC_VERSION_NOT_FOUND` | 404 | 文档版本不存在 |
+
+## 17. 提示词 8800
+
+| 码 | 标识 | HTTP | 提示 |
+|---|---|---|---|
+| 8801 | `PROMPT_NOT_FOUND` | 404 | 提示词不存在 |
+| 8802 | `PROMPT_BUILTIN_READONLY` | 409 | 内置提示词只读，请先复制 |
+| 8803 | `PROMPT_TITLE_CONFLICT` | 409 | 同名提示词已存在 |
+| 8804 | `PROMPT_VARIABLE_MISSING` | 400 | 变量未填写完整 |
+
+## 18. 工作流 8900
+
+| 码 | 标识 | HTTP | 提示 |
+|---|---|---|---|
+| 8901 | `FLOW_NOT_FOUND` | 404 | 工作流不存在 |
+| 8902 | `FLOW_NAME_CONFLICT` | 409 | 同名工作流已存在 |
+| 8903 | `FLOW_GRAPH_INVALID` | 400 | 画布结构不合法（缺起止节点 / 有环 / 孤立节点） |
+| 8904 | `FLOW_NODE_FAILED` | 500 | 节点执行失败 |
+
+## 19. 系统 9000
 
 | 码 | 标识 | HTTP | 提示 |
 |---|---|---|---|
@@ -147,7 +186,7 @@
 | 9003 | `STORAGE_UNAVAILABLE` | 503 | 对象存储不可用 |
 | 9004 | `MQ_UNAVAILABLE` | 503 | 消息队列不可用 |
 
-## 16. 处理约定
+## 20. 处理约定
 
 后端抛出：
 
@@ -169,7 +208,7 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 
 前端映射（`frontend/src/api/index.ts`）：按 `code` 取 `locales` 中的提示文案，`401` 触发重新登录，`403` 提示无权限并停留当前页，`5xx` 允许重试一次。
 
-## 17. 取舍
+## 21. 取舍
 
 | 选择 | 换来什么 | 代价 |
 |---|---|---|

@@ -112,6 +112,11 @@ liteworkbench:
   security:
     # 供应方密钥加密因子，生产必须覆盖
     secret: ${LITEWORKBENCH_SECURITY_SECRET:liteworkbench-default-secret}
+  kb:
+    chunk:
+      # 单块目标字符数与相邻块重叠
+      target-size: 600
+      overlap: 120
   degradation:
     # 中间件不可用时是否允许降级启动
     allow-start: ${LITEWORKBENCH_DEGRADATION_ALLOW_START:true}

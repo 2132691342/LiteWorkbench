@@ -9,13 +9,13 @@ import com.liteworkbench.common.TimeUtil;
 import com.liteworkbench.domain.constant.IdPrefixConst;
 import com.liteworkbench.domain.constant.SessionConst;
 import com.liteworkbench.domain.constant.StateEnum;
+import com.liteworkbench.domain.dto.MessageDocDTO;
 import com.liteworkbench.domain.dto.SessionPageREQ;
 import com.liteworkbench.domain.dto.SessionREQ;
-import com.liteworkbench.domain.entity.WbMessageDO;
 import com.liteworkbench.domain.entity.WbSessionDO;
 import com.liteworkbench.domain.vo.MessageVO;
 import com.liteworkbench.domain.vo.SessionVO;
-import com.liteworkbench.mapper.WbMessageMapper;
+import com.liteworkbench.mapper.MessageIndexMapper;
 import com.liteworkbench.mapper.WbSessionMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,7 +31,7 @@ import java.util.Objects;
 public class SessionService {
 
     private final WbSessionMapper sessionMapper;
-    private final WbMessageMapper messageMapper;
+    private final MessageIndexMapper messageIndexMapper;
 
     /** 分页查询，仅返回归属用户的会话 */
     public PageResult<SessionVO> page(SessionPageREQ req, String userId) {
@@ -85,13 +85,15 @@ public class SessionService {
     public void delete(String sessionId, String userId) {
         getOwned(sessionId, userId);
         sessionMapper.deleteById(userId, sessionId, userId);
-        log.info("[session.delete] sessionId={} userId={}", sessionId, userId);
+        long removed = messageIndexMapper.deleteBySession(sessionId);
+        log.info("[session.delete] sessionId={} userId={} messagesRemoved={}", sessionId, userId, removed);
     }
 
-    /** 会话消息列表 */
+    /** 会话消息列表，来自消息索引，(ts, messageId) 稳定升序 */
     public List<MessageVO> messages(String sessionId, String userId) {
         getOwned(sessionId, userId);
-        return messageMapper.selectBySession(sessionId).stream().map(this::toMessageVO).toList();
+        return messageIndexMapper.listBySession(sessionId, SessionConst.MESSAGE_LIST_LIMIT, null)
+                .stream().map(this::toMessageVO).toList();
     }
 
     /** 归属校验：先按 (ID, user) 查，查不到即 404 不泄露存在性 */
@@ -119,13 +121,13 @@ public class SessionService {
         return vo;
     }
 
-    private MessageVO toMessageVO(WbMessageDO message) {
+    private MessageVO toMessageVO(MessageDocDTO message) {
         MessageVO vo = new MessageVO();
-        vo.setMessageId(message.getMessageId());
-        vo.setRunId(message.getRunId());
-        vo.setRoleCode(message.getRoleCode());
-        vo.setContent(message.getContent());
-        vo.setCreatedAt(TimeUtil.toMillis(message.getCreatedAt()));
+        vo.setMessageId(message.messageId());
+        vo.setRunId(message.runId());
+        vo.setRoleCode(message.role());
+        vo.setContent(message.content());
+        vo.setCreatedAt(message.ts());
         return vo;
     }
 

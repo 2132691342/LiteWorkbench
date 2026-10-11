@@ -194,7 +194,31 @@ Content-Type: application/json
 
 `file/page`、`file/upload`、`file/url` 登录即可用（按 `user_id` 归属）。
 
-## 12. 模型供应方
+## 12. 知识库
+
+知识库为用户私有资源（`user_id` 归属），原件进 MinIO，分块进 Redisearch。权限点前缀 `wb:kb:`。
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/v1/kb/page` | 知识库分页，支持 `keyword`，权限 `wb:kb:list` |
+| GET | `/api/v1/kb/detail/{kbId}` | 详情，按 (kbId, user) 校验归属 |
+| POST | `/api/v1/kb/create` | 新建，权限 `wb:kb:create`，`@Idempotent` |
+| POST | `/api/v1/kb/update` | 改名 / 描述，权限 `wb:kb:update`，`@Idempotent` |
+| POST | `/api/v1/kb/delete/{kbId}` | 删除，级联清文档与分块索引，权限 `wb:kb:delete`，`@Idempotent` |
+| GET | `/api/v1/kb/doc/page` | 文档分页，参数 `kbId` `keyword` `state`，权限 `wb:kb:list` |
+| POST | `/api/v1/kb/doc/upload/{kbId}` | multipart 上传，权限 `wb:kb:upload`，`@Idempotent` |
+| POST | `/api/v1/kb/doc/delete/{docId}` | 删文档（MinIO 原件 + 分块索引），权限 `wb:kb:delete`，`@Idempotent` |
+| POST | `/api/v1/kb/doc/reparse/{docId}` | 重解析失败文档，权限 `wb:kb:upload`，`@Idempotent` |
+| GET | `/api/v1/kb/search` | 分块检索，参数 `kbId`(可选) `keyword` `page` `size`，按相关度排序，权限 `wb:kb:search` |
+
+约定：
+
+- 支持格式：`.txt` `.md` `.csv` `.json` `.html` `.xml` `.log`（UTF-8 文本）、`.docx`、`.pdf`；单文件 ≤ 20MB。
+- 上传立即返回 `KbDocVO(state=pending)`，解析经 MQ 异步执行，前端轮询文档状态到 `ready` / `failed`；失败可 `reparse` 重放。
+- `kb/search` 返回 `PageResult<KbChunkVO>`：`chunkId` `kbId` `docId` `docName` `seq` `content`；高亮由前端按 `keyword` 分段渲染，后端只回原文，避免注入富文本。
+- Agent 侧工具 `kb_search` 由平台工具启停控制（`wb_tool` 种子），对话中模型按需检索当前用户的知识库。
+
+## 13. 模型供应方
 
 供应方为平台级定义（`wb_provider`），管理动作需供应方权限点，列表登录即可用（密钥脱敏）。
 
@@ -208,7 +232,7 @@ Content-Type: application/json
 
 供应方配置变更后清除 `lw:cache:provider:{code}` 缓存，即时生效。
 
-## 13. 日志与监控
+## 14. 日志与监控
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -220,11 +244,71 @@ Content-Type: application/json
 
 `monitor/overview` 返回：`sessionCount` / `runCount` / `successRunCount` / `todayRunCount` / `totalTokens` / `runTrend` / `tokenTrend` / `toolDistribution`。
 
-## 14. 预留结构
+## 15. 创作文档
+
+文档为用户私有资源，权限点前缀 `wb:doc:`。
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/v1/doc/page` | 分页，参数 `keyword` `category` `state`，权限 `wb:doc:list` |
+| GET | `/api/v1/doc/detail/{docId}` | 详情（含正文），按 (docId, user) 校验归属 |
+| POST | `/api/v1/doc/create` | 新建，权限 `wb:doc:create`，`@Idempotent` |
+| POST | `/api/v1/doc/update` | 保存正文（写版本 + 同步索引），权限 `wb:doc:update`，`@Idempotent` |
+| POST | `/api/v1/doc/delete/{docId}` | 删除（删版本 + 索引文档），权限 `wb:doc:delete`，`@Idempotent` |
+| GET | `/api/v1/doc/search` | 全文检索，参数 `keyword` `category` `page` `size`，走 `idx:lw:doc` |
+| GET | `/api/v1/doc/version/page` | 版本列表，参数 `docId`，权限 `wb:doc:list` |
+| GET | `/api/v1/doc/version/detail/{versionId}` | 版本快照，权限 `wb:doc:list` |
+| POST | `/api/v1/doc/version/restore/{versionId}` | 回滚到指定版本，权限 `wb:doc:update`，`@Idempotent` |
+| POST | `/api/v1/doc/assist` | AI 辅助写作（续写 / 润色 / 摘要 / 扩写 / 翻译），非流式返回文本 |
+
+约定：
+
+- `doc/update` 每次调用：`version_no + 1`、写一条 `wb_doc_version` 快照、覆盖 `idx:lw:doc` 文档键，三者在同一事务内，索引写失败只告警不回滚。
+- `doc/assist` 入参：`docId`(可选) `action` `selection`(选中的正文) `instruction`(补充要求) `kbId`(可选引用知识库)；返回 `{ text }`。内部复用 `ModelFactory` 同步调用模型，不建 Run（不产生事件流），结果由前端决定插入或替换选区。
+- 正文上限 200000 字，超出抛 `DOC_CONTENT_TOO_LONG`。
+
+## 16. 提示词
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/v1/prompt/page` | 分页（含内置），参数 `keyword` `category`，权限 `wb:prompt:list` |
+| GET | `/api/v1/prompt/detail/{promptId}` | 详情 |
+| POST | `/api/v1/prompt/create` | 新建，权限 `wb:prompt:create`，`@Idempotent` |
+| POST | `/api/v1/prompt/update` | 更新（内置只读），权限 `wb:prompt:update`，`@Idempotent` |
+| POST | `/api/v1/prompt/delete/{promptId}` | 删除（内置不可删），权限 `wb:prompt:delete`，`@Idempotent` |
+| POST | `/api/v1/prompt/copy/{promptId}` | 复制为自有模板，权限 `wb:prompt:create`，`@Idempotent` |
+| POST | `/api/v1/prompt/render` | 变量渲染：`{promptId, variables}` → 返回渲染后文本 |
+
+约定：
+
+- 内置模板 `user_id = 'builtin'`、`builtin = true`，列表对所有用户可见，修改与删除拒绝。
+- `variables` 为 `[{name,label,defaultValue}]`，渲染用 `{{name}}` 占位替换；缺失且无默认值抛 `PROMPT_VARIABLE_MISSING`。
+- 渲染与"发送到工作台"都在前端完成后续动作，后端只负责产出文本。
+
+## 17. 工作流画布
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/v1/flow/page` | 分页，参数 `keyword`，权限 `wb:flow:list` |
+| GET | `/api/v1/flow/detail/{flowId}` | 详情（含 `graphJson`） |
+| POST | `/api/v1/flow/create` | 新建，权限 `wb:flow:create`，`@Idempotent` |
+| POST | `/api/v1/flow/update` | 保存画布（含结构校验），权限 `wb:flow:update`，`@Idempotent` |
+| POST | `/api/v1/flow/delete/{flowId}` | 删除，权限 `wb:flow:delete`，`@Idempotent` |
+| POST | `/api/v1/flow/run` | 执行工作流：`{flowId, inputs}`，返回 `runId` 与每节点结果，权限 `wb:flow:run` |
+| GET | `/api/v1/flow/run/detail/{runId}` | 运行明细（节点级耗时与输出） |
+
+约定：
+
+- `graphJson` 结构：`{nodes:[{id,type,label,config}], edges:[{source,target}]}`，节点类型 `start` `llm` `tool` `python` `knowledge` `end`。
+- 保存即校验：必须有且仅有一个 `start` 与至少一个 `end`、无环、无孤立节点；不合法抛 `FLOW_GRAPH_INVALID` 并带回具体原因。
+- `flow/run` 按拓扑序串行执行，逐节点落 `wb_event`（复用运行事件流），节点失败即中止并置 `FLOW_NODE_FAILED`，已产生的输出保留在事件里可供回看。
+- 执行入口同步返回，节点耗时上限由各执行器自带超时控制（`llm` 用供应方超时，`python` 用运行时超时）。
+
+## 18. 预留结构
 
 异步任务（`wb_task`）与运行派生关系（`wb_run.relation` / `parent_run_id`）为预留结构，本期不暴露接口。
 
-## 15. 分页请求
+## 19. 分页请求
 
 GET 分页统一携带：
 
@@ -234,7 +318,7 @@ GET 分页统一携带：
 | `size` | int | 20 | 每页条数，上限 200 |
 | `keyword` | string | — | 模糊检索关键字 |
 
-## 16. 取舍
+## 20. 取舍
 
 | 选择 | 换来什么 | 代价 |
 |---|---|---|
@@ -243,3 +327,5 @@ GET 分页统一携带：
 | 统一信封 + HTTP 状态码双轨 | 前端可按 code 分支，网关可按状态码统计 | 两处语义需保持一致 |
 | SSE 而非 WebSocket | 单向流天然适配，自动重连，穿透代理好 | 无法实现客户端主动推消息 |
 | 动作式路径（`/delete/{id}`） | 与"只用 GET/POST"自洽，权限点可直接映射 URL | 资源语义弱化，靠文档对齐 |
+| AI 辅助写作走同步接口不建 Run | 结果短、需即时插入编辑器，落事件流反而增加回收成本 | 无法流式输出，长文辅助需等待 |
+| 工作流执行同步返回 | 画布规模小（≤ 20 节点），前端一次拿到全量结果最简单 | 超长流程会占用请求线程，靠节点超时兜底 |

@@ -81,6 +81,32 @@ public enum ErrorCodeEnum {
     SKILL_CODE_CONFLICT("8002", 409, "技能标识已存在"),
     SKILL_CONTENT_TOO_LONG("8003", 400, "技能内容超过 8000 字上限"),
 
+    // 知识库 8600
+    KB_NOT_FOUND("8601", 404, "知识库不存在"),
+    KB_NAME_CONFLICT("8602", 409, "知识库名已存在"),
+    KB_DOC_NOT_FOUND("8603", 404, "知识库文档不存在"),
+    KB_DOC_TYPE_UNSUPPORTED("8604", 400, "不支持的文档格式"),
+    KB_DOC_PARSE_FAILED("8605", 500, "文档解析失败"),
+    KB_DOC_NOT_READY("8606", 409, "文档尚未解析完成"),
+
+    // 创作文档 8700
+    DOC_NOT_FOUND("8701", 404, "文档不存在"),
+    DOC_TITLE_CONFLICT("8702", 409, "同名文档已存在"),
+    DOC_CONTENT_TOO_LONG("8703", 400, "正文超过 200000 字上限"),
+    DOC_VERSION_NOT_FOUND("8704", 404, "文档版本不存在"),
+
+    // 提示词 8800
+    PROMPT_NOT_FOUND("8801", 404, "提示词不存在"),
+    PROMPT_BUILTIN_READONLY("8802", 409, "内置提示词只读，请先复制"),
+    PROMPT_TITLE_CONFLICT("8803", 409, "同名提示词已存在"),
+    PROMPT_VARIABLE_MISSING("8804", 400, "变量未填写完整"),
+
+    // 工作流 8900
+    FLOW_NOT_FOUND("8901", 404, "工作流不存在"),
+    FLOW_NAME_CONFLICT("8902", 409, "同名工作流已存在"),
+    FLOW_GRAPH_INVALID("8903", 400, "画布结构不合法"),
+    FLOW_NODE_FAILED("8904", 500, "节点执行失败"),
+
     // 系统 9000
     DB_UNAVAILABLE("9001", 503, "数据库不可用"),
     REDIS_UNAVAILABLE("9002", 503, "缓存不可用"),

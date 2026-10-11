@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.liteworkbench.mapper.WbDocMapper">
+
+    <sql id="Page_Condition">
+        <where>
+            deleted = false
+            AND user_id = #{userId}
+            <if test="category != null and category != ''">
+                AND category = #{category}
+            </if>
+            <if test="state != null and state != ''">
+                AND state = #{state}
+            </if>
+            <if test="req.keyword != null and req.keyword != ''">
+                AND (doc_title LIKE '%' || #{req.keyword} || '%'
+                     OR summary LIKE '%' || #{req.keyword} || '%'
+                     OR tags LIKE '%' || #{req.keyword} || '%')
+            </if>
+        </where>
+    </sql>
+
+    <select id="selectPage" resultType="com.liteworkbench.domain.entity.WbDocDO">
+        SELECT doc_id, user_id, doc_title, doc_type, category, tags, summary,
+               word_count, version_no, source_kb_id, state, created_at, updated_at
+        FROM wb_doc
+        <include refid="Page_Condition"/>
+        ORDER BY updated_at DESC
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="countPage" resultType="long">
+        SELECT count(*) FROM wb_doc
+        <include refid="Page_Condition"/>
+    </select>
+</mapper>

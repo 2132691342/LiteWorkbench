@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { Upload } from '@element-plus/icons-vue'
-import { onMounted, ref } from 'vue'
+import { defineAsyncComponent, onMounted, ref, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
+/** 预览依赖较重，按需异步加载避免首屏体积膨胀 */
+const VuePdfEmbed = defineAsyncComponent(() => import('vue-pdf-embed'))
 import LwButton from '@/components/ui/LwButton.vue'
 import LwCard from '@/components/ui/LwCard.vue'
 import LwPageState from '@/components/ui/LwPageState.vue'
@@ -22,6 +24,72 @@ const size = ref(20)
 const loading = ref(false)
 const error = ref('')
 const uploadInput = ref<HTMLInputElement | null>(null)
+
+/** 在线预览：图片直显，pdf / docx / 表格按类型渲染，其余只给下载 */
+const previewOpen = ref(false)
+const previewUrl = ref('')
+const previewKind = ref<'image' | 'pdf' | 'docx' | 'sheet' | 'unknown'>('unknown')
+const previewHtml = ref('')
+const previewLoading = ref(false)
+const docxEl = shallowRef<HTMLDivElement | null>(null)
+
+function kindOf(name: string): 'image' | 'pdf' | 'docx' | 'sheet' | 'unknown' {
+  const ext = name.split('.').pop()?.toLowerCase() ?? ''
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp'].includes(ext)) return 'image'
+  if (ext === 'pdf') return 'pdf'
+  if (ext === 'docx') return 'docx'
+  if (['xlsx', 'xls', 'csv'].includes(ext)) return 'sheet'
+  return 'unknown'
+}
+
+async function preview(item: FileVO): Promise<void> {
+  previewKind.value = kindOf(item.fileName)
+  previewUrl.value = await fileApi.url(item.fileId)
+  previewHtml.value = ''
+  previewOpen.value = true
+  if (previewKind.value === 'unknown') return
+  if (previewKind.value === 'docx') {
+    await renderDocx()
+    return
+  }
+  if (previewKind.value === 'sheet') {
+    await renderSheet()
+  }
+}
+
+async function renderDocx(): Promise<void> {
+  previewLoading.value = true
+  try {
+    const { renderAsync } = await import('docx-preview')
+    const response = await fetch(previewUrl.value)
+    const blob = await response.blob()
+    await renderAsync(blob, docxEl.value as HTMLDivElement)
+  } catch (e) {
+    ElMessage.error((e as Error).message)
+  } finally {
+    previewLoading.value = false
+  }
+}
+
+function openPreviewUrl(): void {
+  window.open(previewUrl.value, '_blank')
+}
+
+async function renderSheet(): Promise<void> {
+  previewLoading.value = true
+  try {
+    const XLSX = await import('xlsx')
+    const response = await fetch(previewUrl.value)
+    const buffer = await response.arrayBuffer()
+    const workbook = XLSX.read(buffer, { type: 'array' })
+    const sheet = workbook.Sheets[workbook.SheetNames[0]]
+    previewHtml.value = XLSX.utils.sheet_to_html(sheet)
+  } catch (e) {
+    ElMessage.error((e as Error).message)
+  } finally {
+    previewLoading.value = false
+  }
+}
 
 async function load(): Promise<void> {
   loading.value = true
@@ -114,6 +182,7 @@ onMounted(load)
           </el-table-column>
           <el-table-column width="160" fixed="right">
             <template #default="{ row }">
+              <LwButton variant="text" size="sm" @click="preview(row)">{{ t('files.preview') }}</LwButton>
               <LwButton variant="text" size="sm" @click="download(row)">{{ t('files.download') }}</LwButton>
               <LwButton v-if="hasPerm('wb:file:delete')" variant="text" size="sm" @click="remove(row)">
                 {{ t('common.delete') }}
@@ -133,5 +202,22 @@ onMounted(load)
         </div>
       </LwPageState>
     </LwCard>
+
+    <!-- 在线预览 -->
+    <el-drawer v-model="previewOpen" :title="t('files.preview')" size="60%">
+      <div class="flex flex-col gap-3 h-full">
+        <img v-if="previewKind === 'image'" :src="previewUrl" class="max-h-full object-contain rounded-control" />
+        <VuePdfEmbed v-else-if="previewKind === 'pdf'" :source="previewUrl" class="h-full" />
+        <div v-else-if="previewKind === 'docx'" ref="docxEl" class="lw-md overflow-auto" />
+        <div v-else-if="previewKind === 'sheet'" class="overflow-auto" v-html="previewHtml" />
+        <div v-else class="flex flex-col items-center gap-3 py-16">
+          <LwEmpty :description="t('files.previewUnsupported')" />
+          <LwButton size="sm" variant="ghost" @click="openPreviewUrl">
+            {{ t('files.download') }}
+          </LwButton>
+        </div>
+        <div v-if="previewLoading" class="lw-subtitle">{{ t('common.loading') }}</div>
+      </div>
+    </el-drawer>
   </div>
 </template>

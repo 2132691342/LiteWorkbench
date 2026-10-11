@@ -3,12 +3,14 @@ package com.liteworkbench.service;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONUtil;
 import com.liteworkbench.common.BizException;
 import com.liteworkbench.common.ErrorCodeEnum;
 import com.liteworkbench.common.IdGenerator;
 import com.liteworkbench.config.StpInterfaceImpl;
 import com.liteworkbench.domain.constant.IdPrefixConst;
 import com.liteworkbench.domain.constant.MenuTypeEnum;
+import com.liteworkbench.domain.constant.RedisKeyConst;
 import com.liteworkbench.domain.constant.StateEnum;
 import com.liteworkbench.domain.entity.SysMenuDO;
 import com.liteworkbench.domain.dto.MenuREQ;
@@ -16,14 +18,17 @@ import com.liteworkbench.domain.vo.MenuVO;
 import com.liteworkbench.mapper.SysMenuMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /** 菜单与权限点：树构建、用户可见性、CRUD */
 @Slf4j
@@ -33,18 +38,58 @@ public class MenuService {
 
     /** 根节点父 ID */
     private static final String ROOT_PARENT_ID = "0";
+    /** 用户菜单树缓存时长，秒 */
+    private static final long MENU_CACHE_SECONDS = 600L;
 
     private final SysMenuMapper sysMenuMapper;
     private final StpInterfaceImpl stpInterface;
+    private final StringRedisTemplate stringRedisTemplate;
 
     /** 全量菜单树，管理页使用 */
     public List<MenuVO> tree() {
         return buildTree(sysMenuMapper.selectAll());
     }
 
-    /** 用户可见菜单树，前端动态路由使用 */
+    /** 用户可见菜单树，缓存 10 分钟，动态路由加载不回源；变更点显式清缓存 */
     public List<MenuVO> userTree(String userId) {
-        return buildTree(sysMenuMapper.selectVisibleByUserId(userId));
+        String cacheKey = RedisKeyConst.cacheMenu(userId);
+        try {
+            String cached = stringRedisTemplate.opsForValue().get(cacheKey);
+            if (StrUtil.isNotBlank(cached)) {
+                return JSONUtil.toList(cached, MenuVO.class);
+            }
+        } catch (Exception e) {
+            log.warn("[menu.cache] 读取失败 {}", e.getMessage());
+        }
+        List<MenuVO> tree = buildTree(sysMenuMapper.selectVisibleByUserId(userId));
+        try {
+            stringRedisTemplate.opsForValue().set(cacheKey, JSONUtil.toJsonStr(tree),
+                    Duration.ofSeconds(MENU_CACHE_SECONDS));
+        } catch (Exception e) {
+            log.warn("[menu.cache] 写入失败 {}", e.getMessage());
+        }
+        return tree;
+    }
+
+    /** 清空全部用户菜单缓存，菜单定义或角色授权变更后调用 */
+    public void clearAllMenuCache() {
+        try {
+            Set<String> keys = stringRedisTemplate.keys(StrUtil.format(RedisKeyConst.CACHE_MENU, "*"));
+            if (CollUtil.isNotEmpty(keys)) {
+                stringRedisTemplate.delete(keys);
+            }
+        } catch (Exception e) {
+            log.warn("[menu.cache.clear] 清空失败 {}", e.getMessage());
+        }
+    }
+
+    /** 清除指定用户菜单缓存，用户角色变更后调用 */
+    public void clearMenuCache(String userId) {
+        try {
+            stringRedisTemplate.delete(RedisKeyConst.cacheMenu(userId));
+        } catch (Exception e) {
+            log.warn("[menu.cache.clear] 清除失败 userId={} {}", userId, e.getMessage());
+        }
     }
 
     /** 用户权限标识集合 */
@@ -76,6 +121,7 @@ public class MenuService {
         sysMenuMapper.insert(menu);
         log.info("[menu.create] menuId={} name={} type={}", menu.getMenuId(), menu.getMenuName(), menu.getMenuType());
         stpInterface.clearAllPermCache();
+        clearAllMenuCache();
         return menu.getMenuId();
     }
 
@@ -97,6 +143,7 @@ public class MenuService {
         sysMenuMapper.update(menu);
         log.info("[menu.update] menuId={} name={}", menu.getMenuId(), menu.getMenuName());
         stpInterface.clearAllPermCache();
+        clearAllMenuCache();
     }
 
     /** 删除菜单，存在子级即拒绝 */
@@ -109,6 +156,7 @@ public class MenuService {
         sysMenuMapper.deleteById(menuId, operatorId);
         log.info("[menu.delete] menuId={}", menuId);
         stpInterface.clearAllPermCache();
+        clearAllMenuCache();
     }
 
     /** 按 parentId 一次分组构建树，保持 sortNo 顺序 */

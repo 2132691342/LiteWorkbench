@@ -9,13 +9,17 @@ import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/** RabbitMQ 拓扑与消息转换：日志索引队列 */
+/** RabbitMQ 拓扑与消息转换：日志索引队列、知识库解析队列 */
 @Configuration
 public class RabbitConfig {
 
     public static final String LOG_EXCHANGE = "lw.log.exchange";
     public static final String LOG_QUEUE = "lw.log.index.queue";
     public static final String LOG_ROUTING_KEY = "lw.log.index";
+
+    public static final String KB_EXCHANGE = "lw.kb.exchange";
+    public static final String KB_PARSE_QUEUE = "lw.kb.parse.queue";
+    public static final String KB_PARSE_ROUTING_KEY = "lw.kb.parse";
 
     @Bean
     public TopicExchange logExchange() {
@@ -30,6 +34,22 @@ public class RabbitConfig {
     @Bean
     public Binding logIndexBinding(Queue logIndexQueue, TopicExchange logExchange) {
         return BindingBuilder.bind(logIndexQueue).to(logExchange).with(LOG_ROUTING_KEY);
+    }
+
+    @Bean
+    public TopicExchange kbExchange() {
+        return new TopicExchange(KB_EXCHANGE, true, false);
+    }
+
+    /** 知识库解析队列：解析耗时且可重放，失败不重回队列，靠页面重解析触发 */
+    @Bean
+    public Queue kbParseQueue() {
+        return new Queue(KB_PARSE_QUEUE, true);
+    }
+
+    @Bean
+    public Binding kbParseBinding(Queue kbParseQueue, TopicExchange kbExchange) {
+        return BindingBuilder.bind(kbParseQueue).to(kbExchange).with(KB_PARSE_ROUTING_KEY);
     }
 
     /** 结构化消息用 Jackson 序列化，记录类字段直接映射 */

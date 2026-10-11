@@ -139,7 +139,7 @@ public class RunService {
 
 ### 3.1 数据归属模型
 
-- 用户拥有的业务表（会话、运行、事件、消息、技能、文件、任务）带 `user_id varchar(40)`（`USER_` 前缀），行级隔离。
+- 用户拥有的业务表（会话、运行、事件、技能、文件、任务、知识库、知识库文档）带 `user_id varchar(40)`（`USER_` 前缀），行级隔离；会话消息与知识库分块不落库表，分别存 Redisearch 索引（`idx:lw:msg`、`idx:lw:kbchunk`），同样带 `user_id` 过滤。
 - 平台级表不带 `user_id`，仅管理角色可写：`sys_menu`、`sys_user_role`、`sys_role_menu`、`wb_tool`、`wb_provider`。
 - 用户身份由 `common.LoginContext` 提供，禁止从请求体采信 `userId`；Service 在请求线程内一律 `LoginContext.userId()` 取当前用户。请求上下文之外（异步线程、MQ 消费）必须把 `userId` 作为第一个业务参数显式传递。
 - 用户拥有的资源，Mapper 查询条件必须显式携带 `user_id`（平台级表除外）。
@@ -212,6 +212,9 @@ public R<String> create(@RequestBody @Valid UserREQ req) { ... }
 | `SKIL_` | 技能 |
 | `FILE_` | 文件对象 |
 | `PROV_` | 模型供应方 |
+| `KB_` | 知识库 |
+| `KBDOC_` | 知识库文档 |
+| `KBCHUNK_` | 知识库分块（Redisearch） |
 | `TASK_` | 异步任务（预留） |
 | `LOGD_` | 日志文档（Redisearch） |
 
@@ -313,24 +316,29 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 
 ## 13. 注释规范
 
-精简，只写"是什么"和"边界"，"为什么"归文档。
+只写"是什么"和"边界"，"为什么"一律归文档。
 
 | 位置 | 要求 |
 |---|---|
 | 文件头 | 一行说明文件职责 |
-| 导出方法 | 一行签名说明 |
-| 字段 | 有歧义的必须注释 |
-| 连续注释块 | 不超过 2 行 |
+| 方法 | 一行签名说明 |
+| 字段 | 有歧义才有注释 |
+| 行内 | 禁止连续注释块，需要解释时压成一行 |
 
 ## 14. 测试约定
 
-只保留有针对性、覆盖复杂流程与长链路的测试，删除琐碎断言。
+只保留覆盖复杂流程与长链路的测试，简单断言（ID 格式、字符串清洗、空参校验）不写。
 
-| 类型 | 范围 |
+| 文件 | 覆盖 |
 |---|---|
-| 单元测试 | ULID 生成、事件归一化、输出裁剪、技能触发词匹配、权限码匹配 |
-| 集成测试 | 会话 → 运行 → 事件落库 → 回放 的完整链路 |
-| 契约测试 | SSE 事件序列顺序与字段；登录 → 鉴权 → 数据归属 链路 |
+| `service/RunEventPipelineTest` | 事件长链路：SDK 事件归一 → 批内合帧，增量合并、类型切换保序、工具输出捕获、超长裁剪 |
+| `api/SseFrameContractTest` | SSE 帧契约：`id` 为 seq、事件名 `run.event`、心跳只发注释行 |
+| `config/PermissionContractTest` | 控制器注解与 `PermConst` 的权限点全部存在于菜单种子 |
+| `service/FlowGraphTest` | 画布校验与拓扑执行序：合法链、有环、孤立节点、非法节点与悬空连线 |
+| `service/KbTextChunkerTest` | 分块算法：段落贪心合并、相邻块重叠、超长段落硬切 |
+| `service/SkillServiceTest` | 技能装配：命中才展开正文、摘要常驻、单轮上限 3 条、总开关旁路 |
+
+前端不写快照测试与纯渲染测试。
 
 ## 15. 第三方集成事实
 
@@ -343,7 +351,7 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 | Spring Boot starter | 其编译基线是 Spring Boot 4.x，与本项目 3.5.12 不匹配，**禁止引入**，在 `agent` 包自建装配（`AgentScopeAgentRuntime` / `ModelFactory`） |
 | 流式入口 | `ReActAgent.streamEvents(...)` 返回 `Flux<AgentEvent>`，事件类在 `io.agentscope.core.event.*` |
 | 工具定义 | `@Tool` + `@ToolParam` 标注，`Toolkit.registerTool(Object)` 注册 |
-| 废弃 API | `Memory`、`UserAgent`、旧 `io.agentscope.core.agent.Event` 均标注 `forRemoval`，禁用；上下文由 `wb_message` 显式组装，不依赖 SDK 状态存储 |
+| 废弃 API | `Memory`、`UserAgent`、旧 `io.agentscope.core.agent.Event` 均标注 `forRemoval`，禁用；上下文由消息索引 `idx:lw:msg` 显式组装，不依赖 SDK 状态存储 |
 | 协议转换扩展点 | `io.agentscope.core.formatter.Formatter`，用于 OpenAI / Anthropic / Ollama 三协议归一 |
 
 ### 15.2 Hutool

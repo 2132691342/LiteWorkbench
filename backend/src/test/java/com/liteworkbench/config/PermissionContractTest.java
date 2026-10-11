@@ -2,9 +2,13 @@ package com.liteworkbench.config;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.liteworkbench.api.AuthController;
+import com.liteworkbench.api.DocController;
 import com.liteworkbench.api.FileController;
+import com.liteworkbench.api.FlowController;
+import com.liteworkbench.api.KbController;
 import com.liteworkbench.api.MenuController;
 import com.liteworkbench.api.MonitorController;
+import com.liteworkbench.api.PromptController;
 import com.liteworkbench.api.ProviderController;
 import com.liteworkbench.api.RoleController;
 import com.liteworkbench.api.RunController;
@@ -30,7 +34,8 @@ class PermissionContractTest {
     private static final List<Class<?>> CONTROLLERS = List.of(
             AuthController.class, UserController.class, RoleController.class, MenuController.class,
             SessionController.class, RunController.class, ToolController.class, SkillController.class,
-            FileController.class, ProviderController.class, MonitorController.class);
+            FileController.class, KbController.class, DocController.class, PromptController.class,
+            FlowController.class, ProviderController.class, MonitorController.class);
 
     @Test
     void controllerPermissionsShouldExistInMenuSeeds() {

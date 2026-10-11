@@ -4,9 +4,27 @@ import { i18n } from '@/locales'
 import type {
   ApiResult,
   ChatStreamREQ,
+  DocAssistREQ,
+  DocAssistVO,
+  DocREQ,
+  DocSearchParams,
+  DocVO,
+  DocVersionVO,
   FileVO,
+  FlowREQ,
+  FlowRunREQ,
+  FlowRunVO,
+  FlowVO,
+  PromptRenderREQ,
+  PromptREQ,
+  PromptVO,
   HealthRESP,
   InvokeToolREQ,
+  KbChunkVO,
+  KbDocVO,
+  KbREQ,
+  KbSearchParams,
+  KbVO,
   LogDocVO,
   LogSearchParams,
   LoginREQ,
@@ -218,6 +236,69 @@ export const fileApi = {
   },
   url: (fileId: string) => get<string>(`/file/url/${fileId}`),
   remove: (fileId: string) => post<void>(`/file/delete/${fileId}`),
+}
+
+/* ===== 知识库 ===== */
+
+export const kbApi = {
+  page: (params: PageREQ) => get<PageResult<KbVO>>('/kb/page', params),
+  detail: (kbId: string) => get<KbVO>(`/kb/detail/${kbId}`),
+  create: (data: KbREQ) => post<string>('/kb/create', data),
+  update: (data: KbREQ) => post<void>('/kb/update', data),
+  remove: (kbId: string) => post<void>(`/kb/delete/${kbId}`),
+  docPage: (params: { kbId: string; page?: number; size?: number; keyword?: string; state?: string }) =>
+    get<PageResult<KbDocVO>>('/kb/doc/page', params),
+  upload: (kbId: string, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return post<KbDocVO>(`/kb/doc/upload/${kbId}`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
+    })
+  },
+  removeDoc: (docId: string) => post<void>(`/kb/doc/delete/${docId}`),
+  reparse: (docId: string) => post<void>(`/kb/doc/reparse/${docId}`),
+  search: (params: KbSearchParams) => get<PageResult<KbChunkVO>>('/kb/search', params),
+}
+
+/* ===== 创作文档 ===== */
+
+export const docApi = {
+  page: (params: DocSearchParams & { state?: string }) => get<PageResult<DocVO>>('/doc/page', params),
+  detail: (docId: string) => get<DocVO>(`/doc/detail/${docId}`),
+  create: (data: DocREQ) => post<string>('/doc/create', data),
+  update: (data: DocREQ) => post<void>('/doc/update', data),
+  remove: (docId: string) => post<void>(`/doc/delete/${docId}`),
+  search: (params: DocSearchParams) => get<PageResult<DocVO>>('/doc/search', params),
+  versionPage: (docId: string, page = 1, size = 20) =>
+    get<PageResult<DocVersionVO>>('/doc/version/page', { docId, page, size }),
+  versionDetail: (versionId: string) => get<DocVersionVO>(`/doc/version/detail/${versionId}`),
+  restore: (versionId: string) => post<void>(`/doc/version/restore/${versionId}`),
+  assist: (data: DocAssistREQ) => post<DocAssistVO>('/doc/assist', data, { timeout: 180000 }),
+}
+
+/* ===== 提示词 ===== */
+
+export const promptApi = {
+  page: (params: PageREQ & { category?: string }) => get<PageResult<PromptVO>>('/prompt/page', params),
+  detail: (promptId: string) => get<PromptVO>(`/prompt/detail/${promptId}`),
+  create: (data: PromptREQ) => post<string>('/prompt/create', data),
+  update: (data: PromptREQ) => post<void>('/prompt/update', data),
+  remove: (promptId: string) => post<void>(`/prompt/delete/${promptId}`),
+  copy: (promptId: string) => post<string>(`/prompt/copy/${promptId}`),
+  render: (data: PromptRenderREQ) => post<string>('/prompt/render', data),
+}
+
+/* ===== 工作流 ===== */
+
+export const flowApi = {
+  page: (params: PageREQ) => get<PageResult<FlowVO>>('/flow/page', params),
+  detail: (flowId: string) => get<FlowVO>(`/flow/detail/${flowId}`),
+  create: (data: FlowREQ) => post<string>('/flow/create', data),
+  update: (data: FlowREQ) => post<void>('/flow/update', data),
+  remove: (flowId: string) => post<void>(`/flow/delete/${flowId}`),
+  run: (data: FlowRunREQ) => post<FlowRunVO>('/flow/run', data, { timeout: 600000 }),
+  runDetail: (runId: string) => get<FlowRunVO>(`/flow/run/detail/${runId}`),
 }
 
 /* ===== 模型供应方 ===== */

@@ -14,9 +14,9 @@
 Browser ──► liteworkbench:24399（宿主机）→ 容器 8080（Spring Boot 内置静态资源 + REST/SSE）
                 │
                 ├─► postgres:5432      业务数据（含用户与权限）
-                ├─► redisearch:6379    缓存 + 登录态 + 日志索引
-                ├─► minio:9000         文件对象
-                └─► rabbitmq:5672      异步日志投递
+                ├─► redisearch:6379    缓存 + 登录态 + 消息/知识块/日志索引
+                ├─► minio:9000         文件对象 + 知识库文档原件
+                └─► rabbitmq:5672      异步投递（日志索引、知识库解析）
 ```
 
 生产环境前端静态资源由应用内置（Spring Boot `static/`），不单独部署 Nginx，减少一跳。
@@ -102,18 +102,20 @@ podman run -d --name liteworkbench -p 24399:8080 \
 |---|---|
 | 种子账号 | `admin`（超级管理员）、`demo`（普通用户），初始密码 `admin123` |
 | 内置角色 | `super_admin`、`admin`、`user`（代码常量定义，不可删除改码） |
-| 菜单树 | 仪表盘、工作台、文件、技能、日志、监控、设置、系统管理（含按钮权限点） |
-| 内置工具 | Python 执行、文件读写、HTTP 请求（固定 ID 幂等重放） |
+| 菜单树 | 仪表盘、工作台、创作台、提示词、工作流、文件、技能、知识库、日志、监控、设置、系统管理（含按钮权限点） |
+| 内置工具 | Python 执行、文件读写、HTTP 请求、知识库检索（固定 ID 幂等重放） |
 | 内置供应方 | `ollama` 本地供应方（无密钥，指向宿主机 Ollama） |
+| 内置提示词 | 文章大纲、标题构思、润色改写、要点摘要、中英互译、代码讲解（固定 ID 幂等重放，只读） |
 
-Redisearch 的 `idx:lw:log` 索引在应用启动时幂等创建。启动自检（`StartupGuardService`）会探测五大组件：核心组件（PostgreSQL / Redis）不可用且 `LITEWORKBENCH_DEGRADATION_ALLOW_START=false` 时终止启动，否则降级放行并打 warn。
+Redisearch 的 `idx:lw:log`、`idx:lw:msg`、`idx:lw:kbchunk`、`idx:lw:doc` 索引在应用启动时幂等创建。升级版本新增的菜单会自动补齐到 `super_admin` / `admin` / `user` 角色，无需手工重新授权。启动自检（`StartupGuardService`）会探测五大组件：核心组件（PostgreSQL / Redis）不可用且 `LITEWORKBENCH_DEGRADATION_ALLOW_START=false` 时终止启动，否则降级放行并打 warn。
 
 ## 7. 升级与回滚
 
 | 动作 | 步骤 |
 |---|---|
-| 升级 | CI 推新镜像 → 主机 `podman-compose pull` → `up -d`，schema 由幂等 DDL 自动补齐 |
-| 回滚 | 换回旧镜像 tag；涉及新增列时不删列，保证旧版本可读 |
+| 升级 | CI 推新镜像 → 主机执行 `deploy/deploy-app.sh <镜像>`（拉取、重建、就绪自检），schema 由幂等 DDL 自动补齐 |
+| 回滚 | 用旧镜像 tag 再跑一次 `deploy-app.sh`；新增列不删除，保证旧版本可读 |
+| 中间件升级 | 不随应用发布，单独改编排并重启对应服务 |
 | 用户数据导出 | `pg_dump` 按 `user_id` 过滤导出 |
 
 ## 8. 健康检查
@@ -134,8 +136,9 @@ Redisearch 的 `idx:lw:log` 索引在应用启动时幂等创建。启动自检�
 | `liteworkbench-error.log` | 按天，仅 WARN/ERROR | 30 天 |
 | `liteworkbench-agent.log` | 按天，Agent 链路专用 | 30 天 |
 | Redisearch `idx:lw:log` | 按时间 | 30 天，启动时清理 |
+| Redisearch `idx:lw:msg` / `idx:lw:kbchunk` | — | 永久，用户资产不过期 |
 
-Redisearch 索引文档键带 30 天 TTL，过期由 Redis 自动回收；不做定时清理任务。
+日志索引文档键带 30 天 TTL，过期由 Redis 自动回收；消息与知识块索引无 TTL。不做定时清理任务。
 
 ## 10. 备份
 
@@ -143,6 +146,7 @@ Redisearch 索引文档键带 30 天 TTL，过期由 Redis 自动回收；不做
 |---|---|
 | PostgreSQL | `pg_dump` 每日一次，保留 7 份 |
 | MinIO | `mc mirror` 到备份桶（对象键已含用户前缀，可按用户恢复） |
+| Redis | 消息与知识块是用户资产：共享实例需开启 RDB 快照（`save 900 1` 级别）并落到持久卷；缓存类键丢了可重建 |
 | 配置 | 环境变量清单入库外保管 |
 
 ## 11. JVM 参数
@@ -171,7 +175,7 @@ Redisearch 索引文档键带 30 天 TTL，过期由 Redis 自动回收；不做
 
 流水线定义在 `.github/workflows/ci.yml`，三个阶段串行：`backend`（编译 + 测试）→ `frontend`（类型检查 + 构建）→ `release`（仅 `main` 的 push 触发）。
 
-发布动作：构建镜像推送到 GHCR（`:latest` 与 `:<sha>` 两个 tag），同步仓库内 `deploy/docker-compose.app.yaml` 到云主机 `47.108.73.153`（编排以仓库为唯一事实源，含对外端口 24399），再 SSH 执行 `podman-compose -f docker-compose.app.yaml pull && up -d`（主机为 Podman 运行时）。
+发布动作：构建镜像推送到 GHCR（`:latest` 与 `:<sha>` 两个 tag），把仓库内 `deploy/docker-compose.app.yaml` 与 `deploy/deploy-app.sh` 同步到云主机 `47.108.73.153`（编排与发布脚本以仓库为唯一事实源），再 SSH 执行 `bash deploy-app.sh <镜像>`：拉取镜像、重建容器、清理同端口的 rootless DNAT 残留、按 `/actuator/health` 做就绪自检，未就绪即失败并打印容器与端口现场。
 
 | Secret | 用途 |
 |---|---|
@@ -196,3 +200,53 @@ Redisearch 索引文档键带 30 天 TTL，过期由 Redis 自动回收；不做
 | 启动自动建表 | 首次部署零手工步骤 | 需要 DDL 保持幂等 |
 | 日志保留 30 天 | 存储可控 | 长周期审计需外部归档 |
 | 堆上限 70% 容器内存 | 不易被 OOM Kill | 峰值时 GC 更频繁 |
+
+## 14. 运维排障
+
+### 14.1 分诊路径
+
+```
+现象
+  ├─ 页面打不开 / 端口不可达
+  │    → 宿主机 curl 127.0.0.1:24399/actuator/health；容器在跑却失败见场景处置
+  ├─ 页面打不开 / 接口 500
+  │    → 1 容器存活：podman ps + HEALTHCHECK 状态
+  │    → 2 应用日志：liteworkbench-error.log 最近 50 行
+  │    → 3 健康页：/api/v1/monitor/health（能登录时）
+  ├─ 单个功能异常
+  │    → 1 错误码分段定位领域（见 ERROR-CODES.md）
+  │    → 2 日志中心按 traceId 检索（响应信封 requestId 即 traceId）
+  └─ 运行行为异常（卡住 / 中断不了 / 输出不全）
+       → 1 运行详情 + 事件回放（工作台右侧运行历史）
+       → 2 agent 日志：liteworkbench-agent.log
+```
+
+### 14.2 场景处置
+
+| 场景 | 判据 | 处置 |
+|---|---|---|
+| 容器反复重启 | HEALTHCHECK 失败、日志出现 OOM | 查 `podman stats` 是否超限，必要时调大容器内存 |
+| 启动失败：缺配置 | 日志含环境变量名 | 补 `LITEWORKBENCH_SECURITY_SECRET` 等必填项；生产禁用开发默认密钥 |
+| 启动失败：DDL 报错 | `spring.sql.init` 日志 | schema.sql 幂等，检查是否手工改过表结构导致类型冲突 |
+| 全部接口 401 | 登录后仍 401 | Redis 被清空或重启，Sa-Token 会话丢失属预期，重新登录；检查 Redis 是否被写满 |
+| 会话提交报 3002 `SESSION_BUSY` | 该会话有运行未收尾 | 等锁 TTL 自动释放，或对残留运行执行 abort |
+| 运行中断不生效 | abort 后仍输出 | 看 `[run.abort]` 日志：有活动实例走 dispose，无实例则直接结算终态 |
+| 模型调用 4002 / 4003 | 运行失败 | 供应方页面测试连通；核对 baseUrl（含 `/v1`）、模型名、密钥 |
+| 无可用供应方 4001 | 对话直接失败 | 供应方列表为空或 `enabled=false`：补充配置并启用 |
+| Python 7001 | 工具返回运行时未就绪 | 容器内确认 `python3 --version`，或用 `LITEWORKBENCH_RUNTIME_PYTHON_PATH` 指定，监控页重探 |
+| 脚本越界 7004 | 工具返回不安全路径 | 脚本工作目录限定在数据目录内，确认脚本未引用目录之外的路径 |
+| 文件 6002 / 6003 | 上传失败 / 超限 | 查 MinIO 健康与桶存在性；单文件上限 100MB |
+| 知识库文档一直 pending | 状态不流转 | MQ 不可用或消费者掉线：看 `[kb.parse]` 日志，恢复后重解析 |
+| 知识库 8604 / 8605 | 上传被拒 / 解析失败 | 8604 换支持的格式；8605 看文档行 `error_message`，修原件后重解析 |
+| 消息或知识块消失 | 旧会话消息读不全 | 共享 Redis 的 `allkeys-lru` 会逐出无 TTL 的用户资产，改 `volatile-lru` 并调大 maxmemory，见 DATA-MODEL §7 |
+| 日志中心查不到 | 检索为空 | MQ 降级时日志只落文件（记 warn）；索引启动幂等创建；文档 30 天 TTL 过期即不可查 |
+| 事件回放缺尾部 | 回放不完整 | 事件按 100 条 / 200ms 攒批，断电可能丢最后一批；以会话助手消息为准 |
+| 容器连不上中间件 | Connection refused 但中间件健康 | aardvark-dns 残留记录把主机名解析到旧 IP：对涉事容器逐个 `network disconnect` + `connect`；严禁对共享网络 `network rm` |
+| 端口不可达但容器在跑 | 容器内 8080 返回 UP，宿主机 24399 失败 | rootless Podman 的 `CNI-HOSTPORT-DNAT` 残留指向已删容器 IP：删除该端口的 iptables 规则后重建，或重跑 `deploy-app.sh` |
+| 磁盘紧张 | 容器占用上涨 | 日志含 30 天滚动与总量上限；Redis 256MB LRU；MinIO 按需清理 |
+
+### 14.3 运维约束
+
+- 排障不得打印密钥与令牌；需要核对密钥时只在供应方页面看脱敏值。
+- 生产不开 debug 级日志，排查依赖 info 字段与 traceId 检索。
+- 手工改库前先 `pg_dump` 对应表。

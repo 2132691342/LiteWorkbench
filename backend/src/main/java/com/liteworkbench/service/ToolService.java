@@ -4,6 +4,7 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import com.liteworkbench.agent.ToolOutputCapture;
 import com.liteworkbench.agent.WorkbenchTools;
+import com.liteworkbench.agent.spi.KbSearchPort;
 import com.liteworkbench.agent.spi.ToolGate;
 import com.liteworkbench.common.BizException;
 import com.liteworkbench.common.ErrorCodeEnum;
@@ -31,6 +32,7 @@ public class ToolService {
 
     private final WbToolMapper toolMapper;
     private final ToolGate toolGate;
+    private final KbSearchPort kbSearchPort;
     private final PythonRuntime pythonRuntime;
     private final RuntimeProperties runtimeProperties;
 
@@ -64,7 +66,7 @@ public class ToolService {
             throw new BizException(ErrorCodeEnum.TOOL_CONFIRM_REQUIRED, tool.getToolLabel());
         }
         Map<String, Object> args = req.getArgs();
-        WorkbenchTools tools = new WorkbenchTools(toolGate, pythonRuntime, runtimeProperties,
+        WorkbenchTools tools = new WorkbenchTools(toolGate, kbSearchPort, pythonRuntime, runtimeProperties,
                 new ToolOutputCapture(), userId);
         long start = System.currentTimeMillis();
         String output = switch (toolName) {
@@ -77,6 +79,7 @@ public class ToolService {
             case "file_read" -> tools.fileRead(str(args, "path"));
             case "file_write" -> tools.fileWrite(str(args, "path"), str(args, "content"));
             case "http_get" -> tools.httpGet(str(args, "url"));
+            case "kb_search" -> tools.kbSearch(str(args, "keyword"), str(args, "kbId"));
             default -> throw new BizException(ErrorCodeEnum.TOOL_NOT_FOUND, toolName);
         };
         log.info("[tool.invoke] toolName={} userId={} cost={}ms", toolName, userId, System.currentTimeMillis() - start);

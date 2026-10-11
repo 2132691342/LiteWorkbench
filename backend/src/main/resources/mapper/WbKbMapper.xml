@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.liteworkbench.mapper.WbKbMapper">
+
+    <sql id="Page_Condition">
+        <where>
+            deleted = false
+            AND user_id = #{userId}
+            <if test="req.keyword != null and req.keyword != ''">
+                AND (kb_name LIKE '%' || #{req.keyword} || '%'
+                     OR description LIKE '%' || #{req.keyword} || '%')
+            </if>
+        </where>
+    </sql>
+
+    <select id="selectPage" resultType="com.liteworkbench.domain.entity.WbKbDO">
+        SELECT * FROM wb_kb
+        <include refid="Page_Condition"/>
+        ORDER BY created_at DESC
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="countPage" resultType="long">
+        SELECT count(*) FROM wb_kb
+        <include refid="Page_Condition"/>
+    </select>
+</mapper>

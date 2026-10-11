@@ -8,7 +8,7 @@
 
 ## 设计
 
-Agent **无状态**：上下文不存放在 Agent 里，每轮运行由工作台从 `wb_message` 取最近 20 条历史显式组装成消息列表。Model 实例（持有 HTTP 客户端，构建成本高）按 `provider + model` 缓存复用；ReActAgent 每次运行构建、运行结束关闭。
+Agent **无状态**：上下文不存放在 Agent 里，每轮运行由工作台从消息索引 `idx:lw:msg` 取最近 20 条历史显式组装成消息列表。Model 实例（持有 HTTP 客户端，构建成本高）按 `provider + model` 缓存复用；ReActAgent 每次运行构建、运行结束关闭。
 
 | 组件 | 职责 |
 |---|---|
@@ -45,7 +45,7 @@ public interface AgentRuntime {
 stream(context)
   ├─ 1 取缓存 Model（ModelFactory，按 provider+model）
   ├─ 2 构建 ReActAgent：name / sysPrompt / model / toolkit / maxIters / 模型超时 180s
-  ├─ 3 组装消息：history（wb_message 最近 20 条）+ new UserMessage(prompt)
+  ├─ 3 组装消息：history（idx:lw:msg 最近 20 条）+ new UserMessage(prompt)
   ├─ 4 agent.streamEvents(messages)
   ├─ 5 AgentEventAdapter 归一化 + 分配 seq
   └─ 6 终态事件 run.end 由 RunService 合成
@@ -58,7 +58,7 @@ stream(context)
 | Model 实例缓存 | 省去 HTTP 客户端与连接池的重复构建 | 供应方配置变更需主动失效缓存 |
 | 缓存键为 provider+model | 实例数不随用户数增长 | 供应方密钥全局一份，由平台级配置保证 |
 | Agent 每次运行构建 | 天然无跨会话状态，工具启停即时生效 | 每轮少量构建开销 |
-| 上下文由库显式组装 | 会话状态只有一份事实来源，回放与重放一致 | 每轮读一次历史消息 |
+| 上下文由消息索引显式组装 | 会话状态只有一份事实来源，回放与重放一致 | 每轮读一次历史消息 |
 | 不启用已废弃的 Hook，用事件流 | 避免未来移除时返工 | 可用扩展点比旧文档少 |
 | SDK 返回 Reactor 流，订阅侧转 SseEmitter | SDK 原生 API 零包装损耗 | 需处理背压与取消传播 |
 
@@ -74,7 +74,7 @@ stream(context)
 | 协议转换扩展点是 `Formatter` | OpenAI / Anthropic / Ollama 三协议在此归一，业务侧不感知 |
 | 官方 Spring Boot starter 基于 Boot 4.x | 本项目 Boot 3.5.12，**不引**，在 `agent` 包自建装配 |
 | `agentscope-harness` 带重型传递依赖 | **不引**，只用 `agentscope-core` 与三个模型扩展 |
-| `Memory` / `UserAgent` / 旧 `agent.Event` 已 `forRemoval` | 禁用，上下文由 `wb_message` 显式组装 |
+| `Memory` / `UserAgent` / 旧 `agent.Event` 已 `forRemoval` | 禁用，上下文由消息索引显式组装 |
 
 ## 约束
 

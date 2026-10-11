@@ -30,6 +30,20 @@ public enum IdPrefixConst {
     FILE("FILE"),
     /** 模型供应方 */
     PROVIDER("PROV"),
+    /** 知识库 */
+    KB("KB"),
+    /** 知识库文档 */
+    KB_DOC("KBDOC"),
+    /** 知识库分块（Redisearch 文档键） */
+    KB_CHUNK("KBCHUNK"),
+    /** 创作文档 */
+    DOC("DOC"),
+    /** 创作文档版本 */
+    DOC_VERSION("DOCV"),
+    /** 提示词 */
+    PROMPT("PRPT"),
+    /** 工作流画布 */
+    FLOW("FLOW"),
     /** 异步任务 */
     TASK("TASK"),
     /** 日志文档 */

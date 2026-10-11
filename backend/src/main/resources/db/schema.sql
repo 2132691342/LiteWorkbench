@@ -142,19 +142,8 @@ CREATE TABLE IF NOT EXISTS wb_event (
 CREATE UNIQUE INDEX IF NOT EXISTS uk_wb_event_seq ON wb_event (run_id, seq);
 CREATE INDEX IF NOT EXISTS idx_wb_event_session ON wb_event (session_id, occurred_at);
 
--- 会话消息
-CREATE TABLE IF NOT EXISTS wb_message (
-    message_id  varchar(40) PRIMARY KEY,
-    user_id     varchar(40) NOT NULL,
-    session_id  varchar(40) NOT NULL,
-    run_id      varchar(40),
-    role_code   varchar(16) NOT NULL,
-    content     text,
-    token_count int         NOT NULL DEFAULT 0,
-    created_at  timestamptz NOT NULL DEFAULT now(),
-    deleted     boolean     NOT NULL DEFAULT false
-);
-CREATE INDEX IF NOT EXISTS idx_wb_message_session ON wb_message (session_id, created_at);
+-- 会话消息不建表：消息存 Redisearch 索引 idx:lw:msg（见 docs/DATA-MODEL.md §6.2），
+-- 历史遗留的 wb_message 由 MessageStoreMigration 启动时迁移进索引后删除
 
 -- 工具定义（平台级）
 CREATE TABLE IF NOT EXISTS wb_tool (
@@ -238,6 +227,127 @@ CREATE TABLE IF NOT EXISTS wb_task (
 );
 CREATE INDEX IF NOT EXISTS idx_wb_task_owner ON wb_task (user_id, state);
 
+-- 知识库
+CREATE TABLE IF NOT EXISTS wb_kb (
+    kb_id      varchar(40)  PRIMARY KEY,
+    user_id    varchar(40)  NOT NULL,
+    kb_name    varchar(128) NOT NULL,
+    description varchar(512),
+    doc_count   int         NOT NULL DEFAULT 0,
+    chunk_count int         NOT NULL DEFAULT 0,
+    state       varchar(24) NOT NULL DEFAULT 'normal',
+    created_by  varchar(40),
+    created_at  timestamptz NOT NULL DEFAULT now(),
+    updated_by  varchar(40),
+    updated_at  timestamptz,
+    deleted     boolean     NOT NULL DEFAULT false,
+    remark      varchar(512)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_wb_kb_name ON wb_kb (user_id, kb_name) WHERE deleted = false;
+
+-- 知识库文档（原件在 MinIO，分块在 Redisearch）
+CREATE TABLE IF NOT EXISTS wb_kb_doc (
+    doc_id        varchar(40)  PRIMARY KEY,
+    user_id       varchar(40)  NOT NULL,
+    kb_id         varchar(40)  NOT NULL,
+    doc_name      varchar(255) NOT NULL,
+    object_key    varchar(512) NOT NULL,
+    bucket_name   varchar(64)  NOT NULL,
+    file_size     bigint       NOT NULL DEFAULT 0,
+    content_type  varchar(128),
+    char_count    int          NOT NULL DEFAULT 0,
+    chunk_count   int          NOT NULL DEFAULT 0,
+    state         varchar(16)  NOT NULL DEFAULT 'pending',
+    error_message text,
+    created_by    varchar(40),
+    created_at    timestamptz  NOT NULL DEFAULT now(),
+    updated_by    varchar(40),
+    updated_at    timestamptz,
+    deleted       boolean      NOT NULL DEFAULT false,
+    remark        varchar(512)
+);
+CREATE INDEX IF NOT EXISTS idx_wb_kb_doc_kb ON wb_kb_doc (kb_id, created_at DESC) WHERE deleted = false;
+CREATE INDEX IF NOT EXISTS idx_wb_kb_doc_owner ON wb_kb_doc (user_id, created_at DESC) WHERE deleted = false;
+
+-- 创作文档
+CREATE TABLE IF NOT EXISTS wb_doc (
+    doc_id       varchar(40)  PRIMARY KEY,
+    user_id      varchar(40)  NOT NULL,
+    doc_title    varchar(255) NOT NULL,
+    doc_type     varchar(16)  NOT NULL DEFAULT 'markdown',
+    category     varchar(64),
+    tags         varchar(512),
+    summary      varchar(512),
+    content      text,
+    content_text text,
+    word_count   int          NOT NULL DEFAULT 0,
+    version_no   int          NOT NULL DEFAULT 1,
+    source_kb_id varchar(40),
+    state        varchar(24)  NOT NULL DEFAULT 'draft',
+    created_by   varchar(40),
+    created_at   timestamptz  NOT NULL DEFAULT now(),
+    updated_by   varchar(40),
+    updated_at   timestamptz,
+    deleted      boolean      NOT NULL DEFAULT false,
+    remark       varchar(512)
+);
+CREATE INDEX IF NOT EXISTS idx_wb_doc_owner ON wb_doc (user_id, updated_at DESC) WHERE deleted = false;
+CREATE INDEX IF NOT EXISTS idx_wb_doc_category ON wb_doc (user_id, category) WHERE deleted = false;
+
+-- 创作文档版本快照
+CREATE TABLE IF NOT EXISTS wb_doc_version (
+    version_id  varchar(40)  PRIMARY KEY,
+    doc_id      varchar(40)  NOT NULL,
+    user_id     varchar(40)  NOT NULL,
+    version_no  int          NOT NULL,
+    doc_title   varchar(255),
+    content     text,
+    change_note varchar(255),
+    created_by  varchar(40),
+    created_at  timestamptz  NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_wb_doc_version_no ON wb_doc_version (doc_id, version_no);
+CREATE INDEX IF NOT EXISTS idx_wb_doc_version_doc ON wb_doc_version (doc_id, version_no DESC);
+
+-- 提示词模板（内置行 user_id = 'builtin'）
+CREATE TABLE IF NOT EXISTS wb_prompt (
+    prompt_id    varchar(40)  PRIMARY KEY,
+    user_id      varchar(40)  NOT NULL,
+    prompt_title varchar(128) NOT NULL,
+    category     varchar(64),
+    content      text         NOT NULL,
+    variables    jsonb,
+    builtin      boolean      NOT NULL DEFAULT false,
+    use_count    int          NOT NULL DEFAULT 0,
+    created_by   varchar(40),
+    created_at   timestamptz  NOT NULL DEFAULT now(),
+    updated_by   varchar(40),
+    updated_at   timestamptz,
+    deleted      boolean      NOT NULL DEFAULT false,
+    remark       varchar(512)
+);
+CREATE INDEX IF NOT EXISTS idx_wb_prompt_owner ON wb_prompt (user_id, created_at DESC) WHERE deleted = false;
+
+-- 工作流画布（节点与连线整体存 graph_json）
+CREATE TABLE IF NOT EXISTS wb_flow (
+    flow_id     varchar(40)  PRIMARY KEY,
+    user_id     varchar(40)  NOT NULL,
+    flow_name   varchar(128) NOT NULL,
+    description varchar(512),
+    graph_json  jsonb,
+    node_count  int          NOT NULL DEFAULT 0,
+    last_run_id varchar(40),
+    state       varchar(24)  NOT NULL DEFAULT 'draft',
+    created_by  varchar(40),
+    created_at  timestamptz  NOT NULL DEFAULT now(),
+    updated_by  varchar(40),
+    updated_at  timestamptz,
+    deleted     boolean      NOT NULL DEFAULT false,
+    remark      varchar(512)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_wb_flow_name ON wb_flow (user_id, flow_name) WHERE deleted = false;
+CREATE INDEX IF NOT EXISTS idx_wb_flow_owner ON wb_flow (user_id, updated_at DESC) WHERE deleted = false;
+
 -- ============================== 内置工具种子 ==============================
 
 -- 工具种子用固定 ID 而非 ULID：ON CONFLICT 幂等重放，重启不产生重复行
@@ -246,7 +356,8 @@ VALUES
     ('TOOL_00000000000000000000000001', 'python_exec', 'Python 执行', 'runtime', 'confirm', true),
     ('TOOL_00000000000000000000000002', 'file_read', '读取文件', 'file', 'safe', true),
     ('TOOL_00000000000000000000000003', 'file_write', '写入文件', 'file', 'confirm', true),
-    ('TOOL_00000000000000000000000004', 'http_get', 'HTTP 请求', 'network', 'safe', true)
+    ('TOOL_00000000000000000000000004', 'http_get', 'HTTP 请求', 'network', 'safe', true),
+    ('TOOL_00000000000000000000000005', 'kb_search', '知识库检索', 'knowledge', 'safe', true)
 ON CONFLICT (tool_id) DO NOTHING;
 
 -- ============================== 旧库升级兜底（幂等） ==============================
@@ -256,3 +367,7 @@ ALTER TABLE wb_run ADD COLUMN IF NOT EXISTS state varchar(16) NOT NULL DEFAULT '
 ALTER TABLE wb_task ADD COLUMN IF NOT EXISTS state varchar(16) NOT NULL DEFAULT 'pending';
 ALTER TABLE wb_event ADD COLUMN IF NOT EXISTS user_id varchar(40) NOT NULL DEFAULT '';
 ALTER TABLE wb_message ADD COLUMN IF NOT EXISTS user_id varchar(40) NOT NULL DEFAULT '';
+
+-- v1.1.0：工作流运行不挂会话，session_id 允许为空
+ALTER TABLE wb_run ALTER COLUMN session_id DROP NOT NULL;
+ALTER TABLE wb_event ALTER COLUMN session_id DROP NOT NULL;

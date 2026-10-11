@@ -65,6 +65,9 @@ mvn test                           # 跑测试
 | `liteworkbench.agent.loop.max-iters` | 20 | 单轮最大迭代 |
 | `liteworkbench.agent.model.default-name` | `qwen-plus` | 兜底模型名 |
 | `liteworkbench.agent.skill.enabled` | true | 是否注入技能 |
+| `liteworkbench.kb.chunk-size` | 600 | 知识库分块目标字符数 |
+| `liteworkbench.kb.chunk-overlap` | 120 | 相邻分块重叠字符数 |
+| `liteworkbench.kb.max-doc-chars` | 500000 | 单文档提取正文上限，超出截断 |
 | `liteworkbench.runtime.python.path` | 空 | 指定解释器路径，空则走探测 |
 | `liteworkbench.runtime.data-dir` | `./data` | Python 工作目录与运行时数据的根 |
 | `liteworkbench.auth.token-timeout` | 7200 | 登录态有效期（秒） |
@@ -82,11 +85,9 @@ mvn test                           # 跑测试
 | 状态 / 路由 | Pinia 2.1.7 + Vue Router 4.3.2 |
 | UI | Element Plus 2.9.0 + UnoCSS 0.58.6 |
 | HTTP | Axios 1.6.8（唯一出口 `src/api/index.ts`） |
-| 可视化 | ECharts 5.5.0、AntV X6 2.18.1（预留流程图） |
-| 工作流 | BPMN-JS 16.4.0（预留） |
-| 富文本 | WangEditor 5.1.23、Mavon-Editor、CodeMirror 6（预留） |
-| 文件处理 | XLSX、docx-preview、vue-pdf-embed（预留） |
-| 微前端 | Qiankun 2.10.16（预留子应用挂载） |
+| 可视化 | ECharts 5.5.0（仪表盘图表）、AntV X6 2.18.1（工作流画布） |
+| 富文本 | WangEditor 5.1.23（创作台富文本模式） |
+| 文件处理 | XLSX、docx-preview、vue-pdf-embed（文件空间在线预览，按需异步加载） |
 | 国际化 | Vue I18n 9.10.2 |
 
 ### 5.2 命令
@@ -108,24 +109,23 @@ npm run typecheck  # vue-tsc --noEmit
 
 ## 6. 测试策略
 
-只保留有针对性、覆盖复杂流程与长链路的测试，不写琐碎断言。
+只保留覆盖复杂流程与长链路的测试，简单断言不写；共 6 个文件，随 `mvn test` 一次跑完。
 
-| 类型 | 文件 | 覆盖 |
-|---|---|---|
-| 单元 | `common/IdGeneratorTest` | ULID 格式、前缀、非法输入 |
-| 单元 | `common/OutputSanitizerTest` | ANSI 与控制字符清理、保尾截断 |
-| 单元 | `service/SkillServiceTest` | 触发词匹配、摘要常驻、数量上限、开关旁路 |
-| 单元 | `service/RunEventFrameTest` | 推送合帧：同类型连续增量合并、类型切换不合并、seq 取尾 |
-| 契约 | `agent/AgentEventAdapterTest` | SDK 事件 → 工作台事件的映射与字段、超长截断、未知事件归一 custom |
-| 契约 | `api/SseFrameContractTest` | SSE 帧格式：`id` 为 seq、事件名 `run.event`、payload 为 JSON、心跳只发注释 |
-| 契约 | `config/PermissionContractTest` | 控制器注解与 `PermConst` 的权限点全部存在于菜单种子 |
+| 文件 | 覆盖 |
+|---|---|
+| `service/RunEventPipelineTest` | 事件长链路：SDK 事件归一 → 批内合帧，增量合并、类型切换保序、工具输出捕获、超长裁剪 |
+| `api/SseFrameContractTest` | SSE 帧契约：`id` 为 seq、事件名 `run.event`、心跳只发注释行 |
+| `config/PermissionContractTest` | 控制器注解与 `PermConst` 的权限点全部存在于菜单种子 |
+| `service/FlowGraphTest` | 画布校验与拓扑执行序：合法链、有环、孤立节点、非法节点与悬空连线 |
+| `service/KbTextChunkerTest` | 分块算法：段落贪心合并、相邻块重叠、超长段落硬切 |
+| `service/SkillServiceTest` | 技能装配：命中才展开正文、摘要常驻、单轮上限 3 条、总开关旁路 |
 
 前端不写快照测试与纯渲染测试。
 
 ## 7. 代码风格
 
 - Java：4 空格，行长 120，实体用 Lombok `@Data` / `@Builder`，构造注入。
-- 注释：文件头一行，方法一行，连续注释块不超过 2 行。
+- 注释：文件头一行，方法一行，字段只在有歧义时注释，禁止连续注释块。
 - TypeScript：2 空格，单引号，行尾无分号，禁止 `any` 泛滥。
 - 提交信息：`feat(scope): 描述`，scope 取模块名。
 
@@ -138,6 +138,10 @@ npm run typecheck  # vue-tsc --noEmit
 | 加一个权限点 | `config/DataInitializer.java` 的 `MENU_SEEDS`（`menu_type=button`）+ 控制器注解 |
 | 加一个内置角色 | `domain/constant/RoleCodeConst.java` + `DataInitializer` 角色与授权 |
 | 加一类日志检索字段 | `observability/RedisearchLogAppender.java` + `mapper/LogSearchMapper.java` 索引定义 |
+| 加一种知识库文档格式 | `service/DocTextExtractor.java` + `domain/constant/KbConst.java` 扩展名清单 |
+| 加一个 AI 辅助动作 | `domain/constant/DocConst.java` 的 `ASSIST_TEMPLATES` + 前端动作下拉与文案 |
+| 加一类工作流节点 | `domain/constant/FlowNodeTypeEnum.java` + `service/FlowEngine.java` 的 `executeNode` 分派 |
+| 加一种在线预览格式 | `views/files/FileList.vue` 的 `kindOf` 与对应渲染分支 |
 | 加一个前端页面 | `frontend/src/views/` + `DataInitializer` 菜单种子（`component` 指向该文件） |
 | 改配色 | `frontend/src/styles/tokens.css`（唯一色值来源） |
 | 加一个写接口 | 控制器加 `@SaCheckPermission` + `@Idempotent` + `@PostMapping` |

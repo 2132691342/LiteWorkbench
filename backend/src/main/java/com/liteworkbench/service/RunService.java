@@ -22,14 +22,14 @@ import com.liteworkbench.domain.constant.RunStatusEnum;
 import com.liteworkbench.domain.constant.SessionConst;
 import com.liteworkbench.domain.constant.StopReasonEnum;
 import com.liteworkbench.domain.dto.ChatStreamREQ;
+import com.liteworkbench.domain.dto.MessageDocDTO;
 import com.liteworkbench.domain.dto.RunEventDTO;
 import com.liteworkbench.domain.dto.SessionPageREQ;
 import com.liteworkbench.domain.entity.WbEventDO;
-import com.liteworkbench.domain.entity.WbMessageDO;
 import com.liteworkbench.domain.entity.WbRunDO;
 import com.liteworkbench.domain.vo.RunVO;
+import com.liteworkbench.mapper.MessageIndexMapper;
 import com.liteworkbench.mapper.WbEventMapper;
-import com.liteworkbench.mapper.WbMessageMapper;
 import com.liteworkbench.mapper.WbRunMapper;
 import com.liteworkbench.mapper.WbSessionMapper;
 import io.agentscope.core.message.AssistantMessage;
@@ -73,7 +73,7 @@ public class RunService {
     private final SkillService skillService;
     private final WbRunMapper runMapper;
     private final WbEventMapper eventMapper;
-    private final WbMessageMapper messageMapper;
+    private final MessageIndexMapper messageIndexMapper;
     private final WbSessionMapper sessionMapper;
     private final StringRedisTemplate redisTemplate;
 
@@ -396,30 +396,24 @@ public class RunService {
     }
 
     private void insertMessage(String userId, String sessionId, String runId, MessageRoleEnum role, String content) {
-        WbMessageDO message = new WbMessageDO();
-        message.setMessageId(IdGenerator.generate(IdPrefixConst.MESSAGE));
-        message.setUserId(userId);
-        message.setSessionId(sessionId);
-        message.setRunId(runId);
-        message.setRoleCode(role.getCode());
-        message.setContent(content);
-        message.setTokenCount(content.length() / 2);
-        messageMapper.insert(message);
+        MessageDocDTO message = new MessageDocDTO(
+                IdGenerator.generate(IdPrefixConst.MESSAGE), userId, sessionId, runId,
+                role.getCode(), content, content.length() / 2, System.currentTimeMillis());
+        messageIndexMapper.add(message);
     }
 
     /** 近 N 条历史消息转 SDK 消息（时间正序），排除本轮运行已落的消息，避免本轮输入重复注入 */
     private List<Msg> loadHistory(String sessionId, String runId) {
-        List<WbMessageDO> recent = messageMapper.selectRecentExcludeRun(sessionId, runId, HISTORY_LIMIT);
+        List<MessageDocDTO> recent = messageIndexMapper.listBySession(sessionId, HISTORY_LIMIT, runId);
         if (recent.isEmpty()) {
             return Collections.emptyList();
         }
-        Collections.reverse(recent);
         List<Msg> messages = new ArrayList<>();
         recent.forEach(message -> {
-            if (MessageRoleEnum.USER.getCode().equals(message.getRoleCode())) {
-                messages.add(new UserMessage(StrUtil.nullToEmpty(message.getContent())));
-            } else if (MessageRoleEnum.ASSISTANT.getCode().equals(message.getRoleCode())) {
-                messages.add(new AssistantMessage(StrUtil.nullToEmpty(message.getContent())));
+            if (MessageRoleEnum.USER.getCode().equals(message.role())) {
+                messages.add(new UserMessage(StrUtil.nullToEmpty(message.content())));
+            } else if (MessageRoleEnum.ASSISTANT.getCode().equals(message.role())) {
+                messages.add(new AssistantMessage(StrUtil.nullToEmpty(message.content())));
             }
         });
         return messages;

@@ -68,13 +68,15 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/liteworkbench:latest
             ghcr.io/${{ github.repository_owner }}/liteworkbench:${{ github.sha }}
 
-      - name: 同步应用编排到云主机
+      - name: 同步应用编排与发布脚本到云主机
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
-          source: deploy/docker-compose.app.yaml
+          source: |
+            deploy/docker-compose.app.yaml
+            deploy/deploy-app.sh
           target: ${{ secrets.SSH_APP_DIR }}
           strip_components: 1
 
@@ -86,46 +88,5 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           script: |
             cd ${{ secrets.SSH_APP_DIR }}
-            export LITEWORKBENCH_IMAGE=ghcr.io/${{ github.repository_owner }}/liteworkbench:latest
             export LITEWORKBENCH_SECURITY_SECRET=${{ secrets.LITEWORKBENCH_SECURITY_SECRET }}
-            # 目标主机运行时为 Podman + podman-compose，无 Docker
-            # podman-compose 1.0.6 的 up -d 只比对配置哈希不比对镜像 ID，先删容器保证新镜像生效
-            # podman 3.x rootless 反复重建同名容器会在 CNI-HOSTPORT-DNAT 留下指向已删容器 IP 的历史规则，
-            # 新容器端口会被转发到不存在的地址（表现为宿主机连不上、外部 502），重建前先清理同端口残留
-            drop_stale_dnat() {
-              port=$1
-              dropped=0
-              while true; do
-                ln=$(iptables -t nat -L CNI-HOSTPORT-DNAT -n --line-numbers 2>/dev/null | grep "$port" | head -1 | awk '{print $1}')
-                [ -z "$ln" ] && break
-                iptables -t nat -D CNI-HOSTPORT-DNAT "$ln" 2>/dev/null || break
-                dropped=$((dropped + 1))
-                [ $dropped -gt 30 ] && break
-              done
-              echo "dropped stale dnat rules on :$port -> $dropped"
-            }
-            podman-compose -f docker-compose.app.yaml pull
-            podman rm -f liteworkbench 2>/dev/null || true
-            drop_stale_dnat 24399
-            podman-compose -f docker-compose.app.yaml up -d
-            # 端口映射与就绪自检：端口未发布或应用未就绪时显式失败并打印现场
-            sleep 5
-            echo "=== 端口映射 ==="
-            podman port liteworkbench || true
-            ready=0
-            for i in $(seq 1 36); do
-              if curl -fsS http://127.0.0.1:24399/actuator/health >/dev/null 2>&1; then
-                ready=1
-                break
-              fi
-              sleep 5
-            done
-            if [ "$ready" != "1" ]; then
-              echo "=== 应用未就绪，容器与日志现场 ==="
-              podman ps --format '{{.Names}} | {{.Status}} | {{.Ports}}'
-              podman logs --tail 80 liteworkbench || true
-              ss -lntp 2>/dev/null | grep 24399 || echo "24399 未监听"
-              exit 1
-            fi
-            echo "liteworkbench ready on :24399"
-            podman image prune -f
+            bash deploy-app.sh ghcr.io/${{ github.repository_owner }}/liteworkbench:latest

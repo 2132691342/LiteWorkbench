@@ -11,4 +11,6 @@ public interface SessionConst {
     long LOCK_TTL_SECONDS = RunConst.SSE_TIMEOUT_MS / 1000L + 60L;
     /** 系统提示词最大长度 */
     int SYSTEM_PROMPT_MAX_LENGTH = 8000;
+    /** 单会话消息读取上限，消息存 Redisearch 按批拉取 */
+    int MESSAGE_LIST_LIMIT = 1000;
 }

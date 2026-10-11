@@ -323,6 +323,58 @@ export interface LogSearchParams {
   size?: number
 }
 
+/* ===== 知识库 ===== */
+
+export interface KbVO {
+  kbId: string
+  userId?: string
+  kbName: string
+  description?: string
+  docCount?: number
+  chunkCount?: number
+  createdAt?: number
+  updatedAt?: number
+}
+
+export interface KbREQ {
+  kbId?: string
+  kbName: string
+  description?: string
+}
+
+export interface KbDocVO {
+  docId: string
+  kbId: string
+  docName: string
+  fileSize?: number
+  contentType?: string
+  charCount?: number
+  chunkCount?: number
+  state: 'pending' | 'processing' | 'ready' | 'failed'
+  errorMessage?: string
+  createdAt?: number
+  updatedAt?: number
+}
+
+export interface KbChunkVO {
+  chunkId: string
+  userId?: string
+  kbId?: string
+  docId?: string
+  docName?: string
+  seq?: number
+  content: string
+  score?: number
+  createdAt?: number
+}
+
+export interface KbSearchParams {
+  keyword?: string
+  kbId?: string
+  page?: number
+  size?: number
+}
+
 /* ===== 对话入参 ===== */
 
 export interface ChatStreamREQ {
@@ -338,4 +390,146 @@ export interface InvokeToolREQ {
 
 export interface SessionPageREQ extends PageREQ {
   sessionId?: string
+}
+
+/* ===== 创作文档 ===== */
+
+export interface DocVO {
+  docId: string
+  userId?: string
+  docTitle: string
+  docType?: 'markdown' | 'rich' | 'code'
+  category?: string
+  tags?: string
+  summary?: string
+  content?: string
+  wordCount?: number
+  versionNo?: number
+  sourceKbId?: string
+  state?: 'draft' | 'published' | 'archived'
+  createdAt?: number
+  updatedAt?: number
+}
+
+export interface DocREQ {
+  docId?: string
+  docTitle: string
+  docType?: string
+  category?: string
+  tags?: string
+  summary?: string
+  content?: string
+  sourceKbId?: string
+  state?: string
+  changeNote?: string
+}
+
+export interface DocVersionVO {
+  versionId: string
+  docId: string
+  versionNo?: number
+  docTitle?: string
+  content?: string
+  changeNote?: string
+  createdAt?: number
+}
+
+export interface DocAssistREQ {
+  docId?: string
+  action: string
+  selection?: string
+  instruction?: string
+  kbId?: string
+}
+
+export interface DocAssistVO {
+  action: string
+  text: string
+  durationMs?: number
+}
+
+export interface DocSearchParams extends PageREQ {
+  category?: string
+}
+
+/* ===== 提示词 ===== */
+
+export interface PromptVariable {
+  name: string
+  label: string
+  defaultValue?: string
+}
+
+export interface PromptVO {
+  promptId: string
+  userId?: string
+  promptTitle: string
+  category?: string
+  content: string
+  variables?: PromptVariable[]
+  builtin?: boolean
+  useCount?: number
+  createdAt?: number
+  updatedAt?: number
+}
+
+export interface PromptREQ {
+  promptId?: string
+  promptTitle: string
+  category?: string
+  content: string
+  variables?: string
+}
+
+export interface PromptRenderREQ {
+  promptId: string
+  variables?: Record<string, string>
+}
+
+/* ===== 工作流 ===== */
+
+export interface FlowVO {
+  flowId: string
+  userId?: string
+  flowName: string
+  description?: string
+  graphJson?: string
+  nodeCount?: number
+  lastRunId?: string
+  state?: 'draft' | 'enabled' | 'disabled'
+  createdAt?: number
+  updatedAt?: number
+}
+
+export interface FlowREQ {
+  flowId?: string
+  flowName: string
+  description?: string
+  graphJson?: string
+  state?: string
+}
+
+export interface FlowRunREQ {
+  flowId: string
+  inputs?: Record<string, string>
+}
+
+export interface FlowNodeResult {
+  nodeId?: string
+  nodeType?: string
+  nodeLabel?: string
+  status?: string
+  output?: string
+  errorMessage?: string
+  durationMs?: number
+}
+
+export interface FlowRunVO {
+  runId: string
+  flowId?: string
+  status?: string
+  errorMessage?: string
+  output?: string
+  durationMs?: number
+  nodes?: FlowNodeResult[]
 }

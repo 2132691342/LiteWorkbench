@@ -4,8 +4,10 @@ import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.thread.ExecutorBuilder;
 import cn.hutool.core.thread.ThreadUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONUtil;
 import com.liteworkbench.common.PageResult;
 import com.liteworkbench.domain.constant.EventTypeEnum;
+import com.liteworkbench.domain.constant.RedisKeyConst;
 import com.liteworkbench.domain.dto.LogSearchDTO;
 import com.liteworkbench.domain.constant.RunStatusEnum;
 import com.liteworkbench.domain.vo.HealthRESP;
@@ -24,8 +26,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -45,6 +49,8 @@ import java.util.concurrent.TimeUnit;
 public class MonitorService {
 
     private static final DateTimeFormatter DAY_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd");
+    /** 汇总指标缓存时长 */
+    private static final long OVERVIEW_CACHE_SECONDS = 60L;
 
     private final HealthMapper healthMapper;
     private final RedisConnectionFactory redisConnectionFactory;
@@ -55,6 +61,7 @@ public class MonitorService {
     private final WbRunMapper runMapper;
     private final WbEventMapper eventMapper;
     private final LogSearchMapper logSearchMapper;
+    private final StringRedisTemplate redisTemplate;
 
     /** 探测专用线程池，探测互不阻塞 */
     private final ExecutorService probeExecutor = ExecutorBuilder.create()
@@ -125,8 +132,28 @@ public class MonitorService {
         pythonRuntime.detect();
     }
 
-    /** 仪表盘汇总指标，全局口径 */
+    /** 仪表盘汇总指标，全局口径，Redis 缓存 60s 避免高频重算 */
     public OverviewRESP overview() {
+        try {
+            String cached = redisTemplate.opsForValue().get(RedisKeyConst.CACHE_OVERVIEW);
+            if (StrUtil.isNotBlank(cached)) {
+                return JSONUtil.toBean(cached, OverviewRESP.class);
+            }
+        } catch (Exception e) {
+            log.warn("[overview.cache] 读取失败 {}", e.getMessage());
+        }
+        OverviewRESP resp = buildOverview();
+        try {
+            redisTemplate.opsForValue().set(RedisKeyConst.CACHE_OVERVIEW,
+                    JSONUtil.toJsonStr(resp), Duration.ofSeconds(OVERVIEW_CACHE_SECONDS));
+        } catch (Exception e) {
+            log.warn("[overview.cache] 写入失败 {}", e.getMessage());
+        }
+        return resp;
+    }
+
+    /** 汇总指标实算 */
+    private OverviewRESP buildOverview() {
         OverviewRESP resp = new OverviewRESP();
         resp.setSessionCount(sessionMapper.countAll());
         resp.setRunCount(runMapper.countAll());

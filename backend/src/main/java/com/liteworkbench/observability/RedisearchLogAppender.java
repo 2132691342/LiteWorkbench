@@ -11,10 +11,7 @@ import org.slf4j.MDC;
 
 import java.util.Objects;
 
-/**
- * Redisearch 日志 Appender：组装文档后交给 LogPublisher（经 MQ 异步入索引）。
- * 投递失败静默丢弃并限流告警，绝不阻塞业务线程。
- */
+/** Redisearch 日志 Appender：组装文档后交 LogPublisher 异步入索引，失败不阻塞业务线程 */
 public class RedisearchLogAppender extends AppenderBase<ILoggingEvent> {
 
     /** 由 Spring 配置在启动时注入 */

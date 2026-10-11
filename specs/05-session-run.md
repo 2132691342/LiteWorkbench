@@ -55,10 +55,10 @@ queued ──► running ──► success
 POST /chat/stream
   ├─ 1 校验会话归属（user_id）
   ├─ 2 抢 Redis 锁，失败抛 SESSION_BUSY
-  ├─ 3 落 wb_run（queued）与 wb_message（user）
+  ├─ 3 落 wb_run（queued）与消息索引（user）
   ├─ 4 建 SseEmitter，注册超时与完成回调
   ├─ 5 订阅 Agent 事件流，攒批落库 + 推送
-  ├─ 6 终态更新 wb_run 与 wb_message（assistant）
+  ├─ 6 终态更新 wb_run 与消息索引（assistant）
   └─ 7 finally 释放锁，关闭 SseEmitter
 ```
 
@@ -71,7 +71,7 @@ POST /chat/stream
 | 逻辑删除 | 误删可恢复 | 查询都要带 `deleted = false` |
 | Redis 锁而非数据库锁 | 无需事务持锁，性能高 | Redis 是登录与锁的强依赖，不可用时请求直接失败，不做静默降级 |
 
-**角色与消息**：`wb_message.role_code` 的 `tool` 取值预留给工具产物落库，MVP 只写 `user` 与 `assistant` 两条。
+**角色与消息**：消息索引的 `role_code` 有 `user` / `assistant` / `tool` / `system` 四种取值，`tool` 预留给工具产物，当前只写 `user` 与 `assistant`。
 
 ## 约束
 

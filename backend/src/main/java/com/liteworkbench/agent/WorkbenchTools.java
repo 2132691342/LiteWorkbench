@@ -3,11 +3,13 @@ package com.liteworkbench.agent;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.http.HttpUtil;
 import cn.hutool.core.util.StrUtil;
+import com.liteworkbench.agent.spi.KbSearchPort;
 import com.liteworkbench.common.BizException;
 import com.liteworkbench.common.ErrorCodeEnum;
 import com.liteworkbench.common.OutputSanitizer;
 import com.liteworkbench.config.RuntimeProperties;
 import com.liteworkbench.agent.spi.ToolGate;
+import com.liteworkbench.domain.constant.KbConst;
 import com.liteworkbench.domain.constant.RedisKeyConst;
 import com.liteworkbench.runtime.ExecRequest;
 import com.liteworkbench.runtime.PythonRuntime;
@@ -22,10 +24,7 @@ import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.Objects;
 
-/**
- * 内置工具集：python_exec / file_read / file_write / http_get。
- * 启用状态从 wb_tool 读取，禁用即拒答；失败以 ERROR: 前缀文本返回，让模型自行调整。
- */
+/** 内置工具集：启用状态读 wb_tool，禁用即拒答，失败以 ERROR: 前缀文本返回 */
 @Slf4j
 public class WorkbenchTools {
 
@@ -33,16 +32,21 @@ public class WorkbenchTools {
     private static final long DEFAULT_TOOL_TIMEOUT = 60L;
 
     private final ToolGate toolGate;
+    private final KbSearchPort kbSearchPort;
     private final PythonRuntime pythonRuntime;
     private final ToolOutputCapture capture;
+    /** 当前运行归属用户，kb_search 以此限定检索范围 */
+    private final String userId;
     /** 工作区根目录，按用户隔离，运行期不变 */
     private final Path workDir;
 
-    public WorkbenchTools(ToolGate toolGate, PythonRuntime pythonRuntime,
+    public WorkbenchTools(ToolGate toolGate, KbSearchPort kbSearchPort, PythonRuntime pythonRuntime,
                           RuntimeProperties runtimeProperties, ToolOutputCapture capture, String userId) {
         this.toolGate = toolGate;
+        this.kbSearchPort = kbSearchPort;
         this.pythonRuntime = pythonRuntime;
         this.capture = capture;
+        this.userId = userId;
         String owner = StrUtil.isBlank(userId) ? "anonymous" : userId;
         this.workDir = Paths.get(runtimeProperties.getDataDir(), "workspace", owner)
                 .toAbsolutePath().normalize();
@@ -129,6 +133,27 @@ public class WorkbenchTools {
             return output;
         } catch (Exception e) {
             return error("请求失败：" + e.getMessage());
+        }
+    }
+
+    /** 检索当前用户知识库 */
+    @Tool(name = "kb_search", description = "检索当前用户知识库，返回与关键词最相关的原文片段（带文档名与块序号），回答引用用户资料时先用它取证")
+    public String kbSearch(
+            @ToolParam(name = "keyword", description = "检索关键词") String keyword,
+            @ToolParam(name = "kbId", description = "限定知识库 ID，不传则跨全部知识库", required = false)
+            String kbId) {
+        if (!toolGate.isEnabled(KbConst.TOOL_NAME)) {
+            return error("工具 kb_search 已被禁用");
+        }
+        if (StrUtil.isBlank(keyword)) {
+            return error("keyword 不能为空");
+        }
+        try {
+            String output = kbSearchPort.search(userId, keyword, kbId, KbConst.TOOL_SEARCH_LIMIT);
+            capture.record(KbConst.TOOL_NAME, output);
+            return output;
+        } catch (Exception e) {
+            return error("检索失败：" + e.getMessage());
         }
     }
 

@@ -2,7 +2,9 @@ import {
   Brush,
   ChatDotRound,
   Coin,
+  Connection,
   Document,
+  EditPen,
   Files,
   Grid,
   List,
@@ -10,6 +12,7 @@ import {
   MagicStick,
   Odometer,
   OfficeBuilding,
+  Reading,
   Setting,
   User,
 } from '@element-plus/icons-vue'
@@ -32,6 +35,10 @@ export const MENU_ICONS: Record<string, Component> = {
   list: List,
   building: OfficeBuilding,
   coin: Coin,
+  book: Reading,
+  edit: EditPen,
+  magic: MagicStick,
+  connection: Connection,
 }
 
 /** 按名称取图标组件 */

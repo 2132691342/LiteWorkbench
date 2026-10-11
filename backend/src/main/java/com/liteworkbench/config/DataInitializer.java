@@ -17,6 +17,7 @@ import com.liteworkbench.mapper.SysMenuMapper;
 import com.liteworkbench.mapper.SysRoleMapper;
 import com.liteworkbench.mapper.SysUserMapper;
 import com.liteworkbench.mapper.WbProviderMapper;
+import com.liteworkbench.service.PromptService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
@@ -43,6 +44,7 @@ public class DataInitializer implements ApplicationRunner {
     private final SysRoleMapper sysRoleMapper;
     private final SysMenuMapper sysMenuMapper;
     private final WbProviderMapper providerMapper;
+    private final PromptService promptService;
     private final AuthProperties authProperties;
 
     /** 启动时补齐种子数据 */
@@ -53,6 +55,8 @@ public class DataInitializer implements ApplicationRunner {
         initMenus();
         initRolesAndUsers();
         initProviders();
+        grantNewMenusToAdminRoles();
+        initBuiltinPrompts();
         log.info("[data.init] cost={}ms", System.currentTimeMillis() - start);
     }
 
@@ -159,6 +163,38 @@ public class DataInitializer implements ApplicationRunner {
         sysUserMapper.insertUserRoles(user.getUserId(), List.of(roleId), "system");
     }
 
+    /** 升级补齐：管理角色始终持有全部菜单，新增菜单无需手工重新授权 */
+    private void grantNewMenusToAdminRoles() {
+        List<String> allMenuIds = sysMenuMapper.selectAll().stream().map(SysMenuDO::getMenuId).toList();
+        if (CollUtil.isEmpty(allMenuIds)) {
+            return;
+        }
+        List<String> userMenuIds = sysMenuMapper.selectAll().stream()
+                .filter(menu -> CollUtil.contains(USER_MENU_NAMES, menu.getMenuName()))
+                .map(SysMenuDO::getMenuId)
+                .toList();
+        for (SysRoleDO role : sysRoleMapper.selectList()) {
+            boolean admin = RoleCodeConst.SUPER_ADMIN.equals(role.getRoleCode())
+                    || RoleCodeConst.ADMIN.equals(role.getRoleCode());
+            boolean normalUser = RoleCodeConst.USER.equals(role.getRoleCode());
+            if (!admin && !normalUser) {
+                continue;
+            }
+            List<String> target = admin ? allMenuIds : userMenuIds;
+            List<String> owned = sysRoleMapper.selectMenuIdsByRoleId(role.getRoleId());
+            List<String> missing = target.stream().filter(id -> !owned.contains(id)).toList();
+            if (CollUtil.isNotEmpty(missing)) {
+                sysRoleMapper.insertRoleMenus(role.getRoleId(), missing, "system");
+                log.info("[data.init.grant] role={} 补齐菜单 {}", role.getRoleCode(), missing.size());
+            }
+        }
+    }
+
+    /** 内置提示词模板：固定 ID 幂等写入，用户可复制后修改 */
+    private void initBuiltinPrompts() {
+        promptService.initBuiltin(BUILTIN_PROMPTS);
+    }
+
     private String menuId(int seq) {
         return String.format("%s_%026d", IdPrefixConst.MENU.getPrefix(), seq);
     }
@@ -174,13 +210,48 @@ public class DataInitializer implements ApplicationRunner {
 
     /** 普通用户可用的菜单与操作点：工作台功能 + 自己数据的增删改 */
     private static final List<String> USER_MENU_NAMES = List.of(
-            "menu.dashboard", "menu.console", "menu.files", "menu.skills", "menu.settings", "menu.showcase",
+            "menu.dashboard", "menu.console", "menu.files", "menu.skills", "menu.kb", "menu.settings", "menu.showcase",
+            "menu.writer", "menu.prompt", "menu.flow",
+            "menu.writer.list", "menu.writer.create", "menu.writer.update", "menu.writer.delete", "menu.writer.search",
+            "menu.prompt.list", "menu.prompt.create", "menu.prompt.update", "menu.prompt.delete",
+            "menu.flow.list", "menu.flow.create", "menu.flow.update", "menu.flow.delete", "menu.flow.run",
             "menu.files.delete",
-            "menu.skills.list", "menu.skills.create", "menu.skills.update", "menu.skills.delete");
+            "menu.skills.list", "menu.skills.create", "menu.skills.update", "menu.skills.delete",
+            "menu.kb.list", "menu.kb.create", "menu.kb.update", "menu.kb.delete", "menu.kb.upload", "menu.kb.search");
 
     /** 菜单种子：seq 为固定自增号，parentSeq 为 0 表示根 */
     private record MenuSeed(int seq, int parentSeq, String name, String type, String route,
                             String component, String icon, String perm, int sort) {
+    }
+
+    /** 内置提示词种子：固定 ID 幂等写入，ID 形如 PRPT_ + 24 位序号 */
+    private static final List<PromptService.BuiltinSeed> BUILTIN_PROMPTS = List.of(
+            new PromptService.BuiltinSeed(promptId(1), "文章大纲", "写作",
+                    "请围绕《{{topic}}》产出一篇{{style}}风格的文章大纲，包含 5 到 8 个一级标题与关键论点。",
+                    "[{\"name\":\"topic\",\"label\":\"主题\",\"defaultValue\":\"\"},"
+                            + "{\"name\":\"style\",\"label\":\"风格\",\"defaultValue\":\"专业简洁\"}]"),
+            new PromptService.BuiltinSeed(promptId(2), "标题构思", "写作",
+                    "请为下面这篇内容构思 10 个候选标题，要求有信息量、不标题党：\n{{content}}",
+                    "[{\"name\":\"content\",\"label\":\"正文\",\"defaultValue\":\"\"}]"),
+            new PromptService.BuiltinSeed(promptId(3), "润色改写", "改写",
+                    "请按{{tone}}的语气润色下面这段内容，保持原意，改善节奏与用词：\n{{content}}",
+                    "[{\"name\":\"tone\",\"label\":\"语气\",\"defaultValue\":\"专业\"},"
+                            + "{\"name\":\"content\",\"label\":\"正文\",\"defaultValue\":\"\"}]"),
+            new PromptService.BuiltinSeed(promptId(4), "要点摘要", "摘要",
+                    "请为下面这段内容生成不超过 {{limit}} 字的摘要，保留关键结论：\n{{content}}",
+                    "[{\"name\":\"limit\",\"label\":\"字数\",\"defaultValue\":\"200\"},"
+                            + "{\"name\":\"content\",\"label\":\"正文\",\"defaultValue\":\"\"}]"),
+            new PromptService.BuiltinSeed(promptId(5), "中英互译", "翻译",
+                    "请把下面这段内容翻译为{{language}}，保持术语一致与段落结构：\n{{content}}",
+                    "[{\"name\":\"language\",\"label\":\"目标语言\",\"defaultValue\":\"English\"},"
+                            + "{\"name\":\"content\",\"label\":\"正文\",\"defaultValue\":\"\"}]"),
+            new PromptService.BuiltinSeed(promptId(6), "代码讲解", "代码",
+                    "请解释下面这段 {{lang}} 代码的职责、关键路径与潜在风险：\n```\n{{code}}\n```",
+                    "[{\"name\":\"lang\",\"label\":\"语言\",\"defaultValue\":\"Python\"},"
+                            + "{\"name\":\"code\",\"label\":\"代码\",\"defaultValue\":\"\"}]"));
+
+    private static String promptId(int seq) {
+        return String.format("%s_%026d", IdPrefixConst.PROMPT.getPrefix(), seq);
     }
 
     private static final List<MenuSeed> MENU_SEEDS = buildSeeds();
@@ -195,6 +266,10 @@ public class DataInitializer implements ApplicationRunner {
         seeds.add(new MenuSeed(2, 0, "menu.console", menu, "/console", "console/Console", "chat", null, 20));
         seeds.add(new MenuSeed(3, 0, "menu.files", menu, "/files", "files/FileList", "folder", null, 30));
         seeds.add(new MenuSeed(4, 0, "menu.skills", menu, "/skills", "skills/SkillList", "bulb", null, 40));
+        seeds.add(new MenuSeed(45, 0, "menu.kb", menu, "/kb", "kb/KbCenter", "book", null, 45));
+        seeds.add(new MenuSeed(46, 0, "menu.writer", menu, "/writer", "writer/WriterStudio", "edit", null, 35));
+        seeds.add(new MenuSeed(47, 0, "menu.prompt", menu, "/prompt", "prompts/PromptLibrary", "magic", null, 36));
+        seeds.add(new MenuSeed(48, 0, "menu.flow", menu, "/flow", "flow/FlowCanvas", "connection", null, 37));
         seeds.add(new MenuSeed(5, 0, "menu.logs", menu, "/logs", "logs/LogSearch", "document", "monitor:log:list", 50));
         seeds.add(new MenuSeed(6, 0, "menu.monitor", menu, "/monitor", "monitor/HealthPanel", "pulse", "monitor:health:list", 60));
         seeds.add(new MenuSeed(7, 0, "menu.showcase", menu, "/showcase", "showcase/Showcase", "palette", null, 70));
@@ -224,6 +299,13 @@ public class DataInitializer implements ApplicationRunner {
         seeds.add(new MenuSeed(62, 4, "menu.skills.delete", button, null, null, null, "wb:skill:delete", 3));
         // 文件页操作点
         seeds.add(new MenuSeed(70, 3, "menu.files.delete", button, null, null, null, "wb:file:delete", 1));
+        // 知识库页操作点
+        seeds.add(new MenuSeed(75, 45, "menu.kb.list", button, null, null, null, "wb:kb:list", 0));
+        seeds.add(new MenuSeed(76, 45, "menu.kb.create", button, null, null, null, "wb:kb:create", 1));
+        seeds.add(new MenuSeed(77, 45, "menu.kb.update", button, null, null, null, "wb:kb:update", 2));
+        seeds.add(new MenuSeed(78, 45, "menu.kb.delete", button, null, null, null, "wb:kb:delete", 3));
+        seeds.add(new MenuSeed(79, 45, "menu.kb.upload", button, null, null, null, "wb:kb:upload", 4));
+        seeds.add(new MenuSeed(80, 45, "menu.kb.search", button, null, null, null, "wb:kb:search", 5));
         // 设置页：工具与供应方管理
         seeds.add(new MenuSeed(90, 8, "menu.settings.tool.list", button, null, null, null, "wb:tool:list", 1));
         seeds.add(new MenuSeed(91, 8, "menu.settings.tool.toggle", button, null, null, null, "wb:tool:toggle", 2));
@@ -232,6 +314,23 @@ public class DataInitializer implements ApplicationRunner {
         seeds.add(new MenuSeed(94, 8, "menu.settings.provider.create", button, null, null, null, "wb:provider:create", 5));
         seeds.add(new MenuSeed(95, 8, "menu.settings.provider.update", button, null, null, null, "wb:provider:update", 6));
         seeds.add(new MenuSeed(96, 8, "menu.settings.provider.delete", button, null, null, null, "wb:provider:delete", 7));
+        // 创作台操作点
+        seeds.add(new MenuSeed(120, 46, "menu.writer.list", button, null, null, null, "wb:doc:list", 0));
+        seeds.add(new MenuSeed(121, 46, "menu.writer.create", button, null, null, null, "wb:doc:create", 1));
+        seeds.add(new MenuSeed(122, 46, "menu.writer.update", button, null, null, null, "wb:doc:update", 2));
+        seeds.add(new MenuSeed(123, 46, "menu.writer.delete", button, null, null, null, "wb:doc:delete", 3));
+        seeds.add(new MenuSeed(124, 46, "menu.writer.search", button, null, null, null, "wb:doc:search", 4));
+        // 提示词操作点
+        seeds.add(new MenuSeed(130, 47, "menu.prompt.list", button, null, null, null, "wb:prompt:list", 0));
+        seeds.add(new MenuSeed(131, 47, "menu.prompt.create", button, null, null, null, "wb:prompt:create", 1));
+        seeds.add(new MenuSeed(132, 47, "menu.prompt.update", button, null, null, null, "wb:prompt:update", 2));
+        seeds.add(new MenuSeed(133, 47, "menu.prompt.delete", button, null, null, null, "wb:prompt:delete", 3));
+        // 工作流操作点
+        seeds.add(new MenuSeed(140, 48, "menu.flow.list", button, null, null, null, "wb:flow:list", 0));
+        seeds.add(new MenuSeed(141, 48, "menu.flow.create", button, null, null, null, "wb:flow:create", 1));
+        seeds.add(new MenuSeed(142, 48, "menu.flow.update", button, null, null, null, "wb:flow:update", 2));
+        seeds.add(new MenuSeed(143, 48, "menu.flow.delete", button, null, null, null, "wb:flow:delete", 3));
+        seeds.add(new MenuSeed(144, 48, "menu.flow.run", button, null, null, null, "wb:flow:run", 4));
         return seeds;
     }
 }

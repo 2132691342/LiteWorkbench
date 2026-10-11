@@ -22,8 +22,7 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * Redisearch 日志索引访问：idx:lw:log，哈希文档键前缀 lw:log:。
- * 原始命令经 RedisConnection.execute 直发，索引创建幂等。
+ * Redisearch 日志索引访问，原始命令经 RedisConnection.execute 直发
  */
 @Slf4j
 @Component

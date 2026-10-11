@@ -16,18 +16,17 @@
 | UI | Element Plus 2.9.0 + UnoCSS 0.58.6 | 控件与原子样式 |
 | 状态 / 路由 | Pinia 2.1.7 + Vue Router 4.3.2 | 状态与动态路由 |
 | 请求 | Axios 1.6.8 | 唯一出口封装 |
-| 可视化 | ECharts 5.5.0、AntV X6 2.18.1 | 图表与流程编排 |
-| 工作流 | BPMN-JS 16.4.0 | 流程建模页（预置） |
-| 富文本 | WangEditor 5.1.23、Mavon-Editor、CodeMirror 6 | 内容创作与代码编辑 |
-| 文件处理 | XLSX、docx-preview、vue-pdf-embed | 产物预览 |
-| 微前端 | Qiankun 2.10.16 | 预留子应用挂载点 |
+| 可视化 | ECharts 5.5.0 | 仪表盘图表，色值经 `utils/theme.ts` 读令牌 |
+| 画布 | AntV X6 2.18.1 | 工作流编排画布 |
+| 富文本 | WangEditor 5.1.23 | 创作台富文本模式 |
+| 文件处理 | XLSX、docx-preview、vue-pdf-embed | 文件空间在线预览，按需异步加载 |
 | 国际化 | Vue I18n 9.10.2 | 中英双语 |
 
 ### 目录
 
 | 目录 | 内容 |
 |---|---|
-| `views/` | 路由页：登录、仪表盘、工作台、文件、技能、日志、监控、设置、系统管理、组件库 |
+| `views/` | 路由页：登录、仪表盘、工作台、创作台、提示词、工作流、文件、技能、知识库、日志、监控、设置、系统管理、组件库 |
 | `components/layout/` | 顶栏、侧栏、外壳 |
 | `components/ui/` | 基础件：`LwButton`、`LwCard`、`LwEmpty`、`LwSkeleton`、`LwErrorBar`、`LwTag`、`LwPageState` |
 | `components/charts/` | ECharts 封装（面积图、环形图、柱状图），色值经 `utils/theme.ts` 读令牌 |
@@ -44,8 +43,12 @@
 | `/login` | 登录 | 公开 |
 | `/dashboard` | 仪表盘 | 登录 |
 | `/console` | 工作台（会话 + 运行时间线） | 登录 |
-| `/files` | 文件空间 | 登录 |
+| `/writer` | 创作台（文档编辑 + 版本 + AI 辅助） | `wb:doc:list` |
+| `/prompt` | 提示词库 | `wb:prompt:list` |
+| `/flow` | 工作流画布 | `wb:flow:list` |
+| `/files` | 文件空间（含在线预览） | 登录 |
 | `/skills` | 技能 | 登录 |
+| `/kb` | 知识库 | `wb:kb:list` |
 | `/logs` | 日志中心 | `monitor:log:list` |
 | `/monitor` | 健康监控 | `monitor:health:list` |
 | `/settings` | 设置 | 登录 |
@@ -121,6 +124,19 @@ await runStore.replay(runId)
   ├─ 输入发送 → 建立 SSE → 逐帧 apply 到 runStore
   ├─ 中断按钮 → POST /run/abort/{runId} → 收到 run.end
   └─ 刷新页面 → 按 runId 拉事件回放
+
+创作台
+  ├─ 左列文档列表（关键字走 /doc/search，否则 /doc/page）
+  ├─ 选中文档 → /doc/detail/{docId} 载入正文与类型
+  ├─ 保存 → /doc/update（写版本 + 同步索引）→ 提示已保存
+  ├─ AI 辅助 → /doc/assist → 结果可插入末尾 / 替换选区 / 复制
+  └─ 版本历史 → /doc/version/page → 回滚即再走一次保存
+
+工作流
+  ├─ 画布由 X6 渲染，节点顺序即执行顺序，可拖拽调位置
+  ├─ 节点配置在右侧编辑（prompt / script / 检索词 / 工具名 / 输出变量）
+  ├─ 保存 → /flow/update（服务端校验结构，不合法即拒绝）
+  └─ 执行 → /flow/run → 按节点展示状态、耗时与输出
 ```
 
 ## 取舍

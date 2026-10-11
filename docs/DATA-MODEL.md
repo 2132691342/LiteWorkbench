@@ -6,9 +6,9 @@
 
 ## 1. 定位
 
-数据分四类存放，各取所长：业务关系型数据与权限主数据进 PostgreSQL；可检索的日志文本进 Redisearch；文件二进制进 MinIO；临时状态、登录态与计数器进 Redis。
+数据分五类存放，各取所长：业务关系型数据与权限主数据进 PostgreSQL；**会话消息、知识库分块、平台日志**这类需要全文检索的文本进 Redisearch；文件与知识库文档原件进 MinIO；缓存、登录态、幂等占位、限流计数与运行锁进 Redis；MQ 只做削峰管道（日志索引、知识库解析任务）。
 
-不做多租户。数据归属以用户为单位：用户拥有的业务数据带 `user_id`，平台级主数据（菜单定义、角色授权关系、工具与供应方定义）例外。
+不做多租户。数据归属以用户为单位：用户拥有的业务数据带 `user_id`（库表与 Redisearch 文档皆然），平台级主数据（菜单定义、角色授权关系、工具与供应方定义）例外。
 
 ## 2. ID 规范
 
@@ -24,11 +24,18 @@
 | `SESS_` | 会话 | `wb_session` |
 | `RUN_` | 运行 | `wb_run` |
 | `EVNT_` | 事件 | `wb_event` |
-| `MESG_` | 消息 | `wb_message` |
+| `MESG_` | 消息 | Redisearch `idx:lw:msg` |
 | `TOOL_` | 工具 | `wb_tool` |
 | `SKIL_` | 技能 | `wb_skill` |
 | `FILE_` | 文件 | `wb_file` |
 | `PROV_` | 模型供应方 | `wb_provider` |
+| `KB_` | 知识库 | `wb_kb` |
+| `KBDOC_` | 知识库文档 | `wb_kb_doc` |
+| `KBCHUNK_` | 知识库分块 | Redisearch `idx:lw:kbchunk` |
+| `DOC_` | 创作文档 | `wb_doc` / Redisearch `idx:lw:doc` |
+| `DOCV_` | 文档版本 | `wb_doc_version` |
+| `PRPT_` | 提示词 | `wb_prompt` |
+| `FLOW_` | 工作流画布 | `wb_flow` |
 | `TASK_` | 异步任务（预留） | `wb_task` |
 | `LOGD_` | 日志文档 | Redisearch `idx:lw:log` |
 
@@ -129,7 +136,7 @@
 | `run_id` | varchar(40) PK | `RUN_` |
 | `user_id` / `session_id` | varchar(40) | 归属 |
 | `parent_run_id` | varchar(40) | 父运行，重试/分支时使用 |
-| `relation` | varchar(16) | `original` / `retry` / `fork` / `recovery`，MVP 恒为 `original`，`parent_run_id` 同为预留 |
+| `relation` | varchar(16) | `original`（会话对话） / `flow`（工作流执行）；`retry` `fork` `recovery` 与 `parent_run_id` 同为预留 |
 | `prompt` | text | 本次输入 |
 | `model_name` | varchar(64) | 实际使用模型 |
 | `state` | varchar(16) | `queued` `running` `success` `failed` `aborted` |
@@ -140,7 +147,7 @@
 | `started_at` / `ended_at` | timestamptz | 起止 |
 | `duration_ms` | bigint | 耗时 |
 
-索引：`(session_id, created_at DESC)`、`(user_id, created_at DESC)`。
+索引：`(session_id, created_at DESC)`、`(user_id, created_at DESC)`。`session_id` 可空：工作流执行不挂会话，这类运行的 `session_id` 为 NULL。
 
 ### 5.3 wb_event
 
@@ -158,18 +165,22 @@
 
 索引：`(run_id, seq)` 唯一，`(session_id, occurred_at)`。
 
-### 5.4 wb_message
+### 5.4 会话消息（Redisearch，无库表）
+
+消息是典型的"写完读、按会话整页读、偶尔全文找"的数据，落 Redisearch 索引 `idx:lw:msg`（哈希文档，键前缀 `lw:msg:`，键即 `lw:msg:{MESG_ULID}`），不建库表。字段：
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
-| `message_id` | varchar(40) PK | `MESG_` |
-| `user_id` | varchar(40) | 归属用户 |
-| `session_id` / `run_id` | varchar(40) | 归属 |
-| `role_code` | varchar(16) | `user` `assistant` `tool` |
-| `content` | text | 正文 |
-| `token_count` | int | 估算用量 |
+| `message_id` | TAG | `MESG_` |
+| `user_id` | TAG | 归属用户 |
+| `session_id` | TAG | 归属会话 |
+| `run_id` | TAG | 产生消息的运行，可空 |
+| `role` | TAG | `user` `assistant` `tool` `system` |
+| `content` | TEXT | 正文，全文可检索 |
+| `token_count` | NUMERIC | 估算用量 |
+| `ts` | NUMERIC SORTABLE | 毫秒时间戳，会话内排序依据 |
 
-索引：`(session_id, created_at)`。
+无 TTL：对话是用户资产，不随时间蒸发；同毫秒写入的次序由 ULID 单调性兜底，读侧按 `(ts, message_id)` 内存稳定排序。会话删除时按 `session_id` 清除对应文档。
 
 ### 5.5 wb_tool（平台级）
 
@@ -236,9 +247,106 @@
 | `retry_count` | int | 重试次数 |
 | `error_message` | text | 错误信息 |
 
+### 5.10 wb_kb
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `kb_id` | varchar(40) PK | `KB_` |
+| `user_id` | varchar(40) | 归属用户 |
+| `kb_name` | varchar(128) | 知识库名，用户内唯一 |
+| `description` | varchar(512) | 描述 |
+| `doc_count` / `chunk_count` | int | 文档与分块计数，冗余免实时聚合 |
+| 审计字段 | | |
+
+### 5.11 wb_kb_doc
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `doc_id` | varchar(40) PK | `KBDOC_` |
+| `user_id` / `kb_id` | varchar(40) | 归属 |
+| `doc_name` | varchar(255) | 文档名 |
+| `object_key` / `bucket_name` | varchar | MinIO 对象键（原件 `user/{userId}/kbdoc/...`）与桶 |
+| `file_size` | bigint | 字节数 |
+| `content_type` | varchar(128) | MIME |
+| `char_count` | int | 提取出的正文总字符数 |
+| `chunk_count` | int | 分块数 |
+| `state` | varchar(16) | `pending` `processing` `ready` `failed` |
+| `error_message` | text | 解析失败原因 |
+| 审计字段 | | |
+
+分块正文不落 PG：解析完成后按块写入 Redisearch `idx:lw:kbchunk`，原件在 MinIO，可随时重解析。解析走 MQ（`lw.kb.parse`）异步执行，上传接口只做 MinIO 落盘 + 置 `pending`。
+
+### 5.12 wb_doc（创作文档）
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `doc_id` | varchar(40) PK | `DOC_` |
+| `user_id` | varchar(40) | 归属用户 |
+| `doc_title` | varchar(255) | 标题 |
+| `doc_type` | varchar(16) | `markdown` `rich` `code` |
+| `category` | varchar(64) | 分类，便于创作台分组 |
+| `tags` | varchar(512) | 逗号分隔标签 |
+| `summary` | varchar(512) | 摘要，列表页展示 |
+| `content` | text | 正文（Markdown 源码 / 富文本 HTML / 代码文本） |
+| `content_text` | text | 去标签纯文本，供索引与字数统计 |
+| `word_count` | int | 字数 |
+| `version_no` | int | 当前版本号，每次保存 +1 |
+| `source_kb_id` | varchar(40) | 引用知识库（可选，AI 辅助写作时检索范围） |
+| `state` | varchar(16) | `draft` `published` `archived` |
+| 审计字段 | | |
+
+正文存 PG 保证强一致与事务；同时把 `content_text` 写 `idx:lw:doc` 供全站检索，两份数据以 PG 为准，索引可重建。
+
+### 5.13 wb_doc_version（文档版本）
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `version_id` | varchar(40) PK | `DOCV_` |
+| `doc_id` | varchar(40) | 归属文档 |
+| `user_id` | varchar(40) | 归属用户 |
+| `version_no` | int | 版本号，文档内递增 |
+| `doc_title` | varchar(255) | 快照标题 |
+| `content` | text | 快照正文 |
+| `change_note` | varchar(255) | 变更说明 |
+| `created_by` / `created_at` | | 只留创建审计，版本不可改 |
+
+每次保存正文即写一条版本，保留最近 30 条，超出由清理接口按 `version_no` 裁剪。
+
+### 5.14 wb_prompt（提示词）
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `prompt_id` | varchar(40) PK | `PRPT_` |
+| `user_id` | varchar(40) | 归属用户；`builtin` 行为内置模板 |
+| `prompt_title` | varchar(128) | 标题 |
+| `category` | varchar(64) | 分类（写作 / 改写 / 摘要 / 翻译 / 代码 …） |
+| `content` | text | 模板正文，变量写作 `{{name}}` |
+| `variables` | jsonb | 变量定义数组：`[{name, label, defaultValue}]` |
+| `builtin` | boolean | 是否内置（内置只读，用户可复制为自有） |
+| `use_count` | int | 使用次数，排序用 |
+| 审计字段 | | |
+
+### 5.15 wb_flow（工作流画布）
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `flow_id` | varchar(40) PK | `FLOW_` |
+| `user_id` | varchar(40) | 归属用户 |
+| `flow_name` | varchar(128) | 名称，用户内唯一 |
+| `description` | varchar(512) | 描述 |
+| `graph_json` | jsonb | X6 画布结构：`{nodes:[], edges:[]}` |
+| `node_count` | int | 节点数，冗余 |
+| `last_run_id` | varchar(40) | 最近一次运行的 Run |
+| `state` | varchar(16) | `draft` `enabled` `disabled` |
+| 审计字段 | | |
+
+节点类型：`start` `llm` `tool` `python` `knowledge` `end`。画布结构只存 JSON，不建节点表：节点是画布的内部结构，没有独立查询需求。
+
 ## 6. Redisearch 索引
 
-索引名 `idx:lw:log`，哈希文档，键前缀 `lw:log:`。
+四个索引，全部哈希文档，启动时幂等创建：
+
+### 6.1 idx:lw:log（键前缀 `lw:log:`）
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
@@ -251,7 +359,40 @@
 | `message` | TEXT | 正文 |
 | `exception` | TEXT | 异常堆栈 |
 
-检索语法：`@level:{ERROR} @message:timeout`，按 `ts` 倒序。
+检索语法：`@level:{ERROR} @message:timeout`，按 `ts` 倒序。文档 TTL 30 天。
+
+### 6.2 idx:lw:msg（键前缀 `lw:msg:`）
+
+见 5.4。检索：`@session_id:{SESS_..}` 按 `ts` 升序取会话消息；`@user_id:{USER_..} @content:(关键字)` 做跨会话全文查找。无 TTL。
+
+### 6.3 idx:lw:kbchunk（键前缀 `lw:kbchunk:`）
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `chunk_id` | TAG | `KBCHUNK_` |
+| `user_id` | TAG | 归属用户 |
+| `kb_id` | TAG | 归属知识库 |
+| `doc_id` | TAG | 归属文档 |
+| `doc_name` | TEXT | 文档名，可被关键字命中 |
+| `seq` | NUMERIC | 文档内块序号，从 1 递增 |
+| `content` | TEXT | 块正文，全文检索主体 |
+| `ts` | NUMERIC SORTABLE | 入库毫秒时间戳 |
+
+检索：`@user_id:{..} @kb_id:{..} @content:(关键字)`，按相关度排序返回；高亮由前端按关键字分段渲染，后端只回原文。无 TTL。
+
+### 6.4 idx:lw:doc（键前缀 `lw:doc:`）
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `doc_id` | TAG | `DOC_` |
+| `user_id` | TAG | 归属用户 |
+| `doc_title` | TEXT | 标题 |
+| `category` | TAG | 分类 |
+| `content` | TEXT | 去标签纯文本正文 |
+| `word_count` | NUMERIC | 字数 |
+| `updated_at` | NUMERIC SORTABLE | 更新时间戳 |
+
+检索：`@user_id:{..} (@doc_title:(关键字) | @content:(关键字))`，默认按 `updated_at` 倒序。文档保存即同步覆盖写入，删除即删文档键。无 TTL。
 
 ## 7. Redis 键
 
@@ -260,6 +401,8 @@
 | `lw:lock:run:{sessionId}` | string | 会话串行锁，防并发运行 |
 | `lw:cache:provider:{code}` | string | 供应方配置 ID 缓存（命中后回源取详情），TTL 5min |
 | `lw:cache:perm:{userId}` | set | 用户权限标识缓存，TTL 10min |
+| `lw:cache:menu:{userId}` | string | 用户可见菜单树缓存（JSON），TTL 10min，菜单 / 授权 / 用户角色变更即清 |
+| `lw:cache:overview` | string | 仪表盘汇总指标缓存（JSON），TTL 60s |
 | `lw:idem:{prefix}:{userId}:{digest}` | string | 幂等占位，TTL 默认 10s |
 | `lw:rl:{prefix}:{主体}:{窗口号}` | string | 接口限流计数（@RateLimit 固定窗口），TTL 窗口 + 5s |
 | `satoken:login:session:{userId}` | — | Sa-Token 会话（库自带命名空间） |
@@ -278,3 +421,10 @@
 | 日志只保留 30 天 | 存储可控 | 长周期审计需外部归档 |
 | 密钥加密存库 | 配置可在页面修改 | 需要管理加密密钥 |
 | `wb_task` 保留表结构但本期不暴露接口 | 异步任务入口已预留 | 短期无消费者，表为空 |
+| 文档正文存 PG、索引存 Redisearch | 编辑强一致，检索低成本 | 双写，索引落后时以 PG 为准，可重建 |
+| 每次保存即写版本行 | 回溯简单，无需 diff 算法 | 长文档版本行占空间，按 30 条裁剪 |
+| 画布结构存单个 jsonb | 节点无独立查询需求，一次读写整个图 | 不能按节点做条件统计，图过大时更新成本高 |
+| 提示词内置行归 `builtin` 用户 | 内置模板与用户模板同表同查询，免分表 | 内置行不可编辑，用户只能复制后用 |
+| 消息与知识块进 Redisearch、不落 PG | 全文检索免建倒排、写路径短、与日志同一套检索设施 | 依赖 Redis 持久化与容量，备份策略要覆盖消息资产 |
+| 知识块不落库表，原件进 MinIO | 可整篇重解析，块结构随分块策略升级 | 分块变更需重建索引 |
+| 概览与菜单树走短 TTL 缓存 | 仪表盘与路由加载不打穿数据库 | 授权与统计数据有最长 1–10 分钟延迟 |

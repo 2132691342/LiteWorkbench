@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import com.liteworkbench.config.AgentProperties;
 import com.liteworkbench.config.RuntimeProperties;
 import com.liteworkbench.domain.constant.RunConst;
+import com.liteworkbench.agent.spi.KbSearchPort;
 import com.liteworkbench.agent.spi.ToolGate;
 import com.liteworkbench.domain.dto.RunEventDTO;
 import com.liteworkbench.runtime.PythonRuntime;
@@ -38,6 +39,7 @@ public class AgentScopeAgentRuntime implements AgentRuntime {
     private final RuntimeProperties runtimeProperties;
     private final PythonRuntime pythonRuntime;
     private final AgentEventAdapter adapter;
+    private final KbSearchPort kbSearchPort;
 
     @Override
     public Flux<RunEventDTO> stream(RunContext context) {
@@ -70,7 +72,7 @@ public class AgentScopeAgentRuntime implements AgentRuntime {
     /** 注册内置工具，工作目录按用户隔离，启用与否由工具实现内读取 wb_tool 决定 */
     private Toolkit buildToolkit(RunContext context, ToolOutputCapture capture) {
         Toolkit toolkit = new Toolkit();
-        toolkit.registerTool(new WorkbenchTools(toolGate, pythonRuntime, runtimeProperties,
+        toolkit.registerTool(new WorkbenchTools(toolGate, kbSearchPort, pythonRuntime, runtimeProperties,
                 capture, context.userId()));
         return toolkit;
     }
