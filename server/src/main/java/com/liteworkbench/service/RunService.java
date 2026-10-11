@@ -37,12 +37,9 @@ import io.agentscope.core.message.UserMessage;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.Disposable;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -103,7 +100,7 @@ public class RunService {
     }
 
     /** 流式对话：锁会话 → 落运行与用户消息 → 订阅事件流（攒批落库 + 推送）→ 终态收尾 */
-    public SseEmitter chatStream(ChatStreamREQ req) {
+    public String chatStream(ChatStreamREQ req, RunSink sink) {
         String userId = LoginContext.userId();
         var session = sessionService.getOwned(req.getSessionId(), userId);
 
@@ -130,14 +127,12 @@ public class RunService {
                     providerCode, modelName, systemPrompt, loadHistory(session.getSessionId()),
                     req.getContent());
 
-            SseEmitter emitter = new SseEmitter(RunConst.SSE_TIMEOUT_MS);
-            ActiveRun run = new ActiveRun(runId, userId, session.getSessionId(), emitter);
+            ActiveRun run = new ActiveRun(runId, userId, session.getSessionId(), sink);
             active.put(runId, run);
-            registerEmitterCallbacks(run);
             subscribe(run, context);
             log.info("[run.start] userId={} sessionId={} runId={} model={}",
                     userId, session.getSessionId(), runId, modelName);
-            return emitter;
+            return runId;
         } catch (RuntimeException e) {
             redisTemplate.delete(RedisKeyConst.lockRun(session.getSessionId()));
             active.remove(runId);
@@ -201,22 +196,25 @@ public class RunService {
         scheduleHeartbeat(run);
     }
 
-    /** SSE 生命周期回调：完成 / 超时统一清理 */
-    private void registerEmitterCallbacks(ActiveRun run) {
-        run.emitter.onCompletion(() -> {
-            if (run.settled.compareAndSet(false, true)) {
-                if (Objects.nonNull(run.disposable)) {
-                    run.disposable.dispose();
-                }
+    /** 通道关闭回调：由 api 层在 SSE 完成 / 超时 / 出错时调用，统一清理运行占用 */
+    public void onChannelClosed(String runId) {
+        ActiveRun run = active.get(runId);
+        if (Objects.isNull(run)) {
+            return;
+        }
+        if (run.settled.compareAndSet(false, true)) {
+            if (Objects.nonNull(run.disposable)) {
+                run.disposable.dispose();
             }
-            active.remove(run.runId);
-            cancelHeartbeat(run);
-            releaseLock(run.sessionId);
-        });
-        run.emitter.onTimeout(() -> {
-            log.warn("[run.timeout] runId={}", run.runId);
-            run.emitter.complete();
-        });
+        }
+        cleanup(run);
+    }
+
+    /** 释放运行占用的资源：活动表、心跳与会话锁 */
+    private void cleanup(ActiveRun run) {
+        active.remove(run.runId);
+        cancelHeartbeat(run);
+        releaseLock(run.sessionId);
     }
 
     /** 单批事件：先持久化再推送，落库失败不中断输出 */
@@ -241,11 +239,8 @@ public class RunService {
             return;
         }
         try {
-            run.emitter.send(SseEmitter.event()
-                    .id(String.valueOf(event.seq()))
-                    .name("run.event")
-                    .data(JSONUtil.toJsonStr(event), MediaType.APPLICATION_JSON));
-        } catch (IOException | IllegalStateException e) {
+            run.sink.send(event.seq(), event.eventType(), JSONUtil.toJsonStr(event));
+        } catch (RuntimeException e) {
             log.warn("[run.sse] runId={} 推送失败，中断运行 {}", run.runId, e.getMessage());
             if (Objects.nonNull(run.disposable)) {
                 run.disposable.dispose();
@@ -271,7 +266,7 @@ public class RunService {
                 "status", RunStatusEnum.SUCCESS.getCode(),
                 "stopReason", stopReason,
                 "usage", run.usage));
-        completeEmitter(run);
+        completeSink(run);
         log.info("[run.end] runId={} status={} cost={}ms", run.runId, RunStatusEnum.SUCCESS.getCode(),
                 System.currentTimeMillis() - run.startedAt);
     }
@@ -291,7 +286,7 @@ public class RunService {
         pushSynthetic(run, "error", Map.of(
                 "code", ErrorCodeEnum.INTERNAL_ERROR.getCode(),
                 "message", "运行失败，请查看日志"));
-        completeEmitter(run);
+        completeSink(run);
     }
 
     /** 中断收尾：取消信号或 abort 触发 */
@@ -311,10 +306,8 @@ public class RunService {
                 "status", RunStatusEnum.ABORTED.getCode(),
                 "stopReason", StopReasonEnum.ABORTED.getCode(),
                 "usage", run.usage));
-        completeEmitter(run);
-        active.remove(run.runId);
-        cancelHeartbeat(run);
-        releaseLock(run.sessionId);
+        completeSink(run);
+        cleanup(run);
     }
 
     /** 运行终态与用量落库 */
@@ -347,10 +340,10 @@ public class RunService {
         push(run, event);
     }
 
-    private void completeEmitter(ActiveRun run) {
+    private void completeSink(ActiveRun run) {
         try {
-            run.emitter.complete();
-        } catch (Exception ignored) {
+            run.sink.complete();
+        } catch (RuntimeException ignored) {
             // 客户端已断开
         }
     }
@@ -404,7 +397,7 @@ public class RunService {
                     cancelHeartbeat(run);
                     return;
                 }
-                run.emitter.send(SseEmitter.event().comment("ping"));
+                run.sink.ping();
             } catch (Exception e) {
                 cancelHeartbeat(run);
                 if (Objects.nonNull(run.disposable)) {
@@ -488,7 +481,7 @@ public class RunService {
         final String runId;
         final String userId;
         final String sessionId;
-        final SseEmitter emitter;
+        final RunSink sink;
         final AtomicBoolean settled = new AtomicBoolean(false);
         final AtomicBoolean exceeded = new AtomicBoolean(false);
         final StringBuilder answer = new StringBuilder();
@@ -499,11 +492,11 @@ public class RunService {
         volatile Disposable disposable;
         volatile ScheduledFuture<?> heartbeat;
 
-        ActiveRun(String runId, String userId, String sessionId, SseEmitter emitter) {
+        ActiveRun(String runId, String userId, String sessionId, RunSink sink) {
             this.runId = runId;
             this.userId = userId;
             this.sessionId = sessionId;
-            this.emitter = emitter;
+            this.sink = sink;
         }
 
         /** 从事件流提取答案文本、用量与迭代数 */

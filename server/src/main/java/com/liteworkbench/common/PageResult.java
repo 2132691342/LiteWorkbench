@@ -22,11 +22,11 @@ public class PageResult<T> implements Serializable {
     /** 当前页数据 */
     private List<T> list;
     /** 总记录数 */
-    private long total;
+    private Long total;
     /** 页码，从 1 开始 */
-    private long page;
+    private Long page;
     /** 每页条数 */
-    private long size;
+    private Long size;
 
     /** 构造分页结果，空列表时返回不可变空集合 */
     public static <T> PageResult<T> of(List<T> list, long total, long page, long size) {

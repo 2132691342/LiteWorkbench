@@ -149,7 +149,15 @@ npm run build    # 产物在 web/dist
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | 容器部署、配置、运维 |
 | [specs/](specs/) | 子系统规格，一篇一个子系统 |
 
-## 7. 约束
+阅读顺序：**README（是什么） → ARCHITECTURE（怎么分层） → specs（每个子系统怎么实现） → AGENTS.md（写代码前查规范） → DESIGN.md（写页面前查视觉）**。
+
+## 7. 构建与交付
+
+代码托管在 GitHub（`2132691342/LiteWorkbench`），`main` 为唯一主干。CI 由 GitHub Actions 执行：后端 `mvn -DskipTests package`、前端 `npm ci && npm run build`，通过后构建镜像并推送到容器仓库；目标主机 `47.108.73.153` 拉取镜像后 `docker compose up -d` 完成发布。
+
+中间件不随应用重建，由 `deploy/docker-compose.yaml` 单独维护，凭据走环境变量，不进仓库。
+
+## 8. 约束
 
 - 只支持容器运行环境，不做裸机与桌面端。
 - 内置运行时只有 Python，不内置 Node / Go / Shell 发行版。

@@ -177,7 +177,7 @@ public class DataInitializer implements ApplicationRunner {
         String dir = MenuTypeEnum.DIR.getCode();
         String button = MenuTypeEnum.BUTTON.getCode();
         // 工作台主菜单
-        seeds.add(new MenuSeed(1, 0, "menu.dashboard", menu, "/dashboard", "dashboard/Dashboard", "dashboard", null, 10));
+        seeds.add(new MenuSeed(1, 0, "menu.dashboard", menu, "/dashboard", "Dashboard", "dashboard", null, 10));
         seeds.add(new MenuSeed(2, 0, "menu.console", menu, "/console", "console/Console", "chat", null, 20));
         seeds.add(new MenuSeed(3, 0, "menu.files", menu, "/files", "files/FileList", "folder", null, 30));
         seeds.add(new MenuSeed(4, 0, "menu.skills", menu, "/skills", "skills/SkillList", "bulb", null, 40));

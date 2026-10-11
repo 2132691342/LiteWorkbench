@@ -7,7 +7,6 @@ import com.liteworkbench.domain.vo.HealthRESP;
 import com.liteworkbench.domain.vo.LogDocVO;
 import com.liteworkbench.domain.vo.OverviewRESP;
 import com.liteworkbench.domain.vo.PythonStatusVO;
-import com.liteworkbench.mapper.LogSearchMapper;
 import com.liteworkbench.service.MonitorService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,7 +24,6 @@ import java.util.List;
 public class MonitorController {
 
     private final MonitorService monitorService;
-    private final LogSearchMapper logSearchMapper;
 
     /** 逐组件健康状态 */
     @SaCheckPermission(PermConst.MONITOR_HEALTH_LIST)
@@ -65,6 +63,6 @@ public class MonitorController {
                                        @RequestParam(defaultValue = "0") long to,
                                        @RequestParam(defaultValue = "1") long page,
                                        @RequestParam(defaultValue = "20") long size) {
-        return R.ok(logSearchMapper.search(keyword, level, from, to, page, size));
+        return R.ok(monitorService.searchLogs(keyword, level, from, to, page, size));
     }
 }

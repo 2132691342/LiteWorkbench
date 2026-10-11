@@ -4,6 +4,7 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import com.liteworkbench.agent.ToolOutputCapture;
 import com.liteworkbench.agent.WorkbenchTools;
+import com.liteworkbench.agent.spi.ToolGate;
 import com.liteworkbench.common.BizException;
 import com.liteworkbench.common.ErrorCodeEnum;
 import com.liteworkbench.config.RuntimeProperties;
@@ -28,6 +29,7 @@ import java.util.Objects;
 public class ToolService {
 
     private final WbToolMapper toolMapper;
+    private final ToolGate toolGate;
     private final PythonRuntime pythonRuntime;
     private final RuntimeProperties runtimeProperties;
 
@@ -62,7 +64,7 @@ public class ToolService {
             throw new BizException(ErrorCodeEnum.FORBIDDEN, "该工具有副作用，需要显式确认");
         }
         Map<String, Object> args = req.getArgs();
-        WorkbenchTools tools = new WorkbenchTools(toolMapper, pythonRuntime, runtimeProperties,
+        WorkbenchTools tools = new WorkbenchTools(toolGate, pythonRuntime, runtimeProperties,
                 new ToolOutputCapture());
         long start = System.currentTimeMillis();
         String output = switch (toolName) {

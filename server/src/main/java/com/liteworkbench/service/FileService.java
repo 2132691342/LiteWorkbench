@@ -8,6 +8,7 @@ import com.liteworkbench.common.IdGenerator;
 import com.liteworkbench.common.PageResult;
 import com.liteworkbench.config.StorageProperties;
 import com.liteworkbench.domain.constant.IdPrefixConst;
+import com.liteworkbench.domain.dto.UploadFileDTO;
 import com.liteworkbench.domain.entity.WbFileDO;
 import com.liteworkbench.domain.vo.FileVO;
 import com.liteworkbench.mapper.WbFileMapper;
@@ -19,7 +20,6 @@ import io.minio.http.Method;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
 import java.time.Duration;
@@ -58,49 +58,49 @@ public class FileService {
     }
 
     /** 上传：先写对象后写元数据，失败回滚对象 */
-    public FileVO upload(MultipartFile multipart, String userId, String sessionId) {
-        if (Objects.isNull(multipart) || multipart.isEmpty()) {
+    public FileVO upload(UploadFileDTO file, String userId, String sessionId) {
+        if (Objects.isNull(file) || Objects.isNull(file.content()) || file.fileSize() <= 0) {
             throw new BizException(ErrorCodeEnum.PARAM_INVALID, "文件不能为空");
         }
-        if (multipart.getSize() > MAX_SIZE) {
+        if (file.fileSize() > MAX_SIZE) {
             throw new BizException(ErrorCodeEnum.FILE_TOO_LARGE);
         }
         String fileId = IdGenerator.generate(IdPrefixConst.FILE);
-        String fileName = sanitizeName(multipart.getOriginalFilename());
+        String fileName = sanitizeName(file.fileName());
         String objectKey = StrUtil.format("user/{}/{}/{}/{}/{}",
                 userId, "upload", LocalDate.now().format(DAY_FORMAT), fileId, fileName);
 
-        try (InputStream in = multipart.getInputStream()) {
+        try (InputStream in = file.content()) {
             minioClient.putObject(PutObjectArgs.builder()
                     .bucket(storageProperties.getBucketName())
                     .object(objectKey)
-                    .contentType(StrUtil.blankToDefault(multipart.getContentType(), "application/octet-stream"))
-                    .stream(in, multipart.getSize(), -1)
+                    .contentType(StrUtil.blankToDefault(file.contentType(), "application/octet-stream"))
+                    .stream(in, file.fileSize(), -1)
                     .build());
         } catch (Exception e) {
             log.error("[file.upload] 对象写入失败 userId={} file={} {}", userId, fileName, e.getMessage());
             throw new BizException(ErrorCodeEnum.FILE_UPLOAD_FAILED, e.getMessage());
         }
 
-        WbFileDO file = new WbFileDO();
-        file.setFileId(fileId);
-        file.setUserId(userId);
-        file.setSessionId(sessionId);
-        file.setFileName(fileName);
-        file.setObjectKey(objectKey);
-        file.setBucketName(storageProperties.getBucketName());
-        file.setFileSize(multipart.getSize());
-        file.setContentType(multipart.getContentType());
-        file.setCategory("upload");
-        file.setCreatedBy(userId);
+        WbFileDO entity = new WbFileDO();
+        entity.setFileId(fileId);
+        entity.setUserId(userId);
+        entity.setSessionId(sessionId);
+        entity.setFileName(fileName);
+        entity.setObjectKey(objectKey);
+        entity.setBucketName(storageProperties.getBucketName());
+        entity.setFileSize(file.fileSize());
+        entity.setContentType(file.contentType());
+        entity.setCategory("upload");
+        entity.setCreatedBy(userId);
         try {
-            fileMapper.insert(file);
+            fileMapper.insert(entity);
         } catch (Exception e) {
             removeObjectQuietly(objectKey);
             throw new BizException(ErrorCodeEnum.FILE_UPLOAD_FAILED, e.getMessage());
         }
-        log.info("[file.upload] userId={} fileId={} size={}", userId, fileId, multipart.getSize());
-        return toVO(file);
+        log.info("[file.upload] userId={} fileId={} size={}", userId, fileId, file.fileSize());
+        return toVO(entity);
     }
 
     /** 预签名下载地址，前端直连 MinIO */

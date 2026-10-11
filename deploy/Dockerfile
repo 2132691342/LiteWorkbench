@@ -20,9 +20,12 @@ RUN apk add --no-cache python3 curl tzdata
 COPY --from=server-build /build/server/target/lite-workbench-server.jar app.jar
 COPY --from=web-build /build/web/dist ./static/
 ENV LITEWORKBENCH_LOG_DIR=/var/log/liteworkbench \
-    LITEWORKBENCH_RUNTIME_DATA_DIR=/var/lib/liteworkbench
+    LITEWORKBENCH_RUNTIME_DATA_DIR=/var/lib/liteworkbench \
+    JAVA_OPTS="-XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:MaxRAMPercentage=70 \
+-XX:+UseStringDeduplication -XX:+UseCompressedOops -XX:+UseCompressedClassPointers \
+-Xss512k -XX:+ExitOnOutOfMemoryError"
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
   CMD curl -f http://localhost:8080/actuator/health || exit 1
-ENTRYPOINT ["java", "-jar", "/app/app.jar", \
-  "--spring.web.resources.static-locations=file:/app/static/,classpath:/static/"]
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar \
+  --spring.web.resources.static-locations=file:/app/static/,classpath:/static/"]

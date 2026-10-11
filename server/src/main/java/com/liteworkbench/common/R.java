@@ -25,7 +25,7 @@ public class R<T> implements Serializable {
     /** 链路标识，与日志 traceId 一致 */
     private String requestId;
     /** 响应时间戳，毫秒 */
-    private long timestamp;
+    private Long timestamp;
 
     private R(String code, String message, T data) {
         this.code = code;

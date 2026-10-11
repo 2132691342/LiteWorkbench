@@ -24,6 +24,8 @@
 | `NOT_FOUND` | 三种方式都没找到 |
 | `BAD_VERSION` | 找到但版本低于 3.8 |
 
+探测结果缓存到内存。首次探测用闸门串行化，避免并发请求同时触发探测；页面可显式清缓存重探。内置目录下写 `.version` 标记，版本不一致时视为缺失重新探测。
+
 **为什么不做嵌入解压**：容器镜像里已经装好 Python，再嵌一份上百 MB 的运行时只会让镜像变大。内置路径仅作为兜底位置保留。
 
 ## 契约
@@ -47,12 +49,15 @@ execute(request)
   ├─ 1 探测解释器，未就绪抛 PYTHON_NOT_READY
   ├─ 2 安全校验：代码与工作目录不得越出数据目录（越界抛 PYTHON_UNSAFE_PATH）
   ├─ 3 脚本落盘到临时目录 lwb-python-{ulid}.py
-  ├─ 4 ProcessBuilder 启动，工作目录设为 workDir
+  ├─ 4 ProcessBuilder 启动，工作目录设为 workDir，注入 PYTHONIOENCODING=utf-8 与
+  │    PYTHONDONTWRITEBYTECODE=1，PATH 首位放解释器所在目录
   ├─ 5 超时后按进程树终止（ProcessHandle.descendants() 全部 destroyForcibly）
-  ├─ 6 双通道收集输出，控制字符清理
+  ├─ 6 双通道收集输出：先做编码归一（GBK/UTF-16 → UTF-8），再清控制字符
   ├─ 7 超长时保尾截断 8000 字符
   └─ 8 finally 删除临时脚本
 ```
+
+路径越界判定用「规范化后前缀校验」：`toRealPath()` 之后必须仍在数据目录内。只比对字符串前缀挡不住 `..` 与符号链接。
 
 ## REST 契约
 

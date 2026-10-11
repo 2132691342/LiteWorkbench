@@ -2,10 +2,13 @@ package com.liteworkbench.api;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.liteworkbench.anno.Idempotent;
+import com.liteworkbench.common.BizException;
+import com.liteworkbench.common.ErrorCodeEnum;
 import com.liteworkbench.common.LoginContext;
 import com.liteworkbench.common.PageResult;
 import com.liteworkbench.common.R;
 import com.liteworkbench.domain.constant.PermConst;
+import com.liteworkbench.domain.dto.UploadFileDTO;
 import com.liteworkbench.domain.vo.FileVO;
 import com.liteworkbench.service.FileService;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +19,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.io.InputStream;
 
 /** 文件空间接口：上传走 multipart，下载走预签名直连 */
 @RestController
@@ -40,7 +46,13 @@ public class FileController {
     @PostMapping("/upload")
     public R<FileVO> upload(@RequestParam("file") MultipartFile file,
                             @RequestParam(required = false) String sessionId) {
-        return R.ok(fileService.upload(file, LoginContext.userId(), sessionId));
+        try (InputStream in = file.getInputStream()) {
+            UploadFileDTO payload = new UploadFileDTO(
+                    file.getOriginalFilename(), file.getContentType(), file.getSize(), in);
+            return R.ok(fileService.upload(payload, LoginContext.userId(), sessionId));
+        } catch (IOException e) {
+            throw new BizException(ErrorCodeEnum.FILE_UPLOAD_FAILED, e.getMessage());
+        }
     }
 
     /** 取预签名下载地址，15 分钟有效 */

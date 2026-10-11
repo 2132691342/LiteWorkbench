@@ -62,8 +62,22 @@ stream(context)
 | 不启用已废弃的 Hook，用事件流 | 避免未来移除时返工 | 可用扩展点比旧文档少 |
 | SDK 返回 Reactor 流，订阅侧转 SseEmitter | SDK 原生 API 零包装损耗 | 需处理背压与取消传播 |
 
+## 集成事实
+
+改动依赖或升级 SDK 版本前先核对这几条。
+
+| 事实 | 说明 |
+|---|---|
+| groupId 是 `io.agentscope` | 坐标不写成 `agentscope` |
+| 流式入口 `ReActAgent.streamEvents(...)` | 返回 `Flux<AgentEvent>`，事件类在 `io.agentscope.core.event.*` |
+| 工具注册 `@Tool` + `@ToolParam` → `Toolkit.registerTool(Object)` | 工具方法返回 `String` 即可 |
+| 协议转换扩展点是 `Formatter` | OpenAI / Anthropic / Ollama 三协议在此归一，业务侧不感知 |
+| 官方 Spring Boot starter 基于 Boot 4.x | 本项目 Boot 3.5.12，**不引**，`config` 包自建 Bean |
+| `agentscope-harness` 带重型传递依赖 | **不引**，只用 `agentscope-core` 与三个模型扩展 |
+| `Memory` / `UserAgent` / 旧 `agent.Event` 已 `forRemoval` | 禁用，上下文走 `AgentState` |
+
 ## 约束
 
 - 禁止在本模块引用 `api` 层任何类型。
-- 禁止使用 `@Deprecated(forRemoval)` 的 `Hook` 与 `InMemoryMemory`。
+- 禁止使用 `@Deprecated(forRemoval)` 的 `Hook`、`Memory`、`UserAgent` 与旧 `agent.Event`。
 - 每个模型调用必须带超时，超时归为 `MODEL_CALL_TIMEOUT`。

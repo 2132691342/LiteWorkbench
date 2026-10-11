@@ -39,6 +39,7 @@ import type {
 
 /** 请求唯一出口：注入令牌、统一解包、统一错误提示 */
 
+/** 本地存储的键名，与请求头名（Authorization）区分 */
 const TOKEN_KEY = 'lw-token'
 
 /** 读取本地令牌 */
@@ -64,7 +65,7 @@ const http = axios.create({
 http.interceptors.request.use((config) => {
   const token = getToken()
   if (token) {
-    config.headers.set('lw-token', token)
+    config.headers.set('Authorization', token)
   }
   return config
 })
@@ -256,7 +257,7 @@ export interface RunStreamHandlers {
 
 /**
  * 以 fetch 发起流式对话并解析 SSE 帧。
- * 需要携带 lw-token 头，故不用原生 EventSource。
+ * 需要携带 Authorization 头，故不用原生 EventSource。
  * 返回中断函数：调用后停止消费（服务端按中断收尾）。
  */
 export function openRunStream(body: ChatStreamREQ, handlers: RunStreamHandlers): (reason?: string) => void {
@@ -266,7 +267,7 @@ export function openRunStream(body: ChatStreamREQ, handlers: RunStreamHandlers):
     try {
       const response = await fetch(`${base}/chat/stream`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'lw-token': getToken() },
+        headers: { 'Content-Type': 'application/json', Authorization: getToken() },
         body: JSON.stringify(body),
         signal: controller.signal,
       })

@@ -70,12 +70,20 @@ GET /api/v1/run/events/{runId}?afterSeq=0
   → 前端按序重放，重建消息与工具调用
 ```
 
+### 推送
+
+文本增量逐条直推会把连接线程打满，也会让客户端每条都触发一次重排。推送按 **16ms 窗口合帧**：窗口内的 `text.delta` 合并为一条 `textDelta` 后发出，`seq` 以合并前最后一条为准。落库攒批（100 条 / 200ms）与推送合帧互相独立。
+
+累积快照不随每个 delta 下发，避免 O(n²) 的文本拷贝。
+
 ### 中断
 
 ```
 POST /api/v1/run/abort/{runId} → Redis 写标记
   → 订阅侧检测 → 取消订阅 → 发 run.end(status=aborted)
 ```
+
+`run.result`（completed）与中断标记在同一窗口内同时到达时，**中断裁决优先**，终态记 `aborted`，不写助手消息。
 
 ## 取舍
 

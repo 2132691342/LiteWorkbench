@@ -39,3 +39,44 @@ jobs:
       - name: 构建
         working-directory: web
         run: npm run build
+
+  release:
+    name: 构建镜像并发布到云主机
+    needs: [server, web]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 登录 GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 构建并推送镜像
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/liteworkbench:latest
+            ghcr.io/${{ github.repository_owner }}/liteworkbench:${{ github.sha }}
+
+      - name: 到云主机拉起新镜像
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd ${{ secrets.SSH_APP_DIR }}
+            export LITEWORKBENCH_IMAGE=ghcr.io/${{ github.repository_owner }}/liteworkbench:latest
+            docker compose -f docker-compose.app.yaml pull
+            docker compose -f docker-compose.app.yaml up -d
+            docker image prune -f

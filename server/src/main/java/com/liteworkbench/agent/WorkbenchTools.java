@@ -7,8 +7,8 @@ import com.liteworkbench.common.BizException;
 import com.liteworkbench.common.ErrorCodeEnum;
 import com.liteworkbench.common.OutputSanitizer;
 import com.liteworkbench.config.RuntimeProperties;
+import com.liteworkbench.agent.spi.ToolGate;
 import com.liteworkbench.domain.constant.RedisKeyConst;
-import com.liteworkbench.mapper.WbToolMapper;
 import com.liteworkbench.runtime.ExecRequest;
 import com.liteworkbench.runtime.PythonRuntime;
 import io.agentscope.core.tool.Tool;
@@ -32,14 +32,14 @@ public class WorkbenchTools {
     /** 工具默认超时，秒 */
     private static final long DEFAULT_TOOL_TIMEOUT = 60L;
 
-    private final WbToolMapper toolMapper;
+    private final ToolGate toolGate;
     private final PythonRuntime pythonRuntime;
     private final RuntimeProperties runtimeProperties;
     private final ToolOutputCapture capture;
 
-    public WorkbenchTools(WbToolMapper toolMapper, PythonRuntime pythonRuntime,
+    public WorkbenchTools(ToolGate toolGate, PythonRuntime pythonRuntime,
                           RuntimeProperties runtimeProperties, ToolOutputCapture capture) {
-        this.toolMapper = toolMapper;
+        this.toolGate = toolGate;
         this.pythonRuntime = pythonRuntime;
         this.runtimeProperties = runtimeProperties;
         this.capture = capture;
@@ -131,8 +131,7 @@ public class WorkbenchTools {
 
     /** 工具启用检查，未注册的调用名视为禁用 */
     private boolean ensureEnabled(String toolName) {
-        var tool = toolMapper.selectByName(toolName);
-        return Objects.nonNull(tool) && Boolean.TRUE.equals(tool.getEnabled());
+        return toolGate.isEnabled(toolName);
     }
 
     /** 把相对路径限定到工作区，拒绝越界 */

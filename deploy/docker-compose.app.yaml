@@ -1,0 +1,41 @@
+# LiteWorkbench 应用编排：只跑应用容器，中间件由 docker-compose.yaml 单独维护
+# 用法（目标主机）：
+#   export LITEWORKBENCH_IMAGE=ghcr.io/2132691342/liteworkbench:latest
+#   docker compose -f docker-compose.app.yaml pull && docker compose -f docker-compose.app.yaml up -d
+services:
+  liteworkbench:
+    image: ${LITEWORKBENCH_IMAGE:-ghcr.io/2132691342/liteworkbench:latest}
+    container_name: liteworkbench
+    restart: always
+    # 与中间件编排同一网络，postgres / redisearch / minio / rabbitmq 主机名可直接解析
+    # 网络名若不同，先 docker network ls 确认后修改
+    networks:
+      - liteworkbench_default
+    environment:
+      LITEWORKBENCH_DATASOURCE_URL: jdbc:postgresql://postgres:5432/postgres
+      LITEWORKBENCH_DATASOURCE_USERNAME: postgres
+      LITEWORKBENCH_DATASOURCE_PASSWORD: ${LITEWORKBENCH_DATASOURCE_PASSWORD:-admin_public}
+      LITEWORKBENCH_REDIS_HOST: redisearch
+      LITEWORKBENCH_REDIS_PASSWORD: ${LITEWORKBENCH_REDIS_PASSWORD:-admin_public}
+      LITEWORKBENCH_STORAGE_ENDPOINT: http://minio:9000
+      LITEWORKBENCH_STORAGE_ACCESS_KEY: ${LITEWORKBENCH_STORAGE_ACCESS_KEY:-minioadmin}
+      LITEWORKBENCH_STORAGE_SECRET_KEY: ${LITEWORKBENCH_STORAGE_SECRET_KEY:-minioadminpublic}
+      LITEWORKBENCH_MQ_HOST: rabbitmq
+      LITEWORKBENCH_MQ_USERNAME: admin
+      LITEWORKBENCH_MQ_PASSWORD: ${LITEWORKBENCH_MQ_PASSWORD:-admin_public}
+      LITEWORKBENCH_SECURITY_SECRET: ${LITEWORKBENCH_SECURITY_SECRET:?必须设置}
+      LITEWORKBENCH_LOG_DIR: /var/log/liteworkbench
+      LITEWORKBENCH_RUNTIME_DATA_DIR: /var/lib/liteworkbench
+    ports:
+      - "8080:8080"
+    volumes:
+      - app_logs:/var/log/liteworkbench
+      - app_data:/var/lib/liteworkbench
+
+networks:
+  liteworkbench_default:
+    external: true
+
+volumes:
+  app_logs: { }
+  app_data: { }

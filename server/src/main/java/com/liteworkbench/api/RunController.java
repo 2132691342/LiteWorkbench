@@ -5,6 +5,7 @@ import com.liteworkbench.common.PageResult;
 import com.liteworkbench.common.R;
 import com.liteworkbench.domain.dto.ChatStreamREQ;
 import com.liteworkbench.domain.dto.SessionPageREQ;
+import com.liteworkbench.domain.constant.RunConst;
 import com.liteworkbench.domain.dto.RunEventDTO;
 import com.liteworkbench.domain.vo.RunVO;
 import com.liteworkbench.service.RunService;
@@ -31,7 +32,12 @@ public class RunController {
     /** 流式对话，SSE 单通道 run.event，id 为 seq */
     @PostMapping(value = "/api/v1/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter chatStream(@RequestBody @Valid ChatStreamREQ req) {
-        return runService.chatStream(req);
+        SseEmitter emitter = new SseEmitter(RunConst.SSE_TIMEOUT_MS);
+        String runId = runService.chatStream(req, new SseRunSink(emitter));
+        emitter.onCompletion(() -> runService.onChannelClosed(runId));
+        emitter.onTimeout(() -> runService.onChannelClosed(runId));
+        emitter.onError(error -> runService.onChannelClosed(runId));
+        return emitter;
     }
 
     /** 运行分页，按会话过滤 */

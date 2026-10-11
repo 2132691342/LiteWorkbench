@@ -129,11 +129,51 @@ Redisearch 索引文档带 TTL 语义，清理由定时任务按 `ts` 范围删�
 | MinIO | `mc mirror` 到备份桶（对象键已含用户前缀，可按用户恢复） |
 | 配置 | 环境变量清单入库外保管 |
 
-## 11. 取舍
+## 11. JVM 参数
+
+云主机规格小，容器固定以下一组参数（`deploy/Dockerfile` 的 `ENTRYPOINT`）：
+
+```
+-XX:+UseG1GC -XX:MaxGCPauseMillis=200
+-XX:MaxRAMPercentage=70
+-XX:+UseStringDeduplication
+-XX:+UseCompressedOops -XX:+UseCompressedClassPointers
+-Xss512k
+-XX:+ExitOnOutOfMemoryError
+```
+
+| 参数 | 理由 |
+|---|---|
+| `UseG1GC` + `MaxGCPauseMillis=200` | 小堆下停顿可控，无需 CMS/ZGC |
+| `MaxRAMPercentage=70` | 给堆外内存与 PageCache 留位置，避免容器 OOM Kill |
+| `UseStringDeduplication` | 日志与事件文本重复率高，去重省堆 |
+| `UseCompressedOops` / `UseCompressedClassPointers` | 指针与对象头压缩，JDK17 默认开，此处显式声明防止被覆盖 |
+| `Xss512k` | 线程栈从默认 1m 降到 512k，同等内存支撑更多 SSE 与工具线程 |
+| `ExitOnOutOfMemoryError` | OOM 直接退出交给编排重启，不留半死状态 |
+
+## 12. CI/CD
+
+流水线定义在 `.github/workflows/ci.yml`，三个阶段串行：`server`（编译 + 测试）→ `web`（类型检查 + 构建）→ `release`（仅 `main` 的 push 触发）。
+
+发布动作：构建镜像推送到 GHCR（`:latest` 与 `:<sha>` 两个 tag），再 SSH 到云主机 `47.108.73.153` 执行 `docker compose -f docker-compose.app.yaml pull && up -d`。
+
+| Secret | 用途 |
+|---|---|
+| `SSH_HOST` | 云主机地址 |
+| `SSH_USER` | 登录用户 |
+| `SSH_KEY` | SSH 私钥 |
+| `SSH_APP_DIR` | 主机上存放 `docker-compose.app.yaml` 的目录 |
+| `GITHUB_TOKEN` | 内置，用于登录 GHCR |
+
+中间件不在 CI 中重建，只在主机上单独维护；应用与中间件靠 `liteworkbench_default` 网络互通。
+
+## 13. 取舍
 
 | 选择 | 换来什么 | 代价 |
 |---|---|---|
 | 静态资源内置到 jar | 少一个 Nginx 容器，部署简单 | 前端更新需重新打镜像 |
+| 应用与中间件分成两个编排 | 发布应用不动数据库 | 需要跨 compose 共享网络 |
 | 单实例 | 无分布式一致性问题 | 无法水平扩展，升级有短暂中断 |
 | 启动自动建表 | 首次部署零手工步骤 | 需要 DDL 保持幂等 |
 | 日志保留 30 天 | 存储可控 | 长周期审计需外部归档 |
+| 堆上限 70% 容器内存 | 不易被 OOM Kill | 峰值时 GC 更频繁 |

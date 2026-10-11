@@ -15,7 +15,7 @@ api ──► service ──► mapper ──► domain
 
 config ──► domain/constant
 mq     ──► domain/dto
-agent  ──► service（通过接口回调），不反向依赖 api
+agent  ──► domain + config + runtime + agent/spi（自身端口），端口实现在 service
 runtime──► 无业务依赖
 observability ──► common + domain/constant
 anno ──► 无依赖；aspect ──► common + domain/constant
@@ -29,7 +29,7 @@ anno ──► 无依赖；aspect ──► common + domain/constant
 | `domain` | 实体、传输对象、枚举常量 | 依赖任何上层 |
 | `config` | 配置类与属性绑定 | 写业务逻辑 |
 | `anno` / `aspect` | 自定义注解与切面（幂等、限流、审计） | 持有业务状态 |
-| `agent` | AgentScope 装配与事件适配 | 引用 `api` 层 |
+| `agent` | AgentScope 装配与事件适配；只读取平台级配置 | 引用 `api` 层、直接访问 `mapper`、反向依赖 `service` 实现 |
 | `runtime` | 内置 Python 运行时的探测与执行 | 依赖业务包 |
 
 **规则**：`service` 与 `api` 不得就地声明入参出参结构体，一律引用 `domain.dto.XxxREQ` / `domain.vo.XxxRESP`。
@@ -186,11 +186,15 @@ public R<String> create(@RequestBody @Valid UserREQ req) { ... }
 | 加解密 | `SecureUtil`、`DigestUtil` | 手写摘要 |
 | 文件 | `FileUtil`、`IoUtil` | 裸流未关闭 |
 | 断言 | `Assert.isTrue`（Hutool） | 抛裸异常 |
+| 线程池 | `ThreadUtil.newFixedExecutor`、`ExecutorBuilder` | 各处 `new Thread` |
+
+**Hutool 不提供 ULID**：`IdUtil` 只有 UUID / ObjectId / Snowflake / NanoId，没有 ULID 实现，也不能拿 `fastUUID` 当有序 ID 用。业务 ID 一律 `IdGenerator`，禁止直接调 `IdUtil` 或 `UlidCreator`。
 
 ## 9. 日志约定
 
 - 长链路、复杂流程必须打点：`开始 → 关键分支 → 结束`，带耗时与业务 ID。
-- 使用 `slf4j` + `lombok.@Slf4j`（或 `@Log4j2`），禁止 `System.out`。
+- **级别只允许 `info` / `warn` / `error`**，禁止 `debug` / `trace`；排查需要的细节靠 `info` 打全字段，不靠调级别。
+- 使用 `slf4j` + `lombok.@Slf4j`（或 `@Log4j2`），禁止 `System.out` 与 `printStackTrace`。
 - 日志按天 + 按级别滚动，共三个文件：`liteworkbench.log`（全量 INFO+）、`liteworkbench-error.log`（WARN/ERROR 单独）、`liteworkbench-agent.log`（Agent 链路专用），保留 30 天；目录开发期默认 `logs/`，容器内用 `LITEWORKBENCH_LOG_DIR` 覆盖。
 - 业务日志同时异步投递到 Redisearch，供页面检索。
 - 禁止打印密钥、Token、完整请求体中的敏感字段。
@@ -265,3 +269,38 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 | 单元测试 | ULID 生成、事件归一化、输出裁剪、技能触发词匹配、权限码匹配 |
 | 集成测试 | 会话 → 运行 → 事件落库 → 回放 的完整链路 |
 | 契约测试 | SSE 事件序列顺序与字段；登录 → 鉴权 → 数据归属 链路 |
+
+## 15. 第三方集成事实
+
+### 15.1 AgentScope
+
+| 事实 | 结论 |
+|---|---|
+| groupId | `io.agentscope`（不是 `agentscope`） |
+| 只引 `agentscope-core` + 三个模型扩展 | `agentscope-harness` 会带入 kubernetes-client 等重型传递依赖，本项目不用 |
+| Spring Boot starter | 其编译基线是 Spring Boot 4.x，与本项目 3.5.12 不匹配，**禁止引入**，改在 `config` 包自建 `@Bean` |
+| 流式入口 | `ReActAgent.streamEvents(...)` 返回 `Flux<AgentEvent>`，事件类在 `io.agentscope.core.event.*` |
+| 工具定义 | `@Tool` + `@ToolParam` 标注，`Toolkit.registerTool(Object)` 注册 |
+| 废弃 API | `Memory`、`UserAgent`、旧 `io.agentscope.core.agent.Event` 均标注 `forRemoval`，禁用；上下文走 `AgentState` |
+| 协议转换扩展点 | `io.agentscope.core.formatter.Formatter`，用于 OpenAI / Anthropic / Ollama 三协议归一 |
+
+### 15.2 Hutool
+
+只引 `hutool-all`。`IdUtil` 无 ULID；`CollectionUtil` 是 `CollUtil` 的别名，二者等价，统一用 `CollUtil`。
+
+### 15.3 Sa-Token
+
+登录态存 Redis，令牌放 `Authorization` 头，令牌风格 `ulid`。权限码由 `StpInterfaceImpl` 从 `LoginUser` 解析，不从请求体采信。
+
+## 16. 运行参数约定
+
+云主机规格小，容器启动参数固定以下一组（见 `deploy/Dockerfile`）：
+
+| 参数 | 值 | 理由 |
+|---|---|---|
+| `-XX:+UseG1GC -XX:MaxGCPauseMillis=200` | — | 小堆下停顿可控 |
+| `-XX:MaxRAMPercentage=70` | 70% | 给堆外与 PageCache 留空间 |
+| `-XX:+UseStringDeduplication` | — | 日志与事件文本重复率高 |
+| `-XX:+UseCompressedOops -XX:+UseCompressedClassPointers` | — | 指针与对象头压缩，省内存 |
+| `-Xss512k` | — | 线程栈从默认 1m 降到 512k，支撑更多 SSE 线程 |
+| `-XX:+ExitOnOutOfMemoryError` | — | OOM 直接退出，交给编排重启，不留半死状态 |

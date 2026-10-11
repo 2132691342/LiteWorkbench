@@ -4,8 +4,8 @@ import cn.hutool.core.util.StrUtil;
 import com.liteworkbench.config.AgentProperties;
 import com.liteworkbench.config.RuntimeProperties;
 import com.liteworkbench.domain.constant.RunConst;
+import com.liteworkbench.agent.spi.ToolGate;
 import com.liteworkbench.domain.dto.RunEventDTO;
-import com.liteworkbench.mapper.WbToolMapper;
 import com.liteworkbench.runtime.PythonRuntime;
 import io.agentscope.core.ReActAgent;
 import io.agentscope.core.event.AgentEvent;
@@ -32,17 +32,17 @@ public class AgentScopeAgentRuntime implements AgentRuntime {
     private static final Duration MODEL_TIMEOUT = Duration.ofSeconds(180L);
 
     private final ModelFactory modelFactory;
-    private final WbToolMapper toolMapper;
+    private final ToolGate toolGate;
     private final AgentProperties agentProperties;
     private final RuntimeProperties runtimeProperties;
     private final PythonRuntime pythonRuntime;
     private final AgentEventAdapter adapter;
 
-    public AgentScopeAgentRuntime(ModelFactory modelFactory, WbToolMapper toolMapper,
+    public AgentScopeAgentRuntime(ModelFactory modelFactory, ToolGate toolGate,
                                   AgentProperties agentProperties, RuntimeProperties runtimeProperties,
                                   PythonRuntime pythonRuntime, AgentEventAdapter adapter) {
         this.modelFactory = modelFactory;
-        this.toolMapper = toolMapper;
+        this.toolGate = toolGate;
         this.agentProperties = agentProperties;
         this.runtimeProperties = runtimeProperties;
         this.pythonRuntime = pythonRuntime;
@@ -84,7 +84,7 @@ public class AgentScopeAgentRuntime implements AgentRuntime {
     /** 注册内置工具，启用与否由工具实现内读取 wb_tool 决定 */
     private Toolkit buildToolkit(ToolOutputCapture capture) {
         Toolkit toolkit = new Toolkit();
-        toolkit.registerTool(new WorkbenchTools(toolMapper, pythonRuntime, runtimeProperties, capture));
+        toolkit.registerTool(new WorkbenchTools(toolGate, pythonRuntime, runtimeProperties, capture));
         return toolkit;
     }
 

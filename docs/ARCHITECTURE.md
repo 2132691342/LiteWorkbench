@@ -136,6 +136,14 @@ AgentScope 的 `AgentEvent` 是开放结构，不做第二套记账，只在出�
 
 `tool.call` 以载荷中的 `phase: start / end` 区分起止；归一在 `AgentEventAdapter` 一处完成，前端只消费工作台事件，不感知 SDK 版本变化。
 
+三条硬规则：
+
+| 规则 | 说明 |
+|---|---|
+| 推送攒批 | 文本增量逐条推会把连接线程打满，按 **16ms 窗口**合帧后推送；落库仍按 100 条 / 200ms |
+| 中断优先 | `run.result`（completed）与中断标记同时到达时，**中断裁决优先**，终态记 `aborted` |
+| 用量单一入账 | Token 用量只从 `run.result` 一处累加，`model.call` 与 `run.end` 不重复计数 |
+
 ### 5.3 中断
 
 ```
@@ -193,7 +201,22 @@ MQ 不可用时降级为跳过索引，不阻塞主流程。
 | 归一一次事件 | 前端与 SDK 解耦 | 新增 SDK 事件需同步适配表 |
 | 日志双写（文件 + Redisearch） | 既有原文又有检索 | 写入路径变长，靠 MQ 削峰 |
 
-## 8. 约束
+## 8. 第三方集成事实
+
+这几条是踩过坑后的结论，改动依赖前先读。
+
+| 依赖 | 事实 | 本项目的做法 |
+|---|---|---|
+| AgentScope | groupId 是 `io.agentscope` | 坐标统一按此写 |
+| AgentScope | 官方 Spring Boot starter 编译基线为 Boot 4.x | **不引 starter**，`config` 包自建 `@Bean` 装配 `Model` 与 `ReActAgent` |
+| AgentScope | `agentscope-harness` 带入 kubernetes-client 等重型传递依赖 | **不引**，只用 `agentscope-core` + 三个模型扩展 |
+| AgentScope | `Memory` / `UserAgent` / 旧 `agent.Event` 已标注 `forRemoval` | 禁用；事件一律用 `io.agentscope.core.event.*` |
+| AgentScope | 流式入口是 `ReActAgent.streamEvents(...)` → `Flux<AgentEvent>` | 订阅侧直接消费，不做二次包装 |
+| Hutool | `IdUtil` 无 ULID，`fastUUID` 不是有序 ID | ULID 只走 `IdGenerator`（`ulid-creator`） |
+| Hutool | `CollectionUtil` 是 `CollUtil` 别名 | 统一用 `CollUtil` |
+| Sa-Token | 登录态存 Redis | Redis 不可用时登录链路不可用，不为此做本地降级 |
+
+## 9. 约束
 
 - 单实例部署，不做分布式锁与选主。
 - `agent` 包不得反向依赖 `api`。

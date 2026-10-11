@@ -62,7 +62,8 @@ mybatis:
 
 # 认证鉴权：令牌风格用 ULID，登录态存 Redis
 sa-token:
-  token-name: lw-token
+  # 令牌统一走 Authorization 头，值为令牌本身，不加 Bearer 前缀
+  token-name: Authorization
   timeout: ${LITEWORKBENCH_AUTH_TOKEN_TIMEOUT:7200}
   active-timeout: -1
   is-concurrent: true

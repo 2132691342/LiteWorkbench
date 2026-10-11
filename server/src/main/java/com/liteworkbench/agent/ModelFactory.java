@@ -7,9 +7,9 @@ import com.liteworkbench.common.BizException;
 import com.liteworkbench.common.ErrorCodeEnum;
 import com.liteworkbench.config.AgentProperties;
 import com.liteworkbench.config.SecurityProperties;
+import com.liteworkbench.agent.spi.ProviderStore;
 import com.liteworkbench.domain.constant.RedisKeyConst;
 import com.liteworkbench.domain.entity.WbProviderDO;
-import com.liteworkbench.mapper.WbProviderMapper;
 import io.agentscope.core.model.GenerateOptions;
 import io.agentscope.core.model.Model;
 import io.agentscope.extensions.model.anthropic.AnthropicChatModel;
@@ -32,7 +32,7 @@ public class ModelFactory {
     /** 供应方配置缓存 TTL */
     private static final Duration PROVIDER_CACHE_TTL = Duration.ofMinutes(5);
 
-    private final WbProviderMapper providerMapper;
+    private final ProviderStore providerStore;
     private final AgentProperties agentProperties;
     private final SecurityProperties securityProperties;
     private final StringRedisTemplate redisTemplate;
@@ -40,9 +40,9 @@ public class ModelFactory {
     /** provider|model -> Model 实例 */
     private final Map<String, Model> modelCache = new ConcurrentHashMap<>();
 
-    public ModelFactory(WbProviderMapper providerMapper, AgentProperties agentProperties,
+    public ModelFactory(ProviderStore providerStore, AgentProperties agentProperties,
                         SecurityProperties securityProperties, StringRedisTemplate redisTemplate) {
-        this.providerMapper = providerMapper;
+        this.providerStore = providerStore;
         this.agentProperties = agentProperties;
         this.securityProperties = securityProperties;
         this.redisTemplate = redisTemplate;
@@ -84,12 +84,12 @@ public class ModelFactory {
         String cachedId = redisTemplate.opsForValue().get(cacheKey);
         WbProviderDO provider;
         if (StrUtil.isNotBlank(cachedId)) {
-            provider = providerMapper.selectById(cachedId);
+            provider = providerStore.findById(cachedId);
             if (Objects.isNull(provider)) {
                 redisTemplate.delete(cacheKey);
             }
         } else {
-            provider = providerMapper.selectByCode(providerCode);
+            provider = providerStore.findByCode(providerCode);
             if (Objects.nonNull(provider)) {
                 redisTemplate.opsForValue().set(cacheKey, provider.getProviderId(), PROVIDER_CACHE_TTL);
             }

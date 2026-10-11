@@ -4,8 +4,10 @@ import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.util.StrUtil;
 import com.liteworkbench.domain.constant.EventTypeEnum;
 import com.liteworkbench.domain.vo.HealthRESP;
+import com.liteworkbench.domain.vo.LogDocVO;
 import com.liteworkbench.domain.vo.OverviewRESP;
 import com.liteworkbench.domain.vo.PythonStatusVO;
+import com.liteworkbench.mapper.LogSearchMapper;
 import com.liteworkbench.mapper.WbEventMapper;
 import com.liteworkbench.mapper.WbRunMapper;
 import com.liteworkbench.mapper.WbSessionMapper;
@@ -46,6 +48,7 @@ public class MonitorService {
     private final WbSessionMapper sessionMapper;
     private final WbRunMapper runMapper;
     private final WbEventMapper eventMapper;
+    private final LogSearchMapper logSearchMapper;
 
     /** 探测专用线程池，探测互不阻塞 */
     private final ExecutorService probeExecutor = Executors.newFixedThreadPool(5, task -> {
@@ -57,7 +60,8 @@ public class MonitorService {
     public MonitorService(JdbcTemplate jdbcTemplate, RedisConnectionFactory redisConnectionFactory,
                           MinioClient minioClient, ConnectionFactory rabbitConnectionFactory,
                           PythonRuntime pythonRuntime, WbSessionMapper sessionMapper,
-                          WbRunMapper runMapper, WbEventMapper eventMapper) {
+                          WbRunMapper runMapper, WbEventMapper eventMapper,
+                          LogSearchMapper logSearchMapper) {
         this.jdbcTemplate = jdbcTemplate;
         this.redisConnectionFactory = redisConnectionFactory;
         this.minioClient = minioClient;
@@ -66,6 +70,17 @@ public class MonitorService {
         this.sessionMapper = sessionMapper;
         this.runMapper = runMapper;
         this.eventMapper = eventMapper;
+        this.logSearchMapper = logSearchMapper;
+    }
+
+    /** Redisearch 日志检索，按时间倒序分页；索引不可用时降级为空结果 */
+    public List<LogDocVO> searchLogs(String keyword, String level, long from, long to, long page, long size) {
+        try {
+            return logSearchMapper.search(keyword, level, from, to, page, size);
+        } catch (Exception e) {
+            log.warn("[log.search] 检索失败，降级为空结果 {}", e.getMessage());
+            return List.of();
+        }
     }
 
     /** 逐组件健康探测，UP / DEGRADED / DOWN 聚合 */

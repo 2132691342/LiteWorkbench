@@ -41,7 +41,7 @@
 
 ### 会话（Sa-Token）
 
-- 登录态存 Redis，令牌走 `Authorization: Bearer <token>`，有效期 7200 秒。
+- 登录态存 Redis，令牌走 `Authorization` 头（值为令牌本身，不加 `Bearer` 前缀），有效期 7200 秒。
 - 权限判定走 `StpInterface` 实现：优先读 `lw:cache:perm:{userId}`（TTL 10 分钟），未命中回源数据库。
 - 控制器用 `@SaCheckPermission` 声明权限点；仅需登录的接口用 `@SaCheckLogin` 或不加注解（拦截器兜底）。
 

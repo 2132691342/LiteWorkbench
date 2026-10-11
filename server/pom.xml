@@ -106,15 +106,12 @@
             <version>${minio.version}</version>
         </dependency>
 
-        <!-- AgentScope：模型协议覆盖 OpenAI 兼容 / Anthropic / Ollama -->
+        <!-- AgentScope：只引 core 与三个模型扩展。
+             harness 会带入 kubernetes-client 等重型传递依赖，本项目不用，不引；
+             官方 Spring Boot starter 编译基线为 Boot 4.x，与 3.5.12 不匹配，改为 config 包自建 Bean -->
         <dependency>
             <groupId>io.agentscope</groupId>
             <artifactId>agentscope-core</artifactId>
-            <version>${agentscope.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>io.agentscope</groupId>
-            <artifactId>agentscope-harness</artifactId>
             <version>${agentscope.version}</version>
         </dependency>
         <dependency>

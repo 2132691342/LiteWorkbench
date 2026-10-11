@@ -44,7 +44,7 @@ HTTP 状态码：成功 200，参数错误 400，未认证 401，无权限 403�
 
 ## 3. 认证
 
-登录态由 Sa-Token 管理，令牌放 `Authorization: Bearer <token>`，会话存 Redis，默认有效期 2 小时。
+登录态由 Sa-Token 管理，令牌放 `Authorization` 头，值为令牌本身（不加 `Bearer` 前缀），会话存 Redis，默认有效期 2 小时。
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -206,8 +206,8 @@ Content-Type: application/json
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/v1/log/search` | Redisearch 检索，参数 `keyword` `level` `from` `to` `page` `size` |
-| GET | `/api/v1/monitor/health` | 各组件健康状态 |
+| GET | `/api/v1/log/search` | Redisearch 检索，参数 `keyword` `level` `from` `to` `page` `size`，权限 `monitor:log:list` |
+| GET | `/api/v1/monitor/health` | 各组件健康状态，权限 `monitor:health:list` |
 | GET | `/api/v1/monitor/overview` | 仪表盘汇总指标，权限 `monitor:health:list` |
 | GET | `/api/v1/runtime/python` | Python 运行时探测结果，权限 `monitor:health:list` |
 | POST | `/api/v1/runtime/python/reprobe` | 重新探测 Python 运行时，权限 `monitor:python:reprobe` |
