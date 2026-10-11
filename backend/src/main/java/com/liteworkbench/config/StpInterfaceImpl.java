@@ -3,6 +3,7 @@ package com.liteworkbench.config;
 import cn.dev33.satoken.stp.StpInterface;
 import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.util.StrUtil;
 import com.liteworkbench.common.LoginUser;
 import com.liteworkbench.domain.constant.AuthConst;
 import com.liteworkbench.domain.constant.RedisKeyConst;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Component;
 import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /** Sa-Token 权限数据源：角色取会话快照，权限标识走 Redis 缓存回源数据库 */
 @Slf4j
@@ -61,6 +63,18 @@ public class StpInterfaceImpl implements StpInterface {
     /** 清除指定用户的权限缓存，授权变更后调用 */
     public void clearPermCache(String userId) {
         stringRedisTemplate.delete(RedisKeyConst.cachePerm(userId));
+    }
+
+    /** 清除全部用户权限缓存，菜单或角色定义变更后调用 */
+    public void clearAllPermCache() {
+        try {
+            Set<String> keys = stringRedisTemplate.keys(StrUtil.format(RedisKeyConst.CACHE_PERM, "*"));
+            if (CollUtil.isNotEmpty(keys)) {
+                stringRedisTemplate.delete(keys);
+            }
+        } catch (Exception e) {
+            log.warn("[perm.cache.clear] 清空失败 {}", e.getMessage());
+        }
     }
 
     private LoginUser loadLoginUser(Object loginId) {

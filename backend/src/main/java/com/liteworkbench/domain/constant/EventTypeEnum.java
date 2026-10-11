@@ -17,6 +17,7 @@ public enum EventTypeEnum {
     RUN_RESULT("run.result", "运行结果"),
     RUN_EXCEED("run.exceed", "超出迭代"),
     RUN_END("run.end", "运行结束"),
+    RUN_ERROR("run.error", "运行错误"),
     CUSTOM("custom", "未归类事件"),
     ;
 

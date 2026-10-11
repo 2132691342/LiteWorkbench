@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Coin, DataLine, TrendCharts } from '@element-plus/icons-vue'
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import LwAreaChart from '@/components/charts/LwAreaChart.vue'
@@ -21,6 +21,13 @@ const monitorStore = useMonitorStore()
 const overview = computed(() => monitorStore.overview)
 const loading = computed(() => monitorStore.loading)
 const error = computed(() => monitorStore.error)
+
+/** 主图表视图：运行趋势 / Token 趋势 */
+const view = ref<'runs' | 'tokens'>('runs')
+const views = [
+  { key: 'runs' as const, label: 'dashboard.viewRuns' },
+  { key: 'tokens' as const, label: 'dashboard.viewTokens' },
+]
 
 /** 成功率 = 成功运行 / 运行总数，无运行时显示占位 */
 const successRate = computed(() => {
@@ -90,11 +97,32 @@ onMounted(load)
     </div>
 
     <LwPageState :loading="loading" :error="error" :skeleton-rows="6" @retry="load">
+      <div class="flex flex-col sm:flex-row justify-end gap-3">
+        <div
+          class="flex bg-white p-1 rounded-lg border lw-shadow-sm"
+          style="border-color: var(--lw-border)"
+        >
+          <button
+            v-for="item in views"
+            :key="item.key"
+            class="px-3 py-1.5 rounded-md text-xs font-bold transition-all duration-200"
+            :style="
+              view === item.key
+                ? 'background: var(--lw-surface-subtle); color: var(--lw-primary); box-shadow: var(--lw-shadow-sm)'
+                : 'color: var(--lw-ink-muted)'
+            "
+            @click="view = item.key"
+          >
+            {{ t(item.label) }}
+          </button>
+        </div>
+      </div>
+
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div
           v-for="metric in metrics"
           :key="metric.key"
-          class="lw-card p-5 h-32 relative overflow-hidden group transition-all duration-200 hover:shadow-md hover:-translate-y-0.5"
+          class="lw-card p-5 h-32 relative overflow-hidden group transition-all duration-200 hover:lw-shadow-md hover:-translate-y-0.5"
         >
           <div class="absolute right-0 top-0 p-4 opacity-10 transition-transform duration-200 group-hover:scale-110">
             <el-icon :size="56" :color="metric.tone"><component :is="metric.icon" /></el-icon>
@@ -105,8 +133,25 @@ onMounted(load)
         </div>
       </div>
 
-      <LwCard :title="t('dashboard.trendTitle')" :desc="t('dashboard.trendDesc')">
-        <LwAreaChart :categories="trendCategories" :values="trendValues" :name="t('dashboard.metricRuns')" :height="300" />
+      <LwCard
+        :title="view === 'runs' ? t('dashboard.trendTitle') : t('dashboard.tokenTrendTitle')"
+        :desc="t('dashboard.trendDesc')"
+      >
+        <LwAreaChart
+          v-if="view === 'runs'"
+          :categories="trendCategories"
+          :values="trendValues"
+          :name="t('dashboard.metricRuns')"
+          :height="300"
+        />
+        <LwAreaChart
+          v-else
+          :categories="tokenCategories"
+          :values="tokenValues"
+          :name="t('dashboard.metricTokens')"
+          :height="300"
+          secondary
+        />
       </LwCard>
 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">

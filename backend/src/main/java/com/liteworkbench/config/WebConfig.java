@@ -2,9 +2,10 @@ package com.liteworkbench.config;
 
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
+import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
-/** Web 层配置：仅放行本地调试源的跨域，生产同源部署不依赖 CORS */
+/** Web 层配置：本地调试跨域放行 + 前端单页应用深链兜底 */
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
 
@@ -17,5 +18,12 @@ public class WebConfig implements WebMvcConfigurer {
                 .allowedHeaders("*")
                 .allowCredentials(true)
                 .maxAge(3600);
+    }
+
+    /** 深链兜底：不含点的路径（前端路由）回落到 index.html；接口与静态资源由各自处理器优先接管 */
+    @Override
+    public void addViewControllers(ViewControllerRegistry registry) {
+        registry.addViewController("/{path:[^\\.]*}").setViewName("forward:/index.html");
+        registry.addViewController("/**/{path:[^\\.]*}").setViewName("forward:/index.html");
     }
 }

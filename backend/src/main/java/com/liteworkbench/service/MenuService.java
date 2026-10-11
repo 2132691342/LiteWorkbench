@@ -6,6 +6,7 @@ import cn.hutool.core.util.StrUtil;
 import com.liteworkbench.common.BizException;
 import com.liteworkbench.common.ErrorCodeEnum;
 import com.liteworkbench.common.IdGenerator;
+import com.liteworkbench.config.StpInterfaceImpl;
 import com.liteworkbench.domain.constant.IdPrefixConst;
 import com.liteworkbench.domain.constant.MenuTypeEnum;
 import com.liteworkbench.domain.constant.StateEnum;
@@ -34,6 +35,7 @@ public class MenuService {
     private static final String ROOT_PARENT_ID = "0";
 
     private final SysMenuMapper sysMenuMapper;
+    private final StpInterfaceImpl stpInterface;
 
     /** 全量菜单树，管理页使用 */
     public List<MenuVO> tree() {
@@ -73,6 +75,7 @@ public class MenuService {
         menu.setCreatedBy(operatorId);
         sysMenuMapper.insert(menu);
         log.info("[menu.create] menuId={} name={} type={}", menu.getMenuId(), menu.getMenuName(), menu.getMenuType());
+        stpInterface.clearAllPermCache();
         return menu.getMenuId();
     }
 
@@ -93,6 +96,7 @@ public class MenuService {
         menu.setUpdatedBy(operatorId);
         sysMenuMapper.update(menu);
         log.info("[menu.update] menuId={} name={}", menu.getMenuId(), menu.getMenuName());
+        stpInterface.clearAllPermCache();
     }
 
     /** 删除菜单，存在子级即拒绝 */
@@ -104,6 +108,7 @@ public class MenuService {
         }
         sysMenuMapper.deleteById(menuId, operatorId);
         log.info("[menu.delete] menuId={}", menuId);
+        stpInterface.clearAllPermCache();
     }
 
     /** 按 parentId 一次分组构建树，保持 sortNo 顺序 */

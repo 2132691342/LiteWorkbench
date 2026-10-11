@@ -27,11 +27,14 @@ public interface WbMessageMapper {
             """)
     List<WbMessageDO> selectBySession(@Param("sessionId") String sessionId);
 
-    /** 会话最近 N 条消息（倒序取回后由调用方反转为正序），组装历史用 */
+    /** 会话最近 N 条消息（倒序取回后由调用方反转为正序），排除指定运行，避免本轮输入重复注入 */
     @Select("""
             SELECT * FROM wb_message
             WHERE session_id = #{sessionId} AND deleted = false
+              AND (run_id IS NULL OR run_id <> #{runId})
             ORDER BY created_at DESC LIMIT #{limit}
             """)
-    List<WbMessageDO> selectRecent(@Param("sessionId") String sessionId, @Param("limit") int limit);
+    List<WbMessageDO> selectRecentExcludeRun(@Param("sessionId") String sessionId,
+                                             @Param("runId") String runId,
+                                             @Param("limit") int limit);
 }

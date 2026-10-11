@@ -18,6 +18,7 @@ import type { Component } from 'vue'
 /** 后端 menu.icon 到 Element Plus 图标的映射，未知图标回退为 Grid */
 export const MENU_ICONS: Record<string, Component> = {
   dashboard: Grid,
+  chat: ChatDotRound,
   console: ChatDotRound,
   folder: Files,
   bulb: MagicStick,

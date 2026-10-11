@@ -75,8 +75,8 @@ function handleCommand(command: string): void {
           </template>
         </LwButton>
         <div
-          class="w-8 h-8 rounded-lg flex items-center justify-center font-bold shadow-sm"
-          style="background-color: var(--lw-primary); color: var(--lw-on-primary)"
+          class="w-8 h-8 rounded-lg flex items-center justify-center font-bold lw-shadow-sm"
+          style="background-color: var(--lw-secondary); color: var(--lw-on-primary)"
         >
           <svg width="18" height="18" viewBox="0 0 32 32" fill="none" aria-hidden="true">
             <path d="M9 22V10h3v9h6v3H9z" fill="currentColor" />
@@ -85,22 +85,6 @@ function handleCommand(command: string): void {
         </div>
         <span class="font-bold text-lg tracking-tight hidden sm:block">{{ t('app.title') }}</span>
       </div>
-      <nav class="hidden md:flex gap-6 text-sm font-medium">
-        <router-link
-          v-for="link in [
-            { to: '/dashboard', label: 'menu.dashboard' },
-            { to: '/console', label: 'menu.console' },
-            { to: '/files', label: 'menu.files' },
-          ]"
-          :key="link.to"
-          :to="link.to"
-          class="transition-all duration-200 hover:opacity-100 hover:scale-105"
-          style="color: var(--lw-ink); opacity: 0.65"
-          active-class="!opacity-100 font-bold"
-        >
-          {{ t(link.label) }}
-        </router-link>
-      </nav>
     </div>
 
     <div class="flex items-center gap-2 md:gap-3">
@@ -113,8 +97,8 @@ function handleCommand(command: string): void {
       </div>
       <el-dropdown trigger="click" @command="handleCommand">
         <div
-          class="w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shadow-sm cursor-pointer transition-transform duration-200 hover:scale-105"
-          style="background-color: var(--lw-secondary); color: var(--lw-on-primary)"
+          class="w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs lw-shadow-sm cursor-pointer transition-transform duration-200 hover:scale-105"
+          style="background-color: var(--lw-surface-subtle); color: var(--lw-primary)"
         >
           {{ initials }}
         </div>

@@ -35,15 +35,17 @@ public class WorkbenchTools {
     private final ToolGate toolGate;
     private final PythonRuntime pythonRuntime;
     private final ToolOutputCapture capture;
-    /** 工作区根目录，运行期不变 */
+    /** 工作区根目录，按用户隔离，运行期不变 */
     private final Path workDir;
 
     public WorkbenchTools(ToolGate toolGate, PythonRuntime pythonRuntime,
-                          RuntimeProperties runtimeProperties, ToolOutputCapture capture) {
+                          RuntimeProperties runtimeProperties, ToolOutputCapture capture, String userId) {
         this.toolGate = toolGate;
         this.pythonRuntime = pythonRuntime;
         this.capture = capture;
-        this.workDir = Paths.get(runtimeProperties.getDataDir(), "workspace").toAbsolutePath().normalize();
+        String owner = StrUtil.isBlank(userId) ? "anonymous" : userId;
+        this.workDir = Paths.get(runtimeProperties.getDataDir(), "workspace", owner)
+                .toAbsolutePath().normalize();
     }
 
     /** 执行 Python 脚本 */
@@ -130,11 +132,15 @@ public class WorkbenchTools {
         }
     }
 
-    /** 把相对路径限定到工作区，拒绝越界 */
+    /** 把相对路径限定到用户工作区：拒绝空路径、绝对路径、任何上级目录片段与越界结果 */
     private Path resolve(String relative) {
-        Path target = workDir.resolve(Objects.toString(relative, "")).normalize();
+        String raw = Objects.toString(relative, "");
+        if (StrUtil.isBlank(raw) || raw.contains("..") || Paths.get(raw).isAbsolute()) {
+            throw new BizException(ErrorCodeEnum.PYTHON_UNSAFE_PATH, raw);
+        }
+        Path target = workDir.resolve(raw).normalize();
         if (!target.startsWith(workDir)) {
-            throw new BizException(ErrorCodeEnum.PYTHON_UNSAFE_PATH, relative);
+            throw new BizException(ErrorCodeEnum.PYTHON_UNSAFE_PATH, raw);
         }
         return target;
     }

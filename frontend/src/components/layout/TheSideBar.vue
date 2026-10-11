@@ -31,7 +31,7 @@ watch(
       <div
         v-if="appStore.sidebarOpen"
         class="fixed inset-0 z-30 lg:hidden"
-        style="background: rgba(15, 23, 42, 0.45)"
+        style="background: var(--lw-overlay)"
         @click="appStore.closeSidebar()"
       />
     </transition>

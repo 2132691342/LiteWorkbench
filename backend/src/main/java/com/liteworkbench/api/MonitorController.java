@@ -2,6 +2,7 @@ package com.liteworkbench.api;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.liteworkbench.anno.Idempotent;
+import com.liteworkbench.common.PageResult;
 import com.liteworkbench.common.R;
 import com.liteworkbench.domain.constant.PermConst;
 import com.liteworkbench.domain.vo.HealthRESP;
@@ -15,8 +16,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
 
 /** 监控、日志检索与运行时接口 */
 @RestController
@@ -59,12 +58,12 @@ public class MonitorController {
     /** 日志检索，Redisearch 全文，按时间倒序分页 */
     @SaCheckPermission(PermConst.MONITOR_LOG_LIST)
     @GetMapping("/log/search")
-    public R<List<LogDocVO>> logSearch(@RequestParam(required = false) String keyword,
-                                       @RequestParam(required = false) String level,
-                                       @RequestParam(defaultValue = "0") long from,
-                                       @RequestParam(defaultValue = "0") long to,
-                                       @RequestParam(defaultValue = "1") long page,
-                                       @RequestParam(defaultValue = "20") long size) {
+    public R<PageResult<LogDocVO>> logSearch(@RequestParam(required = false) String keyword,
+                                             @RequestParam(required = false) String level,
+                                             @RequestParam(defaultValue = "0") long from,
+                                             @RequestParam(defaultValue = "0") long to,
+                                             @RequestParam(defaultValue = "1") long page,
+                                             @RequestParam(defaultValue = "20") long size) {
         return R.ok(monitorService.searchLogs(keyword, level, from, to, page, size));
     }
 }

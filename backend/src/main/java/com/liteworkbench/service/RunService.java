@@ -13,7 +13,6 @@ import com.liteworkbench.common.IdGenerator;
 import com.liteworkbench.common.LoginContext;
 import com.liteworkbench.common.PageResult;
 import com.liteworkbench.common.TimeUtil;
-import com.liteworkbench.config.AgentProperties;
 import com.liteworkbench.domain.constant.EventTypeEnum;
 import com.liteworkbench.domain.constant.IdPrefixConst;
 import com.liteworkbench.domain.constant.MessageRoleEnum;
@@ -72,7 +71,6 @@ public class RunService {
     private final ModelFactory modelFactory;
     private final SessionService sessionService;
     private final SkillService skillService;
-    private final AgentProperties agentProperties;
     private final WbRunMapper runMapper;
     private final WbEventMapper eventMapper;
     private final WbMessageMapper messageMapper;
@@ -98,8 +96,11 @@ public class RunService {
         }
         String runId = IdGenerator.generate(IdPrefixConst.RUN);
         try {
-            String providerCode = StrUtil.blankToDefault(session.getProviderCode(), agentProperties.getProvider());
-            var provider = modelFactory.loadProvider(providerCode);
+            // 会话未指定供应方时取默认可用供应方，全新环境不会因缺配置直接失败
+            var provider = StrUtil.isNotBlank(session.getProviderCode())
+                    ? modelFactory.loadProvider(session.getProviderCode())
+                    : modelFactory.resolveDefaultProvider();
+            String providerCode = provider.getProviderCode();
             String modelName = modelFactory.resolveModelName(provider, session.getModelName());
 
             insertRun(runId, userId, session.getSessionId(), req.getContent(), modelName);
@@ -110,7 +111,7 @@ public class RunService {
             String systemPrompt = skillService.assembleSystemPrompt(
                     userId, session.getSystemPrompt(), req.getContent());
             RunContext context = new RunContext(userId, session.getSessionId(), runId,
-                    providerCode, modelName, systemPrompt, loadHistory(session.getSessionId()),
+                    providerCode, modelName, systemPrompt, loadHistory(session.getSessionId(), runId),
                     req.getContent());
 
             ActiveRun run = new ActiveRun(runId, userId, session.getSessionId(), sink);
@@ -126,13 +127,14 @@ public class RunService {
         }
     }
 
-    /** 运行分页 */
+    /** 运行分页，按归属用户过滤 */
     public PageResult<RunVO> page(SessionPageREQ req) {
-        long total = runMapper.countPage(req);
+        String userId = LoginContext.userId();
+        long total = runMapper.countPage(req, userId);
         if (total <= 0) {
             return PageResult.empty(req.pageNo(), req.pageSize());
         }
-        List<RunVO> list = runMapper.selectPage(req, req.offset(), req.pageSize())
+        List<RunVO> list = runMapper.selectPage(req, userId, req.offset(), req.pageSize())
                 .stream().map(this::toVO).toList();
         return PageResult.of(list, total, req.pageNo(), req.pageSize());
     }
@@ -281,12 +283,13 @@ public class RunService {
                     run.modelCalls, run.usage);
         }
         writeAssistantMessage(run);
-        pushSynthetic(run, EventTypeEnum.RUN_END.getCode(), Map.of(
+        pushTerminal(run, EventTypeEnum.RUN_END.getCode(), Map.of(
                 "runId", run.runId,
                 "status", RunStatusEnum.SUCCESS.getCode(),
                 "stopReason", stopReason,
                 "usage", run.usage));
         completeSink(run);
+        cleanup(run);
         log.info("[run.end] runId={} status={} cost={}ms", run.runId, RunStatusEnum.SUCCESS.getCode(),
                 System.currentTimeMillis() - run.startedAt);
     }
@@ -303,10 +306,11 @@ public class RunService {
                     run.modelCalls, run.usage);
         }
         writeAssistantMessage(run);
-        pushSynthetic(run, "error", Map.of(
+        pushTerminal(run, EventTypeEnum.RUN_ERROR.getCode(), Map.of(
                 "code", ErrorCodeEnum.INTERNAL_ERROR.getCode(),
                 "message", "运行失败，请查看日志"));
         completeSink(run);
+        cleanup(run);
     }
 
     /** 中断收尾：取消信号或 abort 触发 */
@@ -321,7 +325,7 @@ public class RunService {
                     run.modelCalls, run.usage);
         }
         writeAssistantMessage(run);
-        pushSynthetic(run, EventTypeEnum.RUN_END.getCode(), Map.of(
+        pushTerminal(run, EventTypeEnum.RUN_END.getCode(), Map.of(
                 "runId", run.runId,
                 "status", RunStatusEnum.ABORTED.getCode(),
                 "stopReason", StopReasonEnum.ABORTED.getCode(),
@@ -354,10 +358,20 @@ public class RunService {
         sessionMapper.updateStats(run.sessionId, 1, 0, run.usage[0] + run.usage[1]);
     }
 
-    private void pushSynthetic(ActiveRun run, String eventType, Map<String, Object> payload) {
-        RunEventDTO event = new RunEventDTO(run.runId, run.sessionId,
-                run.seq + 1, eventType, null, null, payload, System.currentTimeMillis());
-        push(run, event);
+    /** 终态合成帧：先落库再推送，并递增 seq，保证回放能拿到终态且帧 id 唯一 */
+    private void pushTerminal(ActiveRun run, String eventType, Map<String, Object> payload) {
+        RunEventDTO event = new RunEventDTO(run.runId, run.sessionId, ++run.seq, eventType, null, null,
+                payload, System.currentTimeMillis());
+        try {
+            eventMapper.insertBatch(List.of(toEventDO(run, event)));
+        } catch (Exception e) {
+            log.error("[run.event.persist] runId={} 终态帧落库失败 {}", run.runId, e.getMessage());
+        }
+        try {
+            run.sink.send(event.seq(), event.eventType(), JSONUtil.toJsonStr(event));
+        } catch (RuntimeException e) {
+            log.warn("[run.sse] runId={} 终态帧推送失败 {}", run.runId, e.getMessage());
+        }
     }
 
     private void completeSink(ActiveRun run) {
@@ -393,9 +407,9 @@ public class RunService {
         messageMapper.insert(message);
     }
 
-    /** 近 N 条历史消息转 SDK 消息（时间正序） */
-    private List<Msg> loadHistory(String sessionId) {
-        List<WbMessageDO> recent = messageMapper.selectRecent(sessionId, HISTORY_LIMIT);
+    /** 近 N 条历史消息转 SDK 消息（时间正序），排除本轮运行已落的消息，避免本轮输入重复注入 */
+    private List<Msg> loadHistory(String sessionId, String runId) {
+        List<WbMessageDO> recent = messageMapper.selectRecentExcludeRun(sessionId, runId, HISTORY_LIMIT);
         if (recent.isEmpty()) {
             return Collections.emptyList();
         }
@@ -442,8 +456,9 @@ public class RunService {
         }
     }
 
+    /** 归属校验：按 (运行, 用户) 查，查不到即 404，不泄露他人资源是否存在 */
     private WbRunDO getOwned(String runId) {
-        WbRunDO run = runMapper.selectById(runId);
+        WbRunDO run = runMapper.selectByIdAndUser(runId, LoginContext.userId());
         if (Objects.isNull(run)) {
             throw new BizException(ErrorCodeEnum.RUN_NOT_FOUND, runId);
         }

@@ -7,6 +7,7 @@ import com.liteworkbench.agent.WorkbenchTools;
 import com.liteworkbench.agent.spi.ToolGate;
 import com.liteworkbench.common.BizException;
 import com.liteworkbench.common.ErrorCodeEnum;
+import com.liteworkbench.common.LoginContext;
 import com.liteworkbench.config.RuntimeProperties;
 import com.liteworkbench.domain.constant.PermConst;
 import com.liteworkbench.domain.dto.InvokeToolREQ;
@@ -48,8 +49,9 @@ public class ToolService {
         log.info("[tool.toggle] toolId={} name={} enabled={}", toolId, tool.getToolName(), enabled);
     }
 
-    /** 页面手工执行，与 Agent 内调用共用同一实现与裁剪策略 */
-    public String invoke(String toolName, InvokeToolREQ req, String userId) {
+    /** 页面手工执行，与 Agent 内调用共用同一实现与裁剪策略，工作目录按当前用户隔离 */
+    public String invoke(String toolName, InvokeToolREQ req) {
+        String userId = LoginContext.userId();
         WbToolDO tool = toolMapper.selectByName(toolName);
         if (Objects.isNull(tool)) {
             throw new BizException(ErrorCodeEnum.TOOL_NOT_FOUND, toolName);
@@ -63,7 +65,7 @@ public class ToolService {
         }
         Map<String, Object> args = req.getArgs();
         WorkbenchTools tools = new WorkbenchTools(toolGate, pythonRuntime, runtimeProperties,
-                new ToolOutputCapture());
+                new ToolOutputCapture(), userId);
         long start = System.currentTimeMillis();
         String output = switch (toolName) {
             case "python_exec" -> {

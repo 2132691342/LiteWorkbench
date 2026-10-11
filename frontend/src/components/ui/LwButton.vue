@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-/** 全站唯一按钮：五态由 .lw-btn 系列样式实现，hover 放大 / pressed 缩小 / loading 锁宽 */
+/** 全站唯一按钮：五态由 .lw-btn 系列样式实现，hover 放大 / pressed 缩小 / loading 锁宽且保持主色底 */
 interface Props {
   /** 变体：主/次/幽灵/危险/文字 */
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'text'
   /** 尺寸 */
   size?: 'sm' | 'md' | 'lg'
-  /** 加载态：锁定宽度、屏蔽点击、显示旋转指示器 */
+  /** 加载态：锁定宽度、屏蔽点击、显示旋转指示器，不落原生 disabled 以保持配色 */
   loading?: boolean
   /** 禁用态 */
   disabled?: boolean
@@ -26,7 +26,7 @@ const props = withDefaults(defineProps<Props>(), {
   nativeType: 'button',
 })
 
-defineEmits<{ (e: 'click', payload: MouseEvent): void }>()
+const emit = defineEmits<{ (e: 'click', payload: MouseEvent): void }>()
 
 const classes = computed(() => [
   'lw-btn',
@@ -34,20 +34,32 @@ const classes = computed(() => [
   `lw-btn--${props.size}`,
   {
     'is-loading': props.loading,
+    'is-disabled': props.disabled && !props.loading,
     'w-full': props.block,
   },
 ])
 
-const isDisabled = computed(() => props.disabled || props.loading)
+/** loading 优先于 disabled：loading 期间保持原底色，只屏蔽点击 */
+const nativeDisabled = computed(() => props.disabled && !props.loading)
+
+function onClick(event: MouseEvent): void {
+  if (props.disabled || props.loading) {
+    event.preventDefault()
+    event.stopPropagation()
+    return
+  }
+  emit('click', event)
+}
 </script>
 
 <template>
   <button
     :class="classes"
-    :disabled="isDisabled"
+    :disabled="nativeDisabled"
     :type="nativeType"
     :aria-busy="loading"
-    @click="$emit('click', $event)"
+    :aria-disabled="disabled || loading"
+    @click="onClick"
   >
     <span class="lw-btn__label inline-flex items-center gap-1.5">
       <slot name="icon" />

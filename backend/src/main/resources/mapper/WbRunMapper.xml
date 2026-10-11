@@ -5,7 +5,8 @@
 
     <sql id="Page_Condition">
         <where>
-            <if test="req.sessionId != null and req.sessionId != ''">r.session_id = #{req.sessionId}</if>
+            r.user_id = #{userId}
+            <if test="req.sessionId != null and req.sessionId != ''">AND r.session_id = #{req.sessionId}</if>
             <if test="req.keyword != null and req.keyword != ''">
                 AND r.prompt LIKE '%' || #{req.keyword} || '%'
             </if>

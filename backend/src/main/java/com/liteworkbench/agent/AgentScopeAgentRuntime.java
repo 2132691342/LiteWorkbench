@@ -61,16 +61,17 @@ public class AgentScopeAgentRuntime implements AgentRuntime {
                 .name("lite-workbench")
                 .sysPrompt(StrUtil.nullToEmpty(context.systemPrompt()))
                 .model(model)
-                .toolkit(buildToolkit(capture))
+                .toolkit(buildToolkit(context, capture))
                 .maxIters(agentProperties.getLoop().getMaxIters())
                 .modelExecutionConfig(ExecutionConfig.builder().timeout(MODEL_TIMEOUT).build())
                 .build();
     }
 
-    /** 注册内置工具，启用与否由工具实现内读取 wb_tool 决定 */
-    private Toolkit buildToolkit(ToolOutputCapture capture) {
+    /** 注册内置工具，工作目录按用户隔离，启用与否由工具实现内读取 wb_tool 决定 */
+    private Toolkit buildToolkit(RunContext context, ToolOutputCapture capture) {
         Toolkit toolkit = new Toolkit();
-        toolkit.registerTool(new WorkbenchTools(toolGate, pythonRuntime, runtimeProperties, capture));
+        toolkit.registerTool(new WorkbenchTools(toolGate, pythonRuntime, runtimeProperties,
+                capture, context.userId()));
         return toolkit;
     }
 

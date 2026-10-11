@@ -140,21 +140,25 @@ Content-Type: application/json
 | `run.result` | `{ runId, text, usage }` | 运行产出的完整正文，单帧 |
 | `run.exceed` | `{ runId, maxIters }` | 达到最大迭代上限 |
 | `run.end` | `{ runId, status, stopReason, usage, durationMs }` | 终态，必达 |
-| `error` | `{ code, message }` | 异常，必达 |
+| `run.error` | `{ code, message }` | 异常，必达 |
 | `custom` | `{ payload }` | 未归类事件的兜底 |
 
 公共字段：`seq`、`runId`、`sessionId`、`occurredAt`。
 
-**规则**：`run.end` 与 `error` 必有且仅有其一；客户端收到后关闭连接。心跳为注释行 `: ping`，15 秒一次。单帧增量（`text.delta` / `thinking.delta`）超过 4KB 会被截断，完整正文以 `run.result` 为准；推送侧会对批内连续增量合帧（`textDelta` 拼接、`seq` 取最后一条）。
+**规则**：`run.end` 与 `run.error` 必有且仅有其一，且都会先落库再推送（`seq` 单调递增），因此回放与实时看到同一序列；客户端收到后关闭连接。心跳为注释行 `: ping`，15 秒一次。单帧增量（`text.delta` / `thinking.delta`）超过 4KB 会被截断，完整正文以 `run.result` 为准；推送侧会对批内连续增量合帧（`textDelta` 拼接、`seq` 取最后一条）。
 
 ### 8.2 运行
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/v1/run/detail/{runId}` | 运行详情 |
+| GET | `/api/v1/run/detail/{runId}` | 运行详情，按 (runId, userId) 校验归属 |
 | GET | `/api/v1/run/events/{runId}` | 事件列表，按 `seq` 升序，支持 `afterSeq` 增量拉取，单次上限 500 条 |
-| GET | `/api/v1/run/page` | 按 `sessionId` 查运行列表 |
-| POST | `/api/v1/run/abort/{runId}` | 中断运行 |
+| GET | `/api/v1/run/page` | 运行列表，按 `sessionId` 过滤且仅返回当前用户 |
+| POST | `/api/v1/run/abort/{runId}` | 中断运行，归属校验同上 |
+
+**归属**：运行详情、事件回放、中断一律先按 `(runId, user_id)` 查询，查不到直接返回 `RESOURCE_NOT_FOUND`，不泄露他人资源是否存在。
+
+**并发**：同一会话同时只允许一个运行，`lw:lock:run:{sessionId}` 的 TTL 不小于 SSE 连接存活上限，长任务期间不会因锁过期而并发起第二个运行。
 
 ## 9. 工具
 
@@ -208,7 +212,7 @@ Content-Type: application/json
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/v1/log/search` | Redisearch 检索，参数 `keyword` `level` `from` `to` `page` `size`，权限 `monitor:log:list` |
+| GET | `/api/v1/log/search` | Redisearch 检索，参数 `keyword` `level` `from` `to` `page` `size`，返回 `PageResult<LogDocVO>`，权限 `monitor:log:list` |
 | GET | `/api/v1/monitor/health` | 各组件健康状态，权限 `monitor:health:list` |
 | GET | `/api/v1/monitor/overview` | 仪表盘汇总指标，权限 `monitor:health:list` |
 | GET | `/api/v1/runtime/python` | Python 运行时探测结果，权限 `monitor:health:list` |

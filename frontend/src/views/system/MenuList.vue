@@ -181,7 +181,7 @@ onMounted(load)
           </label>
           <label class="flex flex-col gap-1.5">
             <span class="lw-label">{{ t('system.menu.component') }}</span>
-            <input v-model="form.component" class="lw-input" placeholder="dashboard/Dashboard" />
+            <input v-model="form.component" class="lw-input" placeholder="Dashboard" />
           </label>
         </div>
         <div class="grid grid-cols-2 gap-4">
@@ -191,7 +191,7 @@ onMounted(load)
           </label>
           <label class="flex flex-col gap-1.5">
             <span class="lw-label">{{ t('system.menu.permCode') }}</span>
-            <input v-model="form.permCode" class="lw-input" placeholder="system:user:add" />
+            <input v-model="form.permCode" class="lw-input" placeholder="system:user:create" />
           </label>
         </div>
         <div class="grid grid-cols-2 gap-4 items-end">

@@ -17,9 +17,9 @@ public class ToolOutputCapture {
         }
     }
 
-    /** 读取工具输出，未捕获返回空串 */
+    /** 读取并消费工具输出，未捕获返回空串，避免同一工具多次调用读到上一轮输出 */
     public String take(String toolName) {
-        String output = outputs.get(toolName);
+        String output = outputs.remove(toolName);
         return Objects.toString(output, "");
     }
 }

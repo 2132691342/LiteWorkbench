@@ -84,12 +84,22 @@ function openDialog(user?: UserVO): void {
   dialogVisible.value = true
 }
 
-/** 保存用户：新建走 create，编辑走 update */
+/** 保存用户：新建走 create（初始密码必填），编辑走 update（不提交密码字段） */
 async function submitDialog(): Promise<void> {
+  if (!isEdit.value && (form.password ?? '').length < 6) {
+    ElMessage.warning(t('system.user.initPasswordTip'))
+    return
+  }
   dialogLoading.value = true
   try {
     if (isEdit.value) {
-      await userApi.update({ ...form })
+      await userApi.update({
+        userId: form.userId,
+        username: form.username,
+        nickname: form.nickname,
+        email: form.email,
+        roleIds: [...form.roleIds],
+      })
     } else {
       await userApi.create({ ...form })
     }

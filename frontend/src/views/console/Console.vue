@@ -24,6 +24,7 @@ const { start: startStream, dispose: disposeStream } = useRunStream()
 const draft = ref('')
 const streamError = ref('')
 const editing = ref(false)
+const saving = ref(false)
 const editForm = ref({ sessionId: '', title: '', modelName: '' })
 const timelineEl = ref<HTMLElement | null>(null)
 
@@ -65,8 +66,24 @@ function openEdit(): void {
 }
 
 async function submitEdit(): Promise<void> {
-  await sessionStore.update({ ...editForm.value })
-  editing.value = false
+  saving.value = true
+  try {
+    await sessionStore.update({ ...editForm.value })
+    editing.value = false
+  } catch {
+    // 拦截器已提示，保留弹窗供修正
+  } finally {
+    saving.value = false
+  }
+}
+
+/** 回车发送：输入法组词中的回车只确认候选，不发送 */
+function onEnter(event: KeyboardEvent): void {
+  if (event.isComposing) {
+    return
+  }
+  event.preventDefault()
+  void send()
 }
 
 /* ===== 流式对话 ===== */
@@ -344,7 +361,7 @@ onMounted(async () => {
             class="flex-1 resize-none bg-transparent outline-none text-sm px-2 py-1"
             :placeholder="t('console.inputPlaceholder')"
             :disabled="runStore.streaming || runStore.replaying"
-            @keydown.enter.exact.prevent="send"
+            @keydown.enter.exact="onEnter"
           />
           <LwButton
             v-if="!runStore.streaming"
@@ -372,7 +389,7 @@ onMounted(async () => {
       </el-form>
       <template #footer>
         <LwButton variant="ghost" @click="editing = false">{{ t('common.cancel') }}</LwButton>
-        <LwButton :loading="sessionStore.loading" @click="submitEdit">{{ t('common.save') }}</LwButton>
+        <LwButton :loading="saving" @click="submitEdit">{{ t('common.save') }}</LwButton>
       </template>
     </el-dialog>
   </div>

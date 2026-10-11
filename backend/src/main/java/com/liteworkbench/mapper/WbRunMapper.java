@@ -45,13 +45,18 @@ public interface WbRunMapper {
     @Select("SELECT * FROM wb_run WHERE run_id = #{runId}")
     WbRunDO selectById(@Param("runId") String runId);
 
-    /** 运行分页，按会话过滤 */
+    /** 按 (运行, 用户) 查询，归属校验用：查不到即视为不存在 */
+    @Select("SELECT * FROM wb_run WHERE run_id = #{runId} AND user_id = #{userId}")
+    WbRunDO selectByIdAndUser(@Param("runId") String runId, @Param("userId") String userId);
+
+    /** 运行分页，按会话与归属用户过滤 */
     List<WbRunDO> selectPage(@Param("req") SessionPageREQ req,
+                             @Param("userId") String userId,
                              @Param("offset") long offset,
                              @Param("size") long size);
 
     /** 运行分页计数 */
-    long countPage(@Param("req") SessionPageREQ req);
+    long countPage(@Param("req") SessionPageREQ req, @Param("userId") String userId);
 
     /** 运行总数，仪表盘用 */
     @Select("SELECT count(*) FROM wb_run")

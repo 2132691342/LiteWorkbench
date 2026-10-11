@@ -7,6 +7,7 @@ import com.liteworkbench.common.IdGenerator;
 import com.liteworkbench.common.PageResult;
 import com.liteworkbench.common.TimeUtil;
 import com.liteworkbench.config.StorageProperties;
+import com.liteworkbench.domain.constant.AppConst;
 import com.liteworkbench.domain.constant.IdPrefixConst;
 import com.liteworkbench.domain.dto.UploadFileDTO;
 import com.liteworkbench.domain.entity.WbFileDO;
@@ -43,17 +44,19 @@ public class FileService {
     private final MinioClient minioClient;
     private final StorageProperties storageProperties;
 
-    /** 分页列表 */
+    /** 分页列表，每页条数封顶 MAX_SIZE */
     public PageResult<FileVO> page(String userId, String sessionId, String category,
                                    String keyword, long page, long size) {
-        long offset = (page - 1) * size;
+        long pageNo = Math.max(page, 1L);
+        long pageSize = Math.min(Math.max(size, 1L), AppConst.MAX_SIZE);
+        long offset = (pageNo - 1) * pageSize;
         long total = fileMapper.countPage(userId, sessionId, category, keyword);
         if (total <= 0) {
-            return PageResult.empty(page, size);
+            return PageResult.empty(pageNo, pageSize);
         }
-        List<FileVO> list = fileMapper.selectPage(userId, sessionId, category, keyword, offset, size)
+        List<FileVO> list = fileMapper.selectPage(userId, sessionId, category, keyword, offset, pageSize)
                 .stream().map(this::toVO).toList();
-        return PageResult.of(list, total, page, size);
+        return PageResult.of(list, total, pageNo, pageSize);
     }
 
     /** 上传：先写对象后写元数据，失败回滚对象 */

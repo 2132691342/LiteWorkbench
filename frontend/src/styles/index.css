@@ -48,7 +48,8 @@ body {
   box-shadow: none;
 }
 
-.lw-btn:disabled {
+.lw-btn:disabled,
+.lw-btn.is-disabled {
   cursor: not-allowed;
   background: var(--lw-surface-disabled);
   color: var(--lw-ink-disabled);
@@ -62,6 +63,13 @@ body {
   cursor: progress;
 }
 
+/* LOADING 保留原底色，只锁宽与屏蔽点击，避免被 DISABLED 视觉覆盖 */
+.lw-btn.is-loading:hover,
+.lw-btn.is-loading:active {
+  transform: none;
+  box-shadow: none;
+}
+
 .lw-btn.is-loading .lw-btn__label {
   visibility: hidden;
 }
@@ -72,6 +80,12 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* 深底变体的指示器用前景白，其余沿用当前文字色 */
+.lw-btn--primary .lw-btn__spinner,
+.lw-btn--danger .lw-btn__spinner {
+  color: var(--lw-on-primary);
 }
 
 /* 变体 */
@@ -174,6 +188,7 @@ body {
   --el-color-primary-light-8: var(--lw-primary-light-8);
   --el-color-primary-light-9: var(--lw-primary-tint);
   --el-color-primary-dark-2: var(--lw-primary-hover);
+  --el-color-secondary: var(--lw-secondary);
   --el-color-success: var(--lw-success);
   --el-color-warning: var(--lw-warning);
   --el-color-danger: var(--lw-error);

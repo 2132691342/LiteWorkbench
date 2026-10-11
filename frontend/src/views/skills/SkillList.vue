@@ -8,11 +8,13 @@ import LwCard from '@/components/ui/LwCard.vue'
 import LwPageState from '@/components/ui/LwPageState.vue'
 import LwTag from '@/components/ui/LwTag.vue'
 import { skillApi } from '@/api'
+import { usePermission } from '@/composables/usePermission'
 import type { SkillVO } from '@/types/api'
 import { formatTime } from '@/utils/const'
 
 /** 技能：摘要常驻提示词，命中触发词才展开正文 */
 const { t } = useI18n()
+const { hasPerm } = usePermission()
 
 const skills = ref<SkillVO[]>([])
 const total = ref(0)
@@ -111,7 +113,7 @@ onMounted(load)
         <h2 class="lw-title">{{ t('skills.title') }}</h2>
         <p class="lw-subtitle mt-1">{{ t('skills.desc') }}</p>
       </div>
-      <LwButton @click="openCreate">
+      <LwButton v-if="hasPerm('wb:skill:create')" @click="openCreate">
         <template #icon><el-icon><Plus /></el-icon></template>
         {{ t('common.create') }}
       </LwButton>
@@ -139,8 +141,12 @@ onMounted(load)
           </el-table-column>
           <el-table-column width="150" fixed="right">
             <template #default="{ row }">
-              <LwButton variant="text" size="sm" @click="openEdit(row)">{{ t('common.edit') }}</LwButton>
-              <LwButton variant="text" size="sm" @click="remove(row)">{{ t('common.delete') }}</LwButton>
+              <LwButton v-if="hasPerm('wb:skill:update')" variant="text" size="sm" @click="openEdit(row)">
+                {{ t('common.edit') }}
+              </LwButton>
+              <LwButton v-if="hasPerm('wb:skill:delete')" variant="text" size="sm" @click="remove(row)">
+                {{ t('common.delete') }}
+              </LwButton>
             </template>
           </el-table-column>
           <template #empty><span /></template>

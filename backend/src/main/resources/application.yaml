@@ -24,11 +24,6 @@ spring:
       password: ${LITEWORKBENCH_REDIS_PASSWORD:admin_public}
       database: ${LITEWORKBENCH_REDIS_DATABASE:0}
       timeout: 3000ms
-      lettuce:
-        pool:
-          max-active: 16
-          max-idle: 8
-          min-idle: 2
   sql:
     init:
       mode: always
@@ -80,7 +75,8 @@ management:
         include: health,info,metrics
   endpoint:
     health:
-      show-details: always
+      # 探针免登录，不对外暴露组件细节
+      show-details: never
 
 liteworkbench:
   # 日志目录，容器内用环境变量覆盖

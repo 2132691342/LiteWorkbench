@@ -35,8 +35,8 @@ public class LocalPythonRuntime implements PythonRuntime {
     private static final long PROBE_TIMEOUT_SECONDS = 5L;
     /** 版本输出形如 Python 3.12.1 */
     private static final Pattern VERSION_PATTERN = Pattern.compile("(\\d+)\\.(\\d+)(\\.(\\d+))?");
-    /** 路径穿越片段 */
-    private static final Pattern TRAVERSAL_PATTERN = Pattern.compile("(\\.\\./|\\.\\.\\\\){2,}");
+    /** 单段上级目录穿越片段 */
+    private static final Pattern TRAVERSAL_PATTERN = Pattern.compile("\\.\\.[/\\\\]");
 
     private final RuntimeProperties properties;
 
@@ -50,6 +50,9 @@ public class LocalPythonRuntime implements PythonRuntime {
 
     @Override
     public RuntimeStatus detect() {
+        if (!properties.getPython().isEnabled()) {
+            return new RuntimeStatus(RuntimeStatus.DISABLED, null, null, false);
+        }
         RuntimeStatus status = cachedStatus;
         if (Objects.isNull(status)) {
             synchronized (probeFlight) {
@@ -80,9 +83,16 @@ public class LocalPythonRuntime implements PythonRuntime {
         checkUnsafe(request.code());
 
         Path script = writeScript(request.code());
+        Path stdoutFile = null;
+        Path stderrFile = null;
         try {
+            // 输出重定向到临时文件：管道缓冲写满会阻塞子进程，waitFor 之后再读取会造成死锁
+            stdoutFile = Files.createTempFile("lwb-python-out-", ".log");
+            stderrFile = Files.createTempFile("lwb-python-err-", ".log");
             ProcessBuilder builder = new ProcessBuilder(List.of(status.source(), script.toAbsolutePath().toString()));
             builder.directory(workDir.toFile());
+            builder.redirectOutput(stdoutFile.toFile());
+            builder.redirectError(stderrFile.toFile());
             builder.environment().put("PYTHONDONTWRITEBYTECODE", "1");
             builder.environment().put("PYTHONIOENCODING", "utf-8");
             Process process = builder.start();
@@ -91,8 +101,8 @@ public class LocalPythonRuntime implements PythonRuntime {
                 killTree(process);
                 return new ExecResult(-1, "", "执行超时（" + timeout + " 秒），进程树已终止", true);
             }
-            String stdout = OutputSanitizer.clean(new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8));
-            String stderr = OutputSanitizer.clean(new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8));
+            String stdout = OutputSanitizer.clean(FileUtil.readUtf8String(stdoutFile.toFile()));
+            String stderr = OutputSanitizer.clean(FileUtil.readUtf8String(stderrFile.toFile()));
             return new ExecResult(process.exitValue(), stdout, stderr, false);
         } catch (IOException e) {
             throw new BizException(ErrorCodeEnum.PYTHON_EXEC_FAILED, e.getMessage());
@@ -101,6 +111,12 @@ public class LocalPythonRuntime implements PythonRuntime {
             throw new BizException(ErrorCodeEnum.PYTHON_EXEC_FAILED, "执行被中断");
         } finally {
             FileUtil.del(script.toFile());
+            if (Objects.nonNull(stdoutFile)) {
+                FileUtil.del(stdoutFile.toFile());
+            }
+            if (Objects.nonNull(stderrFile)) {
+                FileUtil.del(stderrFile.toFile());
+            }
         }
     }
 

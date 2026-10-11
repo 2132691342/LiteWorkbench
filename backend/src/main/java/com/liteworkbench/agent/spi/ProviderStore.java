@@ -10,4 +10,7 @@ public interface ProviderStore {
 
     /** 按主键查供应方 */
     WbProviderDO findById(String providerId);
+
+    /** 默认可用供应方：会话未指定时使用，无可用返回 null */
+    WbProviderDO findDefault();
 }

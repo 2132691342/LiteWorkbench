@@ -31,6 +31,7 @@ public class AuthController {
     }
 
     /** 登出 */
+    @Idempotent(prefix = "logout", ttl = 3)
     @PostMapping("/logout")
     public R<Void> logout() {
         authService.logout();

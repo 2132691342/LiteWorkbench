@@ -60,7 +60,11 @@ function handleClick(menu: MenuVO): void {
         <div
           v-if="menu.children?.length"
           class="h-10 rounded-lg flex items-center px-3 gap-3 cursor-pointer transition-all duration-200 hover:bg-black/5"
-          :style="isBranchActive(menu) ? 'color: var(--lw-primary); font-weight: 600' : 'color: var(--lw-ink)'"
+          :style="
+            isBranchActive(menu)
+              ? 'color: var(--lw-primary); font-weight: 600; background: var(--lw-secondary-selected)'
+              : 'color: var(--lw-ink)'
+          "
           @click="handleClick(menu)"
         >
           <el-icon :size="16"><component :is="menuIcon(menu.icon)" /></el-icon>
@@ -78,7 +82,7 @@ function handleClick(menu: MenuVO): void {
             class="h-9 rounded-lg flex items-center pl-9 pr-3 gap-2 text-sm transition-all duration-200 hover:bg-black/5"
             :style="
               isActive(child)
-                ? 'color: var(--lw-primary); font-weight: 600; background: var(--lw-primary-tint)'
+                ? 'color: var(--lw-primary); font-weight: 600; background: var(--lw-secondary-selected)'
                 : 'color: var(--lw-ink)'
             "
           >
@@ -92,7 +96,7 @@ function handleClick(menu: MenuVO): void {
           class="h-10 rounded-lg flex items-center px-3 gap-3 text-sm transition-all duration-200 hover:bg-black/5"
           :style="
             isActive(menu)
-              ? 'color: var(--lw-primary); font-weight: 600; background: var(--lw-primary-tint)'
+              ? 'color: var(--lw-primary); font-weight: 600; background: var(--lw-secondary-selected)'
               : 'color: var(--lw-ink)'
           "
         >
@@ -104,11 +108,11 @@ function handleClick(menu: MenuVO): void {
 
     <div class="p-4 shrink-0">
       <div
-        class="rounded-xl relative overflow-hidden p-4 shadow-sm transition-transform duration-200 hover:scale-[1.02]"
-        style="background-color: var(--lw-primary)"
+        class="rounded-xl relative overflow-hidden p-4 lw-shadow-sm transition-transform duration-200 hover:scale-[1.02]"
+        style="background-color: var(--lw-secondary)"
       >
         <div class="absolute inset-0 bg-white opacity-10" />
-        <div class="relative z-10" style="color: var(--lw-on-primary)">
+        <div class="relative z-10" style="color: var(--lw-on-secondary)">
           <div class="text-xs font-bold mb-1">{{ t('app.title') }}</div>
           <div class="text-[10px] opacity-90 leading-relaxed mb-3">{{ t('app.slogan') }}</div>
           <div class="text-[10px] font-mono opacity-80">

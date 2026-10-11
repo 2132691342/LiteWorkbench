@@ -32,8 +32,9 @@ public class RunController {
 
     private final RunService runService;
 
-    /** 流式对话，SSE 单通道 run.event，id 为 seq；按用户限流控成本 */
+    /** 流式对话，SSE 单通道 run.event，id 为 seq；按用户限流控成本，短窗口幂等防重复点击 */
     @RateLimit(prefix = "run:chat", limit = 20, windowSeconds = 60)
+    @Idempotent(prefix = "chat", ttl = 3)
     @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter chatStream(@RequestBody @Valid ChatStreamREQ req) {
         SseEmitter emitter = new SseEmitter(RunConst.SSE_TIMEOUT_MS);

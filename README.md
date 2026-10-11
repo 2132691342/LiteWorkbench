@@ -5,7 +5,8 @@
 - 后端：JDK 17 + Spring Boot 3.5.12 + MyBatis 3.0.4 + Hutool 5.8.36 + AgentScope 2.0.3 + Sa-Token 1.42.0 + ULID
 - 前端：Vue 3.4.34 + TypeScript 5.4.5 + Vite 5.2.12 + Element Plus 2.9.0 + UnoCSS 0.58.6 + Pinia 2.1.7 + ECharts 5.5.0
 - 存储：PostgreSQL 16（镜像内置 pgvector 扩展，预留）+ Redisearch 2.4.14 + MinIO + RabbitMQ
-- 运行形态：容器，内置 Python 运行时
+- 运行形态：容器，内置 Python 运行时，对外端口 `24399`
+- 设计语言：紫色序列四色 `#F2F0F7 / #CBC9E2 / #9E9AC8 / #6A51A3`，极简风格，全站五态交互
 
 ---
 

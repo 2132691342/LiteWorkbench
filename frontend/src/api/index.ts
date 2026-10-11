@@ -242,7 +242,7 @@ export const monitorApi = {
 /* ===== 日志检索 ===== */
 
 export const logApi = {
-  search: (params: LogSearchParams) => get<LogDocVO[]>('/log/search', params),
+  search: (params: LogSearchParams) => get<PageResult<LogDocVO>>('/log/search', params),
 }
 
 /* ===== SSE 流式对话 ===== */

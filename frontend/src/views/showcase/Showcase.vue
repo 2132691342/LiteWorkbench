@@ -75,7 +75,7 @@ const chartValues = [8, 16, 12, 24, 20, 32, 28, 40]
                 {{ t('showcase.tagPrimary') }}
               </div>
               <div class="flex justify-between text-xs font-mono" style="color: var(--lw-ink-muted)">
-                <span>#2563EB</span><span>Primary</span>
+                <span>#6A51A3</span><span>Primary</span>
               </div>
             </div>
             <div class="flex-1 space-y-2">
@@ -83,7 +83,7 @@ const chartValues = [8, 16, 12, 24, 20, 32, 28, 40]
                 {{ t('showcase.tagSecondary') }}
               </div>
               <div class="flex justify-between text-xs font-mono" style="color: var(--lw-ink-muted)">
-                <span>#9333EA</span><span>Secondary</span>
+                <span>#9E9AC8</span><span>Secondary</span>
               </div>
             </div>
           </div>
@@ -97,7 +97,7 @@ const chartValues = [8, 16, 12, 24, 20, 32, 28, 40]
           </div>
           <div class="p-3 rounded-lg border text-xs flex items-center justify-between" style="background: var(--lw-surface); border-color: var(--lw-border)">
             <span class="font-bold">{{ t('showcase.surfaceLabel') }}</span>
-            <span class="font-mono" style="color: var(--lw-ink-muted)">#F8FAFC / #334155</span>
+            <span class="font-mono" style="color: var(--lw-ink-muted)">#F2F0F7 / #CBC9E2</span>
           </div>
         </div>
       </LwCard>

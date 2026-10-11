@@ -9,6 +9,8 @@ public record RuntimeStatus(String status, String version, String source, boolea
     public static final String NOT_FOUND = "NOT_FOUND";
     /** 版本过低 */
     public static final String BAD_VERSION = "BAD_VERSION";
+    /** 运行时开关已关闭 */
+    public static final String DISABLED = "DISABLED";
 
     /** 最低版本要求 3.8 */
     public static final int MIN_VERSION = 8;

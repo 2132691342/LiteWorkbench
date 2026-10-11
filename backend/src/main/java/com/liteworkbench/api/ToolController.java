@@ -49,6 +49,6 @@ public class ToolController {
     @Idempotent(prefix = "tool:invoke")
     @PostMapping("/invoke/{toolName}")
     public R<String> invoke(@PathVariable String toolName, @RequestBody @Valid InvokeToolREQ req) {
-        return R.ok(toolService.invoke(toolName, req, LoginContext.userId()));
+        return R.ok(toolService.invoke(toolName, req));
     }
 }

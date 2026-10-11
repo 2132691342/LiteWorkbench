@@ -4,7 +4,9 @@ import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.thread.ExecutorBuilder;
 import cn.hutool.core.thread.ThreadUtil;
 import cn.hutool.core.util.StrUtil;
+import com.liteworkbench.common.PageResult;
 import com.liteworkbench.domain.constant.EventTypeEnum;
+import com.liteworkbench.domain.dto.LogSearchDTO;
 import com.liteworkbench.domain.constant.RunStatusEnum;
 import com.liteworkbench.domain.vo.HealthRESP;
 import com.liteworkbench.domain.vo.LogDocVO;
@@ -61,12 +63,13 @@ public class MonitorService {
             .build();
 
     /** Redisearch 日志检索，按时间倒序分页；索引不可用时降级为空结果 */
-    public List<LogDocVO> searchLogs(String keyword, String level, long from, long to, long page, long size) {
+    public PageResult<LogDocVO> searchLogs(String keyword, String level, long from, long to, long page, long size) {
         try {
-            return logSearchMapper.search(keyword, level, from, to, page, size);
+            LogSearchDTO result = logSearchMapper.search(keyword, level, from, to, page, size);
+            return PageResult.of(result.list(), result.total(), page, size);
         } catch (Exception e) {
             log.warn("[log.search] 检索失败，降级为空结果 {}", e.getMessage());
-            return List.of();
+            return PageResult.empty(page, size);
         }
     }
 

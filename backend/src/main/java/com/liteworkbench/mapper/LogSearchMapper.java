@@ -2,6 +2,7 @@ package com.liteworkbench.mapper;
 
 import cn.hutool.core.util.NumberUtil;
 import cn.hutool.core.util.StrUtil;
+import com.liteworkbench.domain.dto.LogSearchDTO;
 import com.liteworkbench.domain.vo.LogDocVO;
 import com.liteworkbench.observability.LogPublisher;
 import lombok.RequiredArgsConstructor;
@@ -38,37 +39,42 @@ public class LogSearchMapper {
 
     private final StringRedisTemplate redisTemplate;
 
-    /** 幂等创建索引，已存在则跳过 */
+    /** 幂等创建索引，已存在则跳过；Redis 不可用时返回 false，不阻断启动 */
     public boolean ensureIndex() {
-        return Boolean.TRUE.equals(redisTemplate.execute((RedisConnection connection) -> {
-            try {
-                if (Objects.nonNull(connection.execute("FT.INFO", args(INDEX)))) {
-                    log.info("[log.index] 索引已存在 {}", INDEX);
-                    return true;
+        try {
+            return Boolean.TRUE.equals(redisTemplate.execute((RedisConnection connection) -> {
+                try {
+                    if (Objects.nonNull(connection.execute("FT.INFO", args(INDEX)))) {
+                        log.info("[log.index] 索引已存在 {}", INDEX);
+                        return true;
+                    }
+                } catch (Exception ignored) {
+                    // 索引不存在，走创建
                 }
-            } catch (Exception ignored) {
-                // 索引不存在，走创建
-            }
-            try {
-                connection.execute("FT.CREATE", args(INDEX,
-                        "ON", "HASH",
-                        "PREFIX", "1", KEY_PREFIX,
-                        "SCHEMA",
-                        "log_id", "TAG",
-                        "ts", "NUMERIC", "SORTABLE",
-                        "level", "TAG",
-                        "logger", "TAG",
-                        "thread", "TAG",
-                        "trace_id", "TAG",
-                        "message", "TEXT",
-                        "exception", "TEXT"));
-                log.info("[log.index] 索引创建成功 {}", INDEX);
-                return true;
-            } catch (Exception e) {
-                log.warn("[log.index] 索引创建失败 {} {}", INDEX, e.getMessage());
-                return false;
-            }
-        }));
+                try {
+                    connection.execute("FT.CREATE", args(INDEX,
+                            "ON", "HASH",
+                            "PREFIX", "1", KEY_PREFIX,
+                            "SCHEMA",
+                            "log_id", "TAG",
+                            "ts", "NUMERIC", "SORTABLE",
+                            "level", "TAG",
+                            "logger", "TAG",
+                            "thread", "TAG",
+                            "trace_id", "TAG",
+                            "message", "TEXT",
+                            "exception", "TEXT"));
+                    log.info("[log.index] 索引创建成功 {}", INDEX);
+                    return true;
+                } catch (Exception e) {
+                    log.warn("[log.index] 索引创建失败 {} {}", INDEX, e.getMessage());
+                    return false;
+                }
+            }));
+        } catch (Exception e) {
+            log.warn("[log.index] Redis 不可用，索引跳过 {} {}", INDEX, e.getMessage());
+            return false;
+        }
     }
 
     /** 写入日志文档，带 30 天 TTL */
@@ -89,9 +95,25 @@ public class LogSearchMapper {
         redisTemplate.expire(key, DOC_TTL);
     }
 
-    /** 检索日志，按 ts 倒序分页 */
-    public List<LogDocVO> search(String keyword, String level,
-                                 long from, long to, long page, long size) {
+    /** 检索日志，按 ts 倒序分页；Redis 不可用或语法异常时降级为空结果 */
+    public LogSearchDTO search(String keyword, String level,
+                               long from, long to, long page, long size) {
+        String query = buildQuery(keyword, level, from, to);
+        long offset = Math.max(page - 1, 0) * Math.max(size, 1);
+        try {
+            Object reply = redisTemplate.execute((RedisConnection connection) ->
+                    connection.execute("FT.SEARCH", args(INDEX, query,
+                            "SORTBY", "ts", "DESC", "LIMIT",
+                            String.valueOf(offset), String.valueOf(Math.max(size, 1)))));
+            return parseReply(reply);
+        } catch (Exception e) {
+            log.warn("[log.search] 检索失败，返回空结果 {}", e.getMessage());
+            return new LogSearchDTO(List.of(), 0L);
+        }
+    }
+
+    /** 查询串：无条件时用全量通配，RediSearch 不接受空查询串 */
+    private String buildQuery(String keyword, String level, long from, long to) {
         StringBuilder query = new StringBuilder();
         if (StrUtil.isNotBlank(level)) {
             query.append(" @level:{").append(level.toUpperCase()).append('}');
@@ -102,20 +124,16 @@ public class LogSearchMapper {
         if (StrUtil.isNotBlank(keyword)) {
             query.append(" @message:(").append(escape(keyword)).append(')');
         }
-        long offset = (page - 1) * size;
-        Object reply = redisTemplate.execute((RedisConnection connection) ->
-                connection.execute("FT.SEARCH", args(INDEX, query.toString(),
-                        "SORTBY", "ts", "DESC", "LIMIT",
-                        String.valueOf(offset), String.valueOf(size))));
-        return parseReply(reply);
+        return query.isEmpty() ? "*" : query.toString().trim();
     }
 
     /** 解析 FT.SEARCH 回复：[total, key, [field, value, ...], ...] */
-    private List<LogDocVO> parseReply(Object reply) {
-        List<LogDocVO> result = new ArrayList<>();
+    private LogSearchDTO parseReply(Object reply) {
         if (!(reply instanceof List<?> rows) || rows.isEmpty()) {
-            return result;
+            return new LogSearchDTO(List.of(), 0L);
         }
+        long total = rows.get(0) instanceof Number number ? number.longValue() : 0L;
+        List<LogDocVO> result = new ArrayList<>();
         for (int i = 1; i < rows.size(); i++) {
             if (!(rows.get(i) instanceof List<?> row) || row.size() < 2
                     || !(row.get(1) instanceof List<?> fields)) {
@@ -136,7 +154,7 @@ public class LogSearchMapper {
             vo.setException(doc.get("exception"));
             result.add(vo);
         }
-        return result;
+        return new LogSearchDTO(result, total);
     }
 
     /** 查询串转义：RediSearch 语法特殊字符全部加反斜杠，防止语法错误与查询注入 */

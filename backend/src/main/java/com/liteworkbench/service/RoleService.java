@@ -107,6 +107,7 @@ public class RoleService {
         sysRoleMapper.deleteById(roleId, operatorId);
         sysRoleMapper.deleteRoleMenus(roleId);
         log.info("[role.delete] roleId={}", roleId);
+        evictPermCache(roleId);
     }
 
     /** 全量授权菜单，先清后写并失效相关用户权限缓存 */
