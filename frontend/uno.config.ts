@@ -16,7 +16,6 @@ export default defineConfig({
         secondarySelected: 'var(--lw-secondary-selected)',
         accentSoft: 'var(--lw-accent-soft)',
         subtle: 'var(--lw-surface-subtle)',
-        onPrimary: 'var(--lw-on-primary)',
         onSecondary: 'var(--lw-on-secondary)',
         surface: 'var(--lw-surface)',
         raised: 'var(--lw-surface-raised)',

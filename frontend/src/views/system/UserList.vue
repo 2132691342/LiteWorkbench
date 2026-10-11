@@ -98,7 +98,7 @@ async function submitDialog(): Promise<void> {
         username: form.username,
         nickname: form.nickname,
         email: form.email,
-        roleIds: [...form.roleIds],
+        roleIds: [...(form.roleIds ?? [])],
       })
     } else {
       await userApi.create({ ...form })
