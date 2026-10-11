@@ -16,6 +16,8 @@ services:
     # 2GB 小主机：容器限内存，JVM MaxRAMPercentage=70 据此收敛堆上限
     mem_limit: 1152m
     environment:
+      # rootless podman 的端口转发只识别 IPv4 监听，显式绑定 IPv4 通配地址
+      SERVER_ADDRESS: 0.0.0.0
       LITEWORKBENCH_DATASOURCE_URL: jdbc:postgresql://postgres:5432/postgres
       LITEWORKBENCH_DATASOURCE_USERNAME: postgres
       LITEWORKBENCH_DATASOURCE_PASSWORD: ${LITEWORKBENCH_DATASOURCE_PASSWORD:-admin_public}

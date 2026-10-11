@@ -1,6 +1,8 @@
 # LiteWorkbench 后端配置：默认值面向本地容器中间件，生产用环境变量覆盖
 server:
   port: 8080
+  # 显式绑定 IPv4 通配地址：rootless 容器端口转发只识别 IPv4 监听，IPv6 通配会导致宿主机端口不可达
+  address: 0.0.0.0
   servlet:
     context-path: /
 

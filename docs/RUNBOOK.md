@@ -8,6 +8,8 @@
 
 ```
 现象
+  ├─ 页面打不开 / 端口不可达
+  │    → 0 端口转发：宿主机 `curl 127.0.0.1:24399/actuator/health`；容器在跑却失败见场景处置
   ├─ 页面打不开 / 接口 500
   │    → 1 容器存活：podman ps + HEALTHCHECK 状态
   │    → 2 应用日志：liteworkbench-error.log 最近 50 行
@@ -41,6 +43,8 @@
 | 事件回放缺尾部 | 回放不完整 | 事件按 100 条 / 200ms 攒批，断电可能丢最后一批；以 wb_message 的助手消息为准 |
 | 容器连不上中间件 | Connection refused 但中间件健康 | aardvark-dns 残留记录把主机名解析到旧 IP：对涉事容器逐个 `podman network disconnect` + `connect` 重建记录；**严禁对共享网络 `network rm`**（会连带销毁挂载的容器） |
 | 共享中间件容器丢失 | minio/pgvector 等不存在 | 用 `/root/workbaby-infra/docker-compose.yaml` 执行 `podman-compose up -d` 按原卷重建（卷在数据在）；原件参照 `/opt/workbaby-infra` |
+| 端口不可达（外部 502 或连接被拒）但容器在跑 | 容器内 `podman exec liteworkbench wget -qO- 127.0.0.1:8080/actuator/health` 返回 UP，宿主机 `curl 127.0.0.1:24399` 失败 | podman 3.x rootless 反复重建同名容器会在 `CNI-HOSTPORT-DNAT` 留下指向已删容器 IP 的历史规则，新容器流量被转发到不存在的地址：`iptables -t nat -L CNI-HOSTPORT-DNAT -n --line-numbers` 逐条删除含该端口的规则，再 `podman rm -f liteworkbench && podman-compose -f docker-compose.app.yaml up -d`；流水线部署前已内置同端口残留清理 |
+| 端口规则指向旧容器 | `iptables -t nat -S CNI-HOSTPORT-DNAT` 中同一端口出现多条 DNAT | 处置同上；清理后应只剩一条，且 `--to-destination` 的 IP 等于 `podman inspect liteworkbench` 的容器 IP |
 
 ## 3. 备份与恢复
 
