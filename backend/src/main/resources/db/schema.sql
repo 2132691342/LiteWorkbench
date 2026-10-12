@@ -142,8 +142,7 @@ CREATE TABLE IF NOT EXISTS wb_event (
 CREATE UNIQUE INDEX IF NOT EXISTS uk_wb_event_seq ON wb_event (run_id, seq);
 CREATE INDEX IF NOT EXISTS idx_wb_event_session ON wb_event (session_id, occurred_at);
 
--- 会话消息不建表：消息存 Redisearch 索引 idx:lw:msg（见 docs/DATA-MODEL.md §6.2），
--- 历史遗留的 wb_message 由 MessageStoreMigration 启动时迁移进索引后删除
+-- 会话消息不建表：消息只存 Redisearch 索引 idx:lw:msg（见 docs/DATA-MODEL.md §6.2）
 
 -- 工具定义（平台级）
 CREATE TABLE IF NOT EXISTS wb_tool (
@@ -361,13 +360,12 @@ VALUES
 ON CONFLICT (tool_id) DO NOTHING;
 
 -- ============================== 旧库升级兜底（幂等） ==============================
+-- 只针对仍然存在的表；已下线表的语句不得保留，否则建表脚本会整段失败
 
--- v1.0.0：业务状态列统一为 state，事件与消息补归属用户
 ALTER TABLE wb_run ADD COLUMN IF NOT EXISTS state varchar(16) NOT NULL DEFAULT 'queued';
 ALTER TABLE wb_task ADD COLUMN IF NOT EXISTS state varchar(16) NOT NULL DEFAULT 'pending';
 ALTER TABLE wb_event ADD COLUMN IF NOT EXISTS user_id varchar(40) NOT NULL DEFAULT '';
-ALTER TABLE wb_message ADD COLUMN IF NOT EXISTS user_id varchar(40) NOT NULL DEFAULT '';
 
--- v1.1.0：工作流运行不挂会话，session_id 允许为空
+-- 工作流运行不挂会话，session_id 允许为空
 ALTER TABLE wb_run ALTER COLUMN session_id DROP NOT NULL;
 ALTER TABLE wb_event ALTER COLUMN session_id DROP NOT NULL;
