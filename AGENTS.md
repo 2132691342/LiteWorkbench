@@ -182,6 +182,7 @@ public R<String> create(@RequestBody @Valid UserREQ req) { ... }
 
 - **密码绝不明文过网**：登录与改密请求的密码字段一律为 RSA 密文（`RSA/ECB/PKCS1Padding`，与浏览器端 JSEncrypt 对齐），公钥由 `GET /api/v1/auth/public-key` 下发（SPKI 的 Base64，进程内存持有，按 6 小时或 1000 次调用轮换）。解密失败即 `CREDENTIAL_INVALID`，不区分"密文坏"与"密码错"。
 - **凭据绝不回显**：页面、README、接口响应一律不得出现初始密码或明文密码。种子账号密码来自环境变量 `LITEWORKBENCH_ADMIN_PASSWORD`；来自配置时**不打印**，缺失时随机生成并仅在启动日志 WARN 打印一次，同时置 `sys_user.pwd_reset_required = true`。
+- **未激活账号可被配置项接管**：配置了初始密码且种子 `admin` 仍 `pwd_reset_required = true` 时，启动把口令对齐到配置值；账号完成改密后配置项不再覆盖。
 - **首登强制改密**：`pwd_reset_required` 为 true 的用户，登录后只允许调用 `/auth/password` 与 `/auth/current`，其余业务接口返回 `PASSWORD_RESET_REQUIRED`。
 - **失败计数**：同一用户名连续失败 5 次锁定 10 分钟（Redis 计数），登录接口另有按 IP 的 `@RateLimit`。
 

@@ -28,6 +28,14 @@ drop_stale_dnat() {
   step "清理 CNI-HOSTPORT-DNAT 残留规则 $dropped 条"
 }
 
+# 主机本地机密（初始密码等）放同目录 .env.app，不入仓库；缺失即跳过，配置仍走 CI 注入的变量
+if [ -f .env.app ]; then
+  step "加载主机本地环境变量 .env.app"
+  set -a
+  . ./.env.app
+  set +a
+fi
+
 # 关键步骤显式判失败，非关键步骤允许非零继续，因此不开 set -e
 step "拉取镜像 $IMAGE"
 export LITEWORKBENCH_IMAGE="$IMAGE"

@@ -32,6 +32,8 @@ services:
       LITEWORKBENCH_MQ_USERNAME: admin
       LITEWORKBENCH_MQ_PASSWORD: ${LITEWORKBENCH_MQ_PASSWORD:-admin_public}
       LITEWORKBENCH_SECURITY_SECRET: ${LITEWORKBENCH_SECURITY_SECRET:?必须设置}
+      # 种子账号初始/接管密码：留空则首次启动随机生成并只打印一次
+      LITEWORKBENCH_ADMIN_PASSWORD: ${LITEWORKBENCH_ADMIN_PASSWORD:-}
       LITEWORKBENCH_LOG_DIR: /var/log/liteworkbench
       LITEWORKBENCH_RUNTIME_DATA_DIR: /var/lib/liteworkbench
     ports:

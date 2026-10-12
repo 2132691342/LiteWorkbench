@@ -59,6 +59,7 @@ public class DataInitializer implements ApplicationRunner {
         reconcileMenus();
         retireMenus();
         initRolesAndUsers();
+        realignSeedPassword();
         initProviders();
         grantNewMenusToAdminRoles();
         initBuiltinPrompts();
@@ -170,6 +171,26 @@ public class DataInitializer implements ApplicationRunner {
         grantMenus(userRoleId, userMenuIds);
         createUser(DEMO_USERNAME, "演示用户", userRoleId, initPassword);
         log.info("[data.init.roles] super={} admin={} user={}", superRoleId, adminRoleId, userRoleId);
+    }
+
+    /**
+     * 未激活的种子账号按配置的初始密码对齐：首次启动生成的密码只打印一次，运维若未留存就再也进不去，
+     * 这里给配置项留一个接管窗口；账号一旦完成改密（`pwd_reset_required = false`），配置项不再覆盖用户自己的密码。
+     */
+    private void realignSeedPassword() {
+        String configured = authProperties.getAdminPassword();
+        if (StrUtil.isBlank(configured)) {
+            return;
+        }
+        SysUserDO admin = sysUserMapper.selectByUsername(ADMIN_USERNAME);
+        if (Objects.isNull(admin) || !Boolean.TRUE.equals(admin.getPwdResetRequired())) {
+            return;
+        }
+        String salt = PasswordUtil.randomSalt();
+        sysUserMapper.updatePassword(admin.getUserId(), PasswordUtil.hash(configured, salt), salt,
+                Boolean.TRUE, SYSTEM);
+        log.info("[data.init.user] 种子账号尚未激活，已按 LITEWORKBENCH_ADMIN_PASSWORD 对齐密码 userId={}",
+                admin.getUserId());
     }
 
     /** 初始密码：配置优先；未配置则随机生成并仅打印一次，绝不写死在代码或配置里 */

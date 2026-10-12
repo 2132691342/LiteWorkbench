@@ -108,7 +108,9 @@ podman run -d --name liteworkbench -p 24399:8080 \
 | 类型 | 内容 |
 |---|---|
 | 种子账号 | `admin`（超级管理员）、`demo`（普通用户）；密码取 `LITEWORKBENCH_ADMIN_PASSWORD`，未配置则随机生成并仅在启动日志 WARN 打印一次；两个账号置 `pwd_reset_required = true`，首登强制改密 |
+| 密码接管 | 配置了 `LITEWORKBENCH_ADMIN_PASSWORD` 且 `admin` 仍处于未激活状态（`pwd_reset_required = true`）时，每次启动都把该账号口令对齐到配置值——首次生成的随机密码没留存时的补救手段；账号一旦完成改密，配置项不再覆盖用户自己的密码 |
 | 存量库升级 | `pwd_reset_required` 列以 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` 补齐，默认 `false`：**已存在的账号不会被强制改密**，只有本次新建的种子账号与管理员新建的用户带该标记 |
+| 主机本地机密 | `deploy-app.sh` 启动前会 source 同目录的 `.env.app`（存在才加载，不入仓库），用于放 `LITEWORKBENCH_ADMIN_PASSWORD` 这类只属于该主机的值 |
 | 内置角色 | `super_admin`、`admin`、`user`（代码常量定义，不可删除改码） |
 | 菜单树 | 仪表盘、工作台、创作台、提示词、文件、技能、知识库、日志、监控、设置、组件库、系统管理（含按钮权限点） |
 | 内置工具 | Python 执行、文件读写、HTTP 请求、知识库检索（固定 ID 幂等重放） |
