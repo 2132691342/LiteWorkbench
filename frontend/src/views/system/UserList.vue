@@ -13,6 +13,7 @@ import LwTag from '@/components/ui/LwTag.vue'
 import { usePermission } from '@/composables/usePermission'
 import type { RoleVO, UserREQ, UserVO } from '@/types/api'
 import { formatTime, USER_STATE } from '@/utils/const'
+import { encryptSecret } from '@/utils/crypto'
 
 /** 用户管理：检索、分页、增删改、启停、重置密码，按钮按权限点显隐 */
 const { t } = useI18n()
@@ -84,9 +85,9 @@ function openDialog(user?: UserVO): void {
   dialogVisible.value = true
 }
 
-/** 保存用户：新建走 create（初始密码必填），编辑走 update（不提交密码字段） */
+/** 保存用户：新建走 create（初始密码必填且加密提交），编辑走 update（不提交密码字段） */
 async function submitDialog(): Promise<void> {
-  if (!isEdit.value && (form.password ?? '').length < 6) {
+  if (!isEdit.value && (form.password ?? '').length < 8) {
     ElMessage.warning(t('system.user.initPasswordTip'))
     return
   }
@@ -101,7 +102,9 @@ async function submitDialog(): Promise<void> {
         roleIds: [...(form.roleIds ?? [])],
       })
     } else {
-      await userApi.create({ ...form })
+      // 初始密码与登录口径一致：RSA 密文提交，失败不乱发明文
+      const { keyId, cipher } = await encryptSecret(form.password ?? '')
+      await userApi.create({ ...form, password: cipher, passwordKeyId: keyId })
     }
     ElMessage.success(t('common.saveSuccess'))
     dialogVisible.value = false
@@ -143,11 +146,12 @@ function openReset(user: UserVO): void {
   resetVisible.value = true
 }
 
-/** 提交重置密码 */
+/** 提交重置密码：同样加密提交 */
 async function submitReset(): Promise<void> {
   resetLoading.value = true
   try {
-    await userApi.resetPassword({ ...resetForm })
+    const { keyId, cipher } = await encryptSecret(resetForm.newPassword)
+    await userApi.resetPassword({ userId: resetForm.userId, newPassword: cipher, keyId })
     ElMessage.success(t('common.saveSuccess'))
     resetVisible.value = false
   } finally {

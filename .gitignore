@@ -28,3 +28,9 @@ Thumbs.db
 # 运行时数据目录
 backend/data/
 data/
+
+# 本地验证产物与一次性凭据（不进仓库）
+.secrets/
+.shots/
+.playwright-cli/
+

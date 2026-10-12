@@ -1,7 +1,6 @@
 package com.liteworkbench.domain.dto;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.io.Serial;
@@ -17,9 +16,8 @@ public class PasswordREQ implements Serializable {
     /** 原密码密文 */
     @NotBlank(message = "原密码不能为空")
     private String oldPassword;
-    /** 新密码密文 */
+    /** 新密码密文：长度由密文决定，强度在解密后的明文上校验，故此处不做长度约束 */
     @NotBlank(message = "新密码不能为空")
-    @Size(min = 8, max = 64, message = "新密码长度须在 8-64 位之间")
     private String newPassword;
     /** 加密所用公钥标识 */
     @NotBlank(message = "缺少公钥标识")

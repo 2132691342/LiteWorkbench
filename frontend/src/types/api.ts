@@ -48,7 +48,10 @@ export interface PasswordREQ {
 
 export interface ResetPasswordREQ {
   userId: string
+  /** 新密码 RSA 密文 */
   newPassword: string
+  /** 加密所用公钥标识 */
+  keyId: string
 }
 
 export interface LoginRESP {
@@ -78,7 +81,10 @@ export interface UserVO {
 export interface UserREQ {
   userId?: string
   username?: string
+  /** 初始密码 RSA 密文，仅新建时提交 */
   password?: string
+  /** 初始密码加密所用公钥标识 */
+  passwordKeyId?: string
   nickname: string
   email?: string
   roleIds?: string[]

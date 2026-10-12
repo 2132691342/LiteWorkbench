@@ -46,7 +46,9 @@ HTTP 状态码：成功 200，参数错误 400，未认证 401，无权限 403�
 
 登录态由 Sa-Token 管理，令牌放 `Authorization` 头，值为令牌本身（不加 `Bearer` 前缀），会话存 Redis，默认有效期 2 小时。
 
-**密码字段一律为密文**：前端先取公钥，用 RSA/PKCS#1 v1.5 加密（JSEncrypt），密文 Base64 放入 `password`，同时回传 `keyId`。明文密码不出浏览器。
+**密码字段一律为密文**：前端先取公钥，用 RSA/PKCS#1 v1.5 加密（JSEncrypt），密文 Base64 放入密码字段，同时回传公钥标识。覆盖四个入口：登录（`password` + `keyId`）、自助改密（`oldPassword` / `newPassword` + `keyId`）、管理员建用户（`password` + `passwordKeyId`）、管理员重置密码（`newPassword` + `keyId`）。明文密码不出浏览器。
+
+密文字段**不做长度校验**（RSA-2048 密文 Base64 后 344 字符），口令强度在服务端解密后的明文上判定（≥8 位且含字母与数字，否则 `PASSWORD_WEAK`）。
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -96,11 +98,11 @@ HTTP 状态码：成功 200，参数错误 400，未认证 401，无权限 403�
 |---|---|---|
 | GET | `/api/v1/user/page` | 分页，支持 `keyword` `state` |
 | GET | `/api/v1/user/detail/{userId}` | 详情（含角色 ID 列表） |
-| POST | `/api/v1/user/create` | 新建 |
-| POST | `/api/v1/user/update` | 修改资料与角色 |
-| POST | `/api/v1/user/toggle/{userId}` | 启用 / 停用 |
-| POST | `/api/v1/user/reset-password` | 重置密码 |
-| POST | `/api/v1/user/delete/{userId}` | 逻辑删除 |
+| POST | `/api/v1/user/create` | 新建，`password`(密文) `passwordKeyId` 必填；新账号首登强制改密 |
+| POST | `/api/v1/user/update` | 修改资料与角色（不提交密码字段），不能改自己的角色 |
+| POST | `/api/v1/user/toggle/{userId}` | 启用 / 停用，不能操作自己 |
+| POST | `/api/v1/user/reset-password` | 重置密码，`newPassword`(密文) `keyId`；重置后该用户首登仍需改密 |
+| POST | `/api/v1/user/delete/{userId}` | 逻辑删除，不能删除自己 |
 
 ## 5. 角色
 

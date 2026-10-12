@@ -8,6 +8,7 @@ import com.liteworkbench.common.ErrorCodeEnum;
 import com.liteworkbench.common.IdGenerator;
 import com.liteworkbench.common.PageResult;
 import com.liteworkbench.common.PasswordUtil;
+import com.liteworkbench.common.SecretCodec;
 import com.liteworkbench.common.TimeUtil;
 import com.liteworkbench.config.StpInterfaceImpl;
 import com.liteworkbench.domain.constant.IdPrefixConst;
@@ -38,6 +39,7 @@ public class UserService {
     private final SysRoleMapper sysRoleMapper;
     private final StpInterfaceImpl stpInterface;
     private final MenuService menuService;
+    private final SecretCodec secretCodec;
 
     /** 分页查询 */
     public PageResult<UserVO> page(UserPageREQ req) {
@@ -65,7 +67,8 @@ public class UserService {
             throw new BizException(ErrorCodeEnum.USERNAME_CONFLICT, req.getUsername());
         }
         validateRoles(req.getRoleIds());
-        String rawPassword = requireStrong(req.getPassword(), "新建用户必须设置初始密码");
+        String rawPassword = requireStrong(decryptSecret(req.getPassword(), req.getPasswordKeyId()),
+                "新建用户必须设置初始密码");
         String salt = PasswordUtil.randomSalt();
         SysUserDO user = new SysUserDO();
         user.setUserId(IdGenerator.generate(IdPrefixConst.USER));
@@ -131,7 +134,7 @@ public class UserService {
     @Transactional(rollbackFor = Exception.class)
     public void resetPassword(ResetPasswordREQ req, String operatorId) {
         require(req.getUserId());
-        String newPassword = requireStrong(req.getNewPassword(), "新密码不能为空");
+        String newPassword = requireStrong(decryptSecret(req.getNewPassword(), req.getKeyId()), "新密码不能为空");
         String salt = PasswordUtil.randomSalt();
         sysUserMapper.updatePassword(req.getUserId(), PasswordUtil.hash(newPassword, salt), salt, true, operatorId);
         log.info("[user.reset] userId={} operatorId={}", req.getUserId(), operatorId);
@@ -168,6 +171,18 @@ public class UserService {
         String salt = PasswordUtil.randomSalt();
         sysUserMapper.updatePassword(userId, PasswordUtil.hash(checked, salt), salt, false, userId);
         log.info("[user.password] userId={}", userId);
+    }
+
+    /** 口令解密：管理员设定的密码同样走 RSA 密文，解密失败统一判凭据解析失败 */
+    private String decryptSecret(String cipher, String keyId) {
+        if (StrUtil.isBlank(cipher)) {
+            return null;
+        }
+        String plain = secretCodec.decrypt(keyId, cipher);
+        if (StrUtil.isBlank(plain)) {
+            throw new BizException(ErrorCodeEnum.PAYLOAD_DECRYPT_FAILED);
+        }
+        return plain;
     }
 
     /** 口令强度守门：空值与弱口令分别给不同错误码 */
