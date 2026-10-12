@@ -190,9 +190,13 @@ public class DataInitializer implements ApplicationRunner {
         }
     }
 
-    /** 内置提示词模板：固定 ID 幂等写入，用户可复制后修改 */
+    /** 内置提示词模板：固定 ID 幂等写入；这是可降级数据，失败只记 error，不阻断启动 */
     private void initBuiltinPrompts() {
-        promptService.initBuiltin(BUILTIN_PROMPTS);
+        try {
+            promptService.initBuiltin(BUILTIN_PROMPTS);
+        } catch (Exception e) {
+            log.error("[data.init.prompt] 内置提示词初始化失败，已跳过 {}", e.getMessage());
+        }
     }
 
     private String menuId(int seq) {

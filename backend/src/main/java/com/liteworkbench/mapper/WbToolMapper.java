@@ -16,7 +16,8 @@ public interface WbToolMapper {
     /** 新增工具定义 */
     @Insert("""
             INSERT INTO wb_tool (tool_id, tool_name, tool_label, category, risk_level, enabled, schema_json)
-            VALUES (#{toolId}, #{toolName}, #{toolLabel}, #{category}, #{riskLevel}, #{enabled}, #{schemaJson})
+            VALUES (#{toolId}, #{toolName}, #{toolLabel}, #{category}, #{riskLevel}, #{enabled},
+                    CAST(#{schemaJson} AS jsonb))
             """)
     int insert(WbToolDO tool);
 

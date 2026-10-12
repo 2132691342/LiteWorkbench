@@ -18,14 +18,15 @@ public interface WbPromptMapper {
     /** 新增模板 */
     @Insert("""
             INSERT INTO wb_prompt (prompt_id, user_id, prompt_title, category, content, variables, builtin, use_count, created_by)
-            VALUES (#{promptId}, #{userId}, #{promptTitle}, #{category}, #{content}, #{variables}, #{builtin}, #{useCount}, #{createdBy})
+            VALUES (#{promptId}, #{userId}, #{promptTitle}, #{category}, #{content},
+                    CAST(#{variables} AS jsonb), #{builtin}, #{useCount}, #{createdBy})
             """)
     int insert(WbPromptDO prompt);
 
     /** 更新模板：内置行由服务层拒绝，这里只按用户范围更新 */
     @Update("""
             UPDATE wb_prompt SET prompt_title = #{promptTitle}, category = #{category}, content = #{content},
-                                 variables = #{variables}, updated_by = #{updatedBy}, updated_at = now()
+                                 variables = CAST(#{variables} AS jsonb), updated_by = #{updatedBy}, updated_at = now()
             WHERE prompt_id = #{promptId} AND user_id = #{userId} AND deleted = false
             """)
     int update(WbPromptDO prompt);

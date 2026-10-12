@@ -106,6 +106,8 @@ public class SysUserDO implements Serializable { ... }
 
 同一个 Mapper 允许注解与 XML 共存：XML 里只留上述复杂语句，且不得与注解方法重名。
 
+**写入 `jsonb` 列必须显式 `CAST(#{x} AS jsonb)`**：PG 不会把 varchar 参数隐式转 jsonb，漏了就报 `column ... is of type jsonb but expression is of type character varying`。现有列：`wb_event.payload`、`wb_prompt.variables`、`wb_flow.graph_json`、`wb_tool.schema_json`、`wb_task.payload`。
+
 原本靠 `<if>` 做的可空判断，迁注解时改用 SQL 空值兜底，保持语句静态：
 
 ```java
