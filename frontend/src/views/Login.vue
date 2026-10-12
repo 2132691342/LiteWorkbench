@@ -12,7 +12,8 @@ const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
 
-const form = reactive({ username: 'admin', password: '' })
+/** 登录表单：不预填任何账号，避免把默认凭据暗示给访问者 */
+const form = reactive({ username: '', password: '' })
 const loading = ref(false)
 const errorMessage = ref('')
 
@@ -51,6 +52,11 @@ async function handleSubmit(): Promise<void> {
     const remain = 400 - (Date.now() - start)
     if (remain > 0) {
       await new Promise((resolve) => setTimeout(resolve, remain))
+    }
+    // 首登强制改密：直接进改密页，其余入口在改密前不可达
+    if (userStore.pwdResetRequired) {
+      router.push('/force-password')
+      return
     }
     const redirect = (route.query.redirect as string) || '/dashboard'
     router.push(redirect)
@@ -160,8 +166,14 @@ async function handleSubmit(): Promise<void> {
           </LwButton>
         </form>
 
-        <p class="text-xs leading-relaxed" style="color: var(--lw-ink-muted)">
-          {{ t('login.seedTip') }}
+        <p class="text-xs leading-relaxed flex items-start gap-1.5" style="color: var(--lw-ink-muted)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" class="mt-0.5 shrink-0"
+               style="color: var(--lw-secondary)">
+            <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+          <span>{{ t('login.securityTip') }}</span>
         </p>
       </div>
     </section>

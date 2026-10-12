@@ -1,16 +1,15 @@
 package com.liteworkbench.service;
 
 import cn.hutool.core.collection.CollUtil;
-import cn.hutool.core.util.StrUtil;
-import com.liteworkbench.agent.ToolOutputCapture;
-import com.liteworkbench.agent.WorkbenchTools;
+import cn.hutool.json.JSONUtil;
 import com.liteworkbench.agent.spi.KbSearchPort;
 import com.liteworkbench.agent.spi.ToolGate;
+import com.liteworkbench.agent.tool.ToolRegistry;
+import com.liteworkbench.agent.tool.WorkbenchTools;
 import com.liteworkbench.common.BizException;
 import com.liteworkbench.common.ErrorCodeEnum;
 import com.liteworkbench.common.LoginContext;
 import com.liteworkbench.config.RuntimeProperties;
-import com.liteworkbench.domain.constant.PermConst;
 import com.liteworkbench.domain.dto.InvokeToolREQ;
 import com.liteworkbench.domain.entity.WbToolDO;
 import com.liteworkbench.domain.vo.ToolVO;
@@ -20,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -29,6 +29,9 @@ import java.util.Objects;
 @Service
 @RequiredArgsConstructor
 public class ToolService {
+
+    /** 页面手工调用未指定超时时的默认值，秒 */
+    private static final long DEFAULT_INVOKE_TIMEOUT_SECONDS = 120L;
 
     private final WbToolMapper toolMapper;
     private final ToolGate toolGate;
@@ -51,7 +54,7 @@ public class ToolService {
         log.info("[tool.toggle] toolId={} name={} enabled={}", toolId, tool.getToolName(), enabled);
     }
 
-    /** 页面手工执行，与 Agent 内调用共用同一实现与裁剪策略，工作目录按当前用户隔离 */
+    /** 页面手工执行：与 Agent 内调用共用同一注册表、同一超时与同一输出裁剪 */
     public String invoke(String toolName, InvokeToolREQ req) {
         String userId = LoginContext.userId();
         WbToolDO tool = toolMapper.selectByName(toolName);
@@ -62,36 +65,33 @@ public class ToolService {
             throw new BizException(ErrorCodeEnum.TOOL_DISABLED, toolName);
         }
         if (!"safe".equals(tool.getRiskLevel()) && !Boolean.TRUE.equals(req.getConfirmed())) {
-            // confirm / danger 工具有副作用，页面必须显式确认；Agent 路径由启用开关统一闸门
+            // confirm / danger 工具有副作用，页面必须显式确认；Agent 路径由平台级启用开关统一闸门
             throw new BizException(ErrorCodeEnum.TOOL_CONFIRM_REQUIRED, tool.getToolLabel());
         }
-        Map<String, Object> args = req.getArgs();
-        WorkbenchTools tools = new WorkbenchTools(toolGate, kbSearchPort, pythonRuntime, runtimeProperties,
-                new ToolOutputCapture(), userId);
+        Map<String, Object> args = new LinkedHashMap<>();
+        if (CollUtil.isNotEmpty(req.getArgs())) {
+            args.putAll(req.getArgs());
+        }
+        long timeoutSeconds = resolveTimeout(req);
+        if (Objects.nonNull(req.getTimeoutSeconds())) {
+            args.put("timeoutSeconds", req.getTimeoutSeconds());
+        }
+        ToolRegistry registry = new ToolRegistry();
+        registry.register(new WorkbenchTools(toolGate, kbSearchPort, pythonRuntime, runtimeProperties, userId));
         long start = System.currentTimeMillis();
-        String output = switch (toolName) {
-            case "python_exec" -> {
-                Integer argTimeout = CollUtil.isEmpty(args) ? null
-                        : (args.get("timeoutSeconds") instanceof Number number ? number.intValue() : null);
-                yield tools.pythonExec(str(args, "code"),
-                        Objects.nonNull(req.getTimeoutSeconds()) ? req.getTimeoutSeconds() : argTimeout);
-            }
-            case "file_read" -> tools.fileRead(str(args, "path"));
-            case "file_write" -> tools.fileWrite(str(args, "path"), str(args, "content"));
-            case "http_get" -> tools.httpGet(str(args, "url"));
-            case "kb_search" -> tools.kbSearch(str(args, "keyword"), str(args, "kbId"));
-            default -> throw new BizException(ErrorCodeEnum.TOOL_NOT_FOUND, toolName);
-        };
-        log.info("[tool.invoke] toolName={} userId={} cost={}ms", toolName, userId, System.currentTimeMillis() - start);
-        return output;
+        try {
+            String output = registry.invoke(toolName, JSONUtil.toJsonStr(args), timeoutSeconds);
+            log.info("[tool.invoke] toolName={} userId={} cost={}ms", toolName, userId,
+                    System.currentTimeMillis() - start);
+            return output;
+        } finally {
+            registry.shutdown();
+        }
     }
 
-    private String str(Map<String, Object> args, String key) {
-        if (CollUtil.isEmpty(args)) {
-            return null;
-        }
-        Object value = args.get(key);
-        return Objects.toString(value, null);
+    private long resolveTimeout(InvokeToolREQ req) {
+        return Objects.nonNull(req.getTimeoutSeconds()) && req.getTimeoutSeconds() > 0
+                ? req.getTimeoutSeconds() : DEFAULT_INVOKE_TIMEOUT_SECONDS;
     }
 
     private ToolVO toVO(WbToolDO tool) {

@@ -2,8 +2,9 @@
 
 一个自托管的企业级个人 AI 创作工作台：多用户、多角色、多菜单权限。Agent 负责干活，工作台负责让你**看见并控制**它是怎么干的。
 
-- 后端：JDK 17 + Spring Boot 3.5.12 + MyBatis 3.0.4 + Hutool 5.8.36 + AgentScope 2.0.3 + Sa-Token 1.42.0 + ULID
-- 前端：Vue 3.4.34 + TypeScript 5.4.5 + Vite 5.2.12 + Element Plus 2.9.0 + UnoCSS 0.58.6 + Pinia 2.1.7 + ECharts 5.5.0
+- 后端：JDK 17 + Spring Boot 3.5.12 + MyBatis 3.0.4 + Hutool 5.8.46（含 hutool-ai）+ Sa-Token 1.42.0 + ULID
+- Agent：**自研内核**，模型出站只依赖 hutool-ai，OpenAI 兼容 / Anthropic / Ollama 三协议，不引任何 Agent 框架
+- 前端：Vue 3.4.34 + TypeScript 5.4.5 + Vite 5.2.12 + Element Plus 2.9.0 + UnoCSS 0.58.6 + Pinia 2.1.7 + ECharts 5.5.0 + AntV X6 + WangEditor
 - 存储：PostgreSQL 16（镜像内置 pgvector 扩展，预留）+ Manticore 25.0.0（全文检索）+ Redis 8 + MinIO + RabbitMQ
 - 运行形态：容器，内置 Python 运行时，对外端口 `24399`
 - 设计语言：紫色序列四色 `#F2F0F7 / #CBC9E2 / #9E9AC8 / #6A51A3`，极简风格，全站五态交互
@@ -20,9 +21,10 @@ LiteWorkbench 解决的是"Agent 跑起来之后我看不见它在干什么"的�
 |---|---|
 | 多角色 | 内置超级管理员 / 平台管理员 / 普通用户三类角色，支持自定义角色 |
 | 用户与权限 | 用户 / 角色 / 菜单三段式 RBAC，按钮级权限点，Sa-Token 会话 |
+| 安全登录 | 密码 RSA 加密传输、失败锁定、首登强制改密、凭据零回显 |
 | 会话工作台 | 多轮对话，流式输出，随时中断 |
 | 运行可观测 | Run / Step / Event 三层时间线，工具调用输入输出可见 |
-| 创作台 | 文档创作（Markdown / 富文本 / 代码）、版本快照与回滚、AI 续写润色摘要、全站全文检索 |
+| 创作台 | 文档创作（Markdown / 富文本 / 代码）、版本快照与回滚、AI 续写润色摘要扩写翻译、全站全文检索 |
 | 提示词库 | 内置模板 + 自定义模板，`{{变量}}` 渲染，一键应用到会话 |
 | 工作流编排 | X6 画布编排 `llm` / `python` / `knowledge` / `tool` 节点，串行执行并逐步落事件 |
 | 知识库 | 原件存 MinIO，切片分块存 Manticore，页面检索与 Agent 工具共用同一份索引 |
@@ -30,8 +32,9 @@ LiteWorkbench 解决的是"Agent 跑起来之后我看不见它在干什么"的�
 | 技能 | 存 `wb_skill` 表，两段式：摘要常驻提示词，命中触发词才展开正文，节省上下文 |
 | 文件空间 | MinIO 对象存储，按用户隔离前缀，支持在线预览与预签名下载 |
 | 日志中心 | 应用日志汇聚到 Manticore，页面支持按级别/关键字/时间检索 |
-| 健康监控 | 数据库、Redis、MinIO、RabbitMQ、Python 运行时逐项探测 |
+| 健康监控 | 数据库、Redis、Manticore、MinIO、RabbitMQ、Python 运行时逐项探测 |
 | 仪表盘 | 运行量、Token 消耗、工具调用分布的可视化统计 |
+| 组件库 | 设计规范的可视化样例，五态按钮、语义色、异步三态、图表全量可点 |
 
 ## 2. 为什么这样设计
 
@@ -56,9 +59,9 @@ LiteWorkbench 解决的是"Agent 跑起来之后我看不见它在干什么"的�
 | 运行时 | JDK | 17.0.17 | — |
 | Web | Spring Boot Web | 3.5.12 | MVC + SseEmitter |
 | 持久 | MyBatis Spring Boot Starter | 3.0.4 | SQL 映射，XML 管理 |
-| 工具 | Hutool | 5.8.36 | 字符串/集合/日期/加解密 |
-| Agent | AgentScope Core + 模型扩展 | 2.0.3 | ReActAgent、Toolkit、事件流（不引 harness 与官方 starter） |
-| 模型 | AgentScope OpenAI / Anthropic / Ollama 扩展 | 2.0.3 | OpenAI 兼容、Claude、本地 Ollama |
+| 工具 | Hutool | 5.8.46 | 字符串/集合/日期/加解密，含 `hutool-ai` 模型出站 |
+| Agent | 自研内核 | — | 推理循环、工具注册、事件归一、上下文压缩、审批闸门 |
+| 模型 | `agent/model` 三协议客户端 | — | OpenAI 兼容、Anthropic、Ollama（含 SSE 增量解析与取消） |
 | 认证 | Sa-Token | 1.42.0 | 登录、权限注解、会话管理 |
 | ID | ulid-creator | 5.1.0 | ULID 生成 |
 | 数据库 | PostgreSQL + pgvector | 16 | 业务数据；pgvector 扩展预留，本期不建向量列 |
@@ -92,7 +95,7 @@ LiteWorkbench/
 │       ├── anno/                自定义注解（@Idempotent 等）
 │       ├── aspect/              切面实现
 │       ├── mq/{producer,consumer}/
-│       ├── agent/               AgentScope 集成：工厂、工具、事件适配
+│       ├── agent/               自研 Agent 内核：模型协议、推理循环、工具、事件归一
 │       ├── runtime/             内置 Python 运行时
 │       ├── observability/       日志汇聚、健康指标
 │       └── common/              统一响应、异常、分页、ULID、登录上下文
@@ -139,12 +142,15 @@ npm run build    # 产物在 frontend/dist
 
 ### 5.4 初始账号
 
-首次启动自动建表并写入种子数据：
+首次启动自动建表并写入种子数据，内置 `admin`（超级管理员）与 `demo`（普通用户）两个账号。
 
-| 账号 | 密码 | 角色 |
-|---|---|---|
-| `admin` | `admin123` | 超级管理员（`super_admin`） |
-| `demo` | `admin123` | 普通用户（`user`） |
+**密码不在任何地方回显**：启动读取环境变量 `LITEWORKBENCH_ADMIN_PASSWORD` 作为初始密码；未设置时随机生成 16 位强密码并仅在启动日志中打印一次（WARN）。种子账号带 `pwd_reset_required` 标记，首次登录后必须立即改密才能使用其余功能。
+
+```bash
+export LITEWORKBENCH_ADMIN_PASSWORD='<your-strong-password>'
+```
+
+登录与改密请求中的密码字段为 RSA-OAEP(SHA-256) 密文，公钥由 `GET /api/v1/auth/public-key` 下发，明文密码不出浏览器。
 
 ## 6. 文档索引
 

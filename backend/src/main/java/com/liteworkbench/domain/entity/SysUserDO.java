@@ -37,6 +37,8 @@ public class SysUserDO implements Serializable {
     private String avatarUrl;
     /** 最近登录时间 */
     private LocalDateTime lastLoginAt;
+    /** 是否必须先改密 */
+    private Boolean pwdResetRequired;
     /** 状态：normal / disabled / locked */
     private String state;
     /** 创建人 */

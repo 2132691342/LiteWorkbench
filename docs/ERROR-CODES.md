@@ -53,6 +53,10 @@
 | 2003 | `FORBIDDEN` | 403 | 没有操作权限 |
 | 2004 | `TOKEN_EXPIRED` | 401 | 登录已过期 |
 | 2005 | `OLD_PASSWORD_INVALID` | 400 | 原密码不正确 |
+| 2006 | `PASSWORD_RESET_REQUIRED` | 403 | 请先修改初始密码 |
+| 2007 | `ACCOUNT_LOCKED` | 403 | 登录失败次数过多，请稍后再试 |
+| 2008 | `PASSWORD_WEAK` | 400 | 密码强度不足（至少 8 位，含字母与数字） |
+| 2009 | `PAYLOAD_DECRYPT_FAILED` | 400 | 凭据解析失败 |
 
 ## 5. 用户 2200
 
@@ -207,6 +211,8 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 信封 `code` 一律为 `String`（如 `"0"`、`"3001"`），与 HTTP 状态码的 int 区分；网络交互字段全部使用包装类型。
 
 前端映射（`frontend/src/api/index.ts`）：按 `code` 取 `locales` 中的提示文案，`401` 触发重新登录，`403` 提示无权限并停留当前页，`5xx` 允许重试一次。
+
+特殊分支：`2006`（`PASSWORD_RESET_REQUIRED`）直接跳强制改密页，不弹 toast；`2009`（`PAYLOAD_DECRYPT_FAILED`）清空密码输入框并提示重新输入，不重试。
 
 ## 21. 取舍
 

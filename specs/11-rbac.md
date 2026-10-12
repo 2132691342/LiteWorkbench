@@ -19,8 +19,11 @@
 |---|---|
 | 归属 | 用户全局唯一，`UNIQUE(username)`（`deleted = false` 范围内） |
 | 口令 | `PBKDF2-HMAC-SHA256`，十万次迭代 + 16 位随机盐，存储格式 `pbkdf2$迭代次数$盐$Base64`；校验兼容旧 `SHA-256(密码 + 盐)` 记录 |
+| 初值 | 种子账号密码取自 `liteworkbench.auth.admin-password`，未配置则随机生成并只打印一次；账号置 `pwd_reset_required = true` |
 | 状态 | `normal` / `disabled` / `locked`，停用后登录直接拒绝 |
 | 自操作 | 不允许停用、删除自己，不允许修改自己的角色 |
+
+凭据传输与首登强制的完整规则见 [spec 15](15-auth-security.md)。
 
 ### 角色
 
@@ -37,6 +40,8 @@
 
 - 树形三级：`dir` 目录 / `menu` 路由页 / `button` 权限点。
 - `perm_code` 格式 `域:资源:动作`，例：`system:user:create`、`wb:session:delete`。
+- `menu_name` 存 i18n key（`menu.userManage` / `menu.groupSystem` / `menu.userManageCreate`），禁止"同段既是叶子又是分组"，规则见 AGENTS.md §2.5；前端经 `menuLabel()` 渲染，翻译缺失也不裸显 key。
+- 种子 ID 为 `MENU_ + 26 位零填充序号`；启动时按 ID upsert 回写全部字段，并软删 `route_path` 或 `perm_code` 命中种子但 ID 不在种子内的历史残留行。
 - 前端菜单由后端下发，按钮可见性由 `perms` 集合控制。
 
 ### 会话（Sa-Token）

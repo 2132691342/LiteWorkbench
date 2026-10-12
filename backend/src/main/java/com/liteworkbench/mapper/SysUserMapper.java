@@ -18,25 +18,27 @@ public interface SysUserMapper {
     /** 新增用户 */
     @Insert("""
             INSERT INTO sys_user (user_id, username, password_hash, password_salt, nickname,
-                                  email, avatar_url, state, created_by, remark)
+                                  email, avatar_url, state, pwd_reset_required, created_by, remark)
             VALUES (#{userId}, #{username}, #{passwordHash}, #{passwordSalt}, #{nickname},
-                    #{email}, #{avatarUrl}, #{state}, #{createdBy}, #{remark})
+                    #{email}, #{avatarUrl}, #{state}, #{pwdResetRequired}, #{createdBy}, #{remark})
             """)
     int insert(SysUserDO user);
 
     /** 按主键更新资料与状态 */
     int update(SysUserDO user);
 
-    /** 更新密码摘要与盐 */
+    /** 更新密码摘要与盐，并显式落是否需要强制改密的标记 */
     @Update("""
             UPDATE sys_user
             SET password_hash = #{passwordHash}, password_salt = #{passwordSalt},
+                pwd_reset_required = #{pwdResetRequired},
                 updated_by = #{updatedBy}, updated_at = now()
             WHERE user_id = #{userId} AND deleted = false
             """)
     int updatePassword(@Param("userId") String userId,
                        @Param("passwordHash") String passwordHash,
                        @Param("passwordSalt") String passwordSalt,
+                       @Param("pwdResetRequired") boolean pwdResetRequired,
                        @Param("updatedBy") String updatedBy);
 
     /** 记录最近登录时间 */
@@ -67,7 +69,8 @@ public interface SysUserMapper {
     /** 按主键查询 */
     @Select("""
             SELECT user_id, username, password_hash, password_salt, nickname, email, avatar_url,
-                   last_login_at, state, created_by, created_at, updated_by, updated_at, deleted, remark
+                   last_login_at, pwd_reset_required, state, created_by, created_at, updated_by,
+                   updated_at, deleted, remark
             FROM sys_user
             WHERE user_id = #{userId} AND deleted = false
             """)
@@ -76,7 +79,8 @@ public interface SysUserMapper {
     /** 按登录名查询 */
     @Select("""
             SELECT user_id, username, password_hash, password_salt, nickname, email, avatar_url,
-                   last_login_at, state, created_by, created_at, updated_by, updated_at, deleted, remark
+                   last_login_at, pwd_reset_required, state, created_by, created_at, updated_by,
+                   updated_at, deleted, remark
             FROM sys_user
             WHERE username = #{username} AND deleted = false
             """)

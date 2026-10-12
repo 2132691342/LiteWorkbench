@@ -19,6 +19,8 @@ public interface RedisKeyConst {
     String IDEM = "lw:idem:{}:{}:{}";
     /** 限流计数，前缀 / 主体 / 窗口号 */
     String RATE_LIMIT = "lw:rl:{}:{}:{}";
+    /** 登录失败连续计数 */
+    String AUTH_FAIL = "lw:auth:fail:{}";
 
     /** 用户权限标识缓存键 */
     static String cachePerm(String userId) {

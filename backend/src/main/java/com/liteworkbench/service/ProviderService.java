@@ -2,6 +2,9 @@ package com.liteworkbench.service;
 
 import cn.hutool.core.util.StrUtil;
 import com.liteworkbench.agent.ModelFactory;
+import com.liteworkbench.agent.model.ModelClient;
+import com.liteworkbench.agent.model.ModelEventListener;
+import com.liteworkbench.agent.model.ModelTypes;
 import com.liteworkbench.common.BizException;
 import com.liteworkbench.common.ErrorCodeEnum;
 import com.liteworkbench.common.IdGenerator;
@@ -28,6 +31,8 @@ public class ProviderService {
 
     /** 连通性测试超时 */
     private static final Duration TEST_TIMEOUT = Duration.ofSeconds(15L);
+    /** 连通性测试最大输出 token，够触发一次完整调用即可 */
+    private static final int TEST_MAX_TOKENS = 16;
 
     private final WbProviderMapper providerMapper;
     private final ModelFactory modelFactory;
@@ -88,17 +93,19 @@ public class ProviderService {
         modelFactory.evictProvider(provider.getProviderCode());
     }
 
-    /** 连通性测试：向构建好的模型发一条极短消息，取首帧即返回 */
+    /** 连通性测试：向构建好的模型发一条极短消息，拿到任意响应即视为连通 */
     public ProviderVO test(String providerId) {
         WbProviderDO provider = require(providerId);
         long start = System.currentTimeMillis();
         try {
-            io.agentscope.core.model.Model model = modelFactory.get(provider.getProviderCode(),
+            ModelClient client = modelFactory.client(provider.getProviderCode(),
                     StrUtil.blankToDefault(provider.getDefaultModel(), "gpt-4o-mini"));
-            model.stream(List.of(new io.agentscope.core.message.UserMessage("ping")),
-                    List.of(), null)
-                    .take(1)
-                    .blockLast(TEST_TIMEOUT);
+            ModelTypes.Request request = new ModelTypes.Request();
+            request.setMessages(List.of(ModelTypes.Msg.user("ping")));
+            request.setMaxTokens(TEST_MAX_TOKENS);
+            request.setTimeoutSeconds((int) TEST_TIMEOUT.getSeconds());
+            client.stream(request, new ModelEventListener() {
+            }, () -> false);
         } catch (BizException e) {
             throw e;
         } catch (Exception e) {

@@ -45,9 +45,13 @@ spring:
     password: ${LITEWORKBENCH_MQ_PASSWORD:admin_public}
     listener:
       simple:
+        # multiplier 必须 > 1.0，否则 ExponentialBackOffPolicy 在启动期打告警且退避等同固定间隔
         retry:
           enabled: true
           max-attempts: 3
+          initial-interval: 1s
+          max-interval: 10s
+          multiplier: 2
 
 mybatis:
   mapper-locations: classpath:mapper/*.xml
@@ -84,16 +88,28 @@ liteworkbench:
   # 日志目录，容器内用环境变量覆盖
   log-dir: ${LITEWORKBENCH_LOG_DIR:logs}
   auth:
-    # 种子账号初始密码，首次登录后应修改
-    default-password: admin123
+    # 种子账号初始密码：生产用 LITEWORKBENCH_ADMIN_PASSWORD 注入，缺失则随机生成并仅打印一次
+    admin-password: ${LITEWORKBENCH_ADMIN_PASSWORD:}
   agent:
     provider: openai
     model:
       default-name: qwen-plus
       temperature: 0.3
       stream: true
+      # 上下文窗口与输出预留，超出即压缩历史
+      context-window: 32000
+      reserve-tokens: 4096
+      stream-timeout-seconds: 180
+      sync-timeout-seconds: 120
+      connect-timeout-seconds: 30
     loop:
       max-iters: 20
+      # 同一工具同一参数重复调用护栏
+      repeat-guard: 3
+      tool-timeout-seconds: 60
+    history:
+      # 组装上下文时读取的历史消息条数上限
+      limit: 40
     skill:
       enabled: true
   runtime:

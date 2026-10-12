@@ -4,11 +4,14 @@ import { reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { authApi } from '@/api'
 import LwButton from '@/components/ui/LwButton.vue'
+import { useUserStore } from '@/stores/user'
+import { encryptSecret, resetPublicKey } from '@/utils/crypto'
 
 /** 修改密码弹窗：两次新密码校验通过后才提交 */
 const visible = defineModel<boolean>({ required: true })
 
 const { t } = useI18n()
+const userStore = useUserStore()
 const form = reactive({ oldPassword: '', newPassword: '', confirmPassword: '' })
 const loading = ref(false)
 const errorMessage = ref('')
@@ -31,9 +34,19 @@ async function submit(): Promise<void> {
   }
   loading.value = true
   try {
-    await authApi.changePassword({ oldPassword: form.oldPassword, newPassword: form.newPassword })
-    ElMessage.success(t('common.saveSuccess'))
+    // 两段密码分别加密；改密成功后服务端作废会话，需重新登录
+    const oldSecret = await encryptSecret(form.oldPassword)
+    const newSecret = await encryptSecret(form.newPassword)
+    await authApi.changePassword({
+      oldPassword: oldSecret.cipher,
+      newPassword: newSecret.cipher,
+      keyId: newSecret.keyId,
+    })
+    resetPublicKey()
+    ElMessage.success(t('settings.passwordChanged'))
     visible.value = false
+    userStore.reset()
+    window.location.href = '/login'
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : t('common.failed')
   } finally {

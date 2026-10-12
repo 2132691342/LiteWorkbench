@@ -94,8 +94,11 @@ public class MonitorService {
             return "pong";
         }));
         components.add(probe("manticore", 3, () -> {
-            manticoreUtilsApi.sql("SHOW TABLES", false);
-            return "tables listed";
+            // /sql 非 raw 模式会把语句编译成搜索查询：必须带 FROM 索引。
+            // SELECT 1 与 SHOW TABLES 都会被回 501 `only SELECT queries are supported`，
+            // 探测语句因此必须查真实索引，顺带证明索引还在。
+            manticoreUtilsApi.sql("SELECT log_id FROM lw_log LIMIT 1", false);
+            return "log index ok";
         }));
         components.add(probe("minio", 5, () -> minioClient.bucketExists(BucketExistsArgs.builder()
                 .bucket("liteworkbench").build()) ? "bucket ready" : "bucket missing"));

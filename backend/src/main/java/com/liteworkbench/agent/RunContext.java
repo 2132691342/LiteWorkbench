@@ -1,6 +1,6 @@
 package com.liteworkbench.agent;
 
-import io.agentscope.core.message.Msg;
+import com.liteworkbench.agent.model.ModelTypes.Msg;
 
 import java.util.List;
 

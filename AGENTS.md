@@ -29,7 +29,7 @@ anno ──► 无依赖；aspect ──► common + domain/constant
 | `domain` | 实体、传输对象、枚举常量 | 依赖任何上层 |
 | `config` | 配置类与属性绑定 | 写业务逻辑 |
 | `anno` / `aspect` | 自定义注解与切面（幂等、限流、审计） | 持有业务状态 |
-| `agent` | AgentScope 装配与事件适配；只读取平台级配置 | 引用 `api` 层、直接访问 `mapper`、反向依赖 `service` 实现 |
+| `agent` | 自研 Agent 内核（推理循环、工具、模型协议适配、事件归一）；只读取平台级配置 | 引用 `api` 层、直接访问 `mapper`、反向依赖 `service` 实现 |
 | `runtime` | 内置 Python 运行时的探测与执行 | 依赖业务包 |
 
 **规则**：`service` 与 `api` 不得就地声明入参出参结构体，一律引用 `domain.dto.XxxREQ` / `domain.vo.XxxRESP`。
@@ -135,6 +135,20 @@ public class RunService {
 
 需要 JDK 能力或 Hutool 已有能力时**直接调用**，不为其写单行私有包装方法；只有真正被多处复用的转换才抽方法（如 Manticore 文档字段批量转码）。
 
+### 2.5 菜单与 i18n key
+
+`sys_menu.menu_name` 存 **i18n key**，不存中文，前端经 `menuLabel()` 渲染。
+
+**key 命名禁止"同段既能当叶子又能当分组"**：`menu.system`（叶子）与 `menu.system.user`（另一叶子）在 vue-i18n 的点路径解析下会互相遮蔽，导致菜单退化成裸 key 或英文。
+
+| 形态 | 写法 | 反例 |
+|---|---|---|
+| 路由菜单 | `menu.<camelCase>`，如 `menu.userManage` | `menu.system.user` |
+| 目录 | `menu.groupSystem` | `menu.system` 同时被当叶子用 |
+| 权限点 | `menu.<路由key><Action>`，如 `menu.userManageCreate` | `menu.system.user.create` |
+
+**菜单种子对账**：`DataInitializer` 对每个种子按固定 `menu_id` 做 **upsert**（已存在则回写 `menu_name` / `route_path` / `component` / `perm_code` / `icon` / `sort_no`），并在同一次运行里软删"`route_path` 或 `perm_code` 与种子冲突但 ID 不在种子内"的历史残留行，避免升级后出现重复菜单。
+
 ## 3. 角色与权限
 
 不做多租户。多用户、多角色、多菜单权限，以**角色**为单位授权，数据归属以**用户**为单位隔离。
@@ -163,6 +177,13 @@ public R<String> create(@RequestBody @Valid UserREQ req) { ... }
 ### 3.3 数据归属校验
 
 访问单个资源时，先按 `(资源 ID, user_id)` 查；查不到即 `RESOURCE_NOT_FOUND`，不泄露他人资源是否存在。
+
+### 3.4 登录安全
+
+- **密码绝不明文过网**：登录与改密请求的密码字段一律为 RSA 密文（`RSA/ECB/PKCS1Padding`，与浏览器端 JSEncrypt 对齐），公钥由 `GET /api/v1/auth/public-key` 下发（SPKI 的 Base64，进程内存持有，按 6 小时或 1000 次调用轮换）。解密失败即 `CREDENTIAL_INVALID`，不区分"密文坏"与"密码错"。
+- **凭据绝不回显**：页面、README、接口响应一律不得出现初始密码或明文密码。种子账号密码来自环境变量 `LITEWORKBENCH_ADMIN_PASSWORD`；来自配置时**不打印**，缺失时随机生成并仅在启动日志 WARN 打印一次，同时置 `sys_user.pwd_reset_required = true`。
+- **首登强制改密**：`pwd_reset_required` 为 true 的用户，登录后只允许调用 `/auth/password` 与 `/auth/current`，其余业务接口返回 `PASSWORD_RESET_REQUIRED`。
+- **失败计数**：同一用户名连续失败 5 次锁定 10 分钟（Redis 计数），登录接口另有按 IP 的 `@RateLimit`。
 
 ## 4. API 约定
 
@@ -315,9 +336,11 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 | 请求 | 唯一出口 `src/api/index.ts`，字段名与后端 JSON 严格一致 |
 | 类型 | `src/types/api.ts` 与后端 VO 对齐，禁止 `any` 泛滥 |
 | 样式 | UnoCSS 原子类 + `var(--lw-*)` 令牌，禁止硬编码色值 |
-| 按钮 | 一律使用 `components/ui/LwButton.vue`，实现五态（见 DESIGN.md） |
-| 国际化 | 文案一律走 `vue-i18n`，组件内不写中文硬编码 |
+| 按钮 | 一律使用 `components/ui/LwButton.vue`，实现五态（见 DESIGN.md）；Element Plus 自带按钮由 `styles/index.css` 全局覆盖为同等五态 |
+| 国际化 | 文案一律走 `vue-i18n`，组件内不写中文硬编码；菜单标签必须经 `utils/menu.ts` 的 `menuLabel()` 渲染，翻译缺失时降级为 key 末段的人类可读形式，绝不裸显 i18n key |
 | 状态 | 每个异步操作必须有 loading / error / empty 三态 |
+| 反馈 | 任何超过 300ms 的等待都要有骨架或 loading；任何状态变化都要有过渡动画或颜色变化 |
+| 密码 | 密码字段一律 `type="password"` 且提交前用 `utils/crypto.ts` 加密，禁止明文进 store 持久化 |
 | 路由 | 动态菜单由后端 `sys_menu` 下发，路由守卫校验登录态与权限标识 |
 
 ## 13. 注释规范
@@ -337,7 +360,7 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 
 | 文件 | 覆盖 |
 |---|---|
-| `service/RunEventPipelineTest` | 事件长链路：SDK 事件归一 → 批内合帧，增量合并、类型切换保序、工具输出捕获、超长裁剪 |
+| `service/RunEventPipelineTest` | 事件长链路：内核事件归一 → 批内合帧，增量合并、类型切换保序、工具输出捕获、超长裁剪 |
 | `service/FlowGraphTest` | 画布校验与拓扑执行序：合法链、有环、孤立节点、非法节点与悬空连线 |
 | `api/SseFrameContractTest` | SSE 帧契约：`id` 为 seq、事件名 `run.event`、心跳只发注释行 |
 | `config/PermissionContractTest` | 控制器注解与 `PermConst` 的权限点全部存在于菜单种子 |
@@ -346,21 +369,30 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 
 ## 15. 第三方集成事实
 
-### 15.1 AgentScope
+### 15.1 Agent 内核（自研，基于 hutool-ai）
+
+不使用任何 Agent 框架，Agent 内核写在 `agent` 包内，唯一的模型出站依赖是 hutool-ai。下表是 hutool-ai 的既定事实，内核按此补齐：
 
 | 事实 | 结论 |
 |---|---|
-| groupId | `io.agentscope`（不是 `agentscope`） |
-| 只引 `agentscope-core` + 三个模型扩展 | `agentscope-harness` 会带入 kubernetes-client 等重型传递依赖，本项目不用 |
-| Spring Boot starter | 其编译基线是 Spring Boot 4.x，与本项目 3.5.12 不匹配，**禁止引入**，在 `agent` 包自建装配（`AgentScopeAgentRuntime` / `ModelFactory`） |
-| 流式入口 | `ReActAgent.streamEvents(...)` 返回 `Flux<AgentEvent>`，事件类在 `io.agentscope.core.event.*` |
-| 工具定义 | `@Tool` + `@ToolParam` 标注，`Toolkit.registerTool(Object)` 注册 |
-| 废弃 API | `Memory`、`UserAgent`、旧 `io.agentscope.core.agent.Event` 均标注 `forRemoval`，禁用；上下文由消息表 `lw_msg` 显式组装，不依赖 SDK 状态存储 |
-| 协议转换扩展点 | `io.agentscope.core.formatter.Formatter`，用于 OpenAI / Anthropic / Ollama 三协议归一 |
+| 坐标与归属 | `cn.hutool:hutool-ai`，5.8.38 起随 `hutool-all` 引入，5.8.46 已含 openai / deepseek / doubao / grok / hutool / ollama / gemini 七家 SPI |
+| 出站实现 | 非流式走 `cn.hutool.http.HttpRequest`，流式走裸 `java.net.HttpURLConnection` 逐行读，**两条路径实现不一致** |
+| 只有裸字符串 | `XXServiceImpl.chat` 直接返回 `response.body()`，无 usage / finish_reason / tool_calls 的 POJO，需自行 `JSONUtil` 建模 |
+| 消息模型 | `cn.hutool.ai.core.Message` 只有 `role` + `Object content`，**无 `tool_calls` / `tool_call_id` / `name`** |
+| **不支持 function calling** | 代码从不构造 `tools` / `tool_choice`，工具调用必须自研请求体与消息模型 |
+| 流式回调 | `chat(msgs, Consumer<String>)` 把**每一行原样**回调（不剥 `data:`、不合 delta、不识别 `[DONE]`），且 `ThreadUtil.newThread(...)` 起线程后立即返回，**无句柄、不可取消** |
+| 配置 | `AIConfigBuilder` 链式构建，`apiUrl` / `apiKey` / `model` / `timeout` / `readTimeout` / 代理，`temperature` 等只能经 `putAdditionalConfig` 走动态参数 |
+| 统一门面缺失 | `AIService` 只有 `chat`，embedding / vision / tts 散落在各 provider 子接口 |
+
+内核以此为准：
+
+- **配置层复用 hutool-ai**：`agent/model/ProviderAIConfig` 直接实现 `cn.hutool.ai.core.AIConfig`，供应方的 `apiUrl` / `apiKey` / `model` / 连接与读超时 / 动态参数都由这一份配置承载。
+- **同步文本路径优先用 hutool-ai**：`ModelCaller` 在 hutool-ai 覆盖的供应方码（hutool / deepseek / openai / doubao / grok / ollama / gemini）上先调 `AIUtil.chat(config, messages)`，失败或空文本再回退自研客户端。
+- **流式与工具调用自研**：hutool-ai 的流式是"逐行原样回调 + 后台线程即弃"，既无 `data:` 解析也不可取消，且完全不支持 `tools` / `tool_calls`；因此 `agent/model` 自建 `OpenAiCompatClient` / `AnthropicClient` / `OllamaClient`，共用 `HttpModelSupport` 做建连、逐行读流与取消。
 
 ### 15.2 Hutool
 
-只引 `hutool-all`。`IdUtil` 无 ULID；`CollectionUtil` 是 `CollUtil` 的别名，二者等价，统一用 `CollUtil`。
+只引 `hutool-all`（版本 5.8.46，已含 `hutool-ai`）。`IdUtil` 无 ULID；`CollectionUtil` 是 `CollUtil` 的别名，二者等价，统一用 `CollUtil`。
 
 ### 15.3 Sa-Token
 
@@ -377,7 +409,8 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 | 文本列声明 | `text stored` 只存不索引，**必须写 `text indexed stored`** 才有全文检索 |
 | 中文分词 | `morphology='icu_chinese'`（ICU 词典分词，内置），中英混排按词切分；不引语言包、不用 ngram（该版本 ngram 索引侧不工作） |
 | SDK 端点映射 | `IndexApi` → `/insert` `/replace` `/update` `/delete` `/bulk`；`SearchApi` → `/search`；`UtilsApi.sql` → `/sql` |
-| `/sql` 限制 | 该版本 HTTP `/sql` **只支持 SELECT**，DDL 与 DML 走 JSON 端点或 `/cli` |
+| `/sql` 限制 | 非 raw 模式下 `/sql` 把语句**编译成搜索查询**，**必须带 `FROM <索引>`**：探测写 `SELECT 1`、运维写 `SHOW TABLES` 都会被回 **501 `only SELECT queries are supported`**。要跑任意语句必须 `raw_response=true`（等价 `mode=raw`）；SDK 的 `UtilsApi.sql(q, rawResponse)` 正把这个参数放在 query 上，`false` 即走编译路径。健康探测因此必须查真实索引（如 `SELECT log_id FROM lw_log LIMIT 1`） |
+| `/cli` 心跳 | `/cli` 只要 HTTP 200 就回 `Query OK`，不能作为可用性判据；探测一律用 `/search` 或带 `FROM` 的 `/sql` |
 | DDL | 建表（`CREATE TABLE IF NOT EXISTS`）走 HTTP `/cli`，**必须 text/plain 裸 body**：表单编码把单引号编成 `%27`、换行编成 `%0A`，该端点的表单解码不接受这两种编码，语句静默失败且仍回显 `Query OK` |
 | `/cli` 无错误回显 | 失败语句也回 `Query OK`，建表后必须用属性过滤 SELECT（如 `WHERE level='__probe__'`）校验表与列类型 |
 | `/insert` 隐式建表 | 表不存在时 `/insert` 按文档字段自动建表，字段全部建成 text/int 而非属性列；DDL 静默失败会被这个行为掩盖，靠上面的 SELECT 校验兜底 |

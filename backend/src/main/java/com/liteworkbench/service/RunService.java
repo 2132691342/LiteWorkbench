@@ -7,12 +7,16 @@ import cn.hutool.json.JSONUtil;
 import com.liteworkbench.agent.AgentRuntime;
 import com.liteworkbench.agent.ModelFactory;
 import com.liteworkbench.agent.RunContext;
+import com.liteworkbench.agent.RunHandle;
+import com.liteworkbench.agent.model.ModelTypes.Msg;
+import com.liteworkbench.agent.model.ModelTypes.Role;
 import com.liteworkbench.common.BizException;
 import com.liteworkbench.common.ErrorCodeEnum;
 import com.liteworkbench.common.IdGenerator;
 import com.liteworkbench.common.LoginContext;
 import com.liteworkbench.common.PageResult;
 import com.liteworkbench.common.TimeUtil;
+import com.liteworkbench.config.AgentProperties;
 import com.liteworkbench.domain.constant.EventTypeEnum;
 import com.liteworkbench.domain.constant.IdPrefixConst;
 import com.liteworkbench.domain.constant.MessageRoleEnum;
@@ -27,20 +31,16 @@ import com.liteworkbench.domain.dto.RunEventDTO;
 import com.liteworkbench.domain.dto.SessionPageREQ;
 import com.liteworkbench.domain.entity.WbEventDO;
 import com.liteworkbench.domain.entity.WbRunDO;
-import com.liteworkbench.domain.vo.RunVO;
 import com.liteworkbench.mapper.MessageIndexMapper;
 import com.liteworkbench.mapper.WbEventMapper;
 import com.liteworkbench.mapper.WbRunMapper;
 import com.liteworkbench.mapper.WbSessionMapper;
-import io.agentscope.core.message.AssistantMessage;
-import io.agentscope.core.message.Msg;
-import io.agentscope.core.message.UserMessage;
+import com.liteworkbench.domain.vo.RunVO;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
-import reactor.core.Disposable;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -56,19 +56,20 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** 运行主链路：SSE 流式对话、事件攒批落库、中断与回放 */
+/** 运行主链路：SSE 流式对话、事件攒批落库、取消与回放 */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class RunService {
 
-    /** 历史消息条数上限 */
-    private static final int HISTORY_LIMIT = 20;
     /** 回放单页事件上限 */
     private static final long REPLAY_PAGE_SIZE = 500L;
+    /** 攒批冲刷间隔，与 RunConst 的批内时间阈值一致 */
+    private static final long FLUSH_INTERVAL_MS = RunConst.EVENT_BATCH_INTERVAL_MS;
 
     private final AgentRuntime agentRuntime;
     private final ModelFactory modelFactory;
+    private final AgentProperties agentProperties;
     private final SessionService sessionService;
     private final SkillService skillService;
     private final WbRunMapper runMapper;
@@ -82,8 +83,13 @@ public class RunService {
     /** SSE 心跳调度器 */
     private final ScheduledExecutorService heartbeatExecutor =
             Executors.newSingleThreadScheduledExecutor(ThreadUtil.newNamedThreadFactory("lw-sse-heartbeat", true));
+    /** 事件攒批冲刷调度器 */
+    private final ScheduledExecutorService flushExecutor =
+            Executors.newSingleThreadScheduledExecutor(ThreadUtil.newNamedThreadFactory("lw-sse-flush", true));
+    /** 冲刷任务只登记一次 */
+    private final AtomicBoolean flushScheduled = new AtomicBoolean(false);
 
-    /** 流式对话：锁会话 → 落运行与用户消息 → 订阅事件流（攒批落库 + 推送）→ 终态收尾 */
+    /** 流式对话：锁会话 → 落运行与用户消息 → 启动内核（攒批落库 + 推送）→ 终态收尾 */
     public String chatStream(ChatStreamREQ req, RunSink sink) {
         String userId = LoginContext.userId();
         var session = sessionService.getOwned(req.getSessionId(), userId);
@@ -116,7 +122,7 @@ public class RunService {
 
             ActiveRun run = new ActiveRun(runId, userId, session.getSessionId(), sink);
             active.put(runId, run);
-            subscribe(run, context);
+            dispatch(run, context);
             log.info("[run.start] userId={} sessionId={} runId={} model={}",
                     userId, session.getSessionId(), runId, modelName);
             return runId;
@@ -151,15 +157,17 @@ public class RunService {
                 .stream().map(this::toEventDTO).toList();
     }
 
-    /** 中断运行：dispose 订阅，取消信号统一走 settleAborted；无活动实例的孤儿运行直接落终态 */
+    /** 中断运行：协作式取消，无活动实例的孤儿运行直接落终态 */
     public void abort(String runId) {
         WbRunDO run = getOwned(runId);
         if (RunStatusEnum.isTerminal(run.getState())) {
             throw new BizException(ErrorCodeEnum.RUN_NOT_ABORTABLE, run.getState());
         }
-        ActiveRun activeRun = active.remove(runId);
+        ActiveRun activeRun = active.get(runId);
         if (Objects.nonNull(activeRun)) {
-            activeRun.disposable.dispose();
+            activeRun.cancel();
+            settleAborted(activeRun);
+            log.info("[run.abort] runId={} 已下发取消", runId);
             return;
         }
         // 无活动实例（如进程重启后的孤儿运行）：直接落终态
@@ -168,18 +176,22 @@ public class RunService {
         log.info("[run.abort] runId={} 孤儿运行直接置终态", runId);
     }
 
-    /** 订阅事件流：windowTimeout 攒批（100 条或 200ms），先落库后推送 */
-    private void subscribe(ActiveRun run, RunContext context) {
-        Disposable disposable = agentRuntime.stream(context)
-                .windowTimeout(RunConst.EVENT_BATCH_SIZE, Duration.ofMillis(RunConst.EVENT_BATCH_INTERVAL_MS))
-                .concatMap(window -> window.collectList())
-                .doOnCancel(() -> settleAborted(run))
-                .subscribe(
-                        batch -> deliver(run, batch),
-                        error -> settleError(run, error),
-                        () -> settleSuccess(run));
-        run.disposable = disposable;
+    /** 启动内核：事件入批缓冲，终态由句柄完成通知收尾 */
+    private void dispatch(ActiveRun run, RunContext context) {
+        run.handle = agentRuntime.start(context, run::offer);
+        run.handle.completion().whenComplete((ignored, error) -> {
+            if (Objects.nonNull(error)) {
+                settleError(run, error);
+            } else {
+                settleSuccess(run);
+            }
+        });
         scheduleHeartbeat(run);
+        // 冲刷任务全进程一个，与运行数量无关
+        if (flushScheduled.compareAndSet(false, true)) {
+            flushExecutor.scheduleWithFixedDelay(this::flushAll, FLUSH_INTERVAL_MS,
+                    FLUSH_INTERVAL_MS, TimeUnit.MILLISECONDS);
+        }
     }
 
     /** 通道关闭回调：由 api 层在 SSE 完成 / 超时 / 出错时调用，统一清理运行占用 */
@@ -188,23 +200,24 @@ public class RunService {
         if (Objects.isNull(run)) {
             return;
         }
-        if (run.settled.compareAndSet(false, true)) {
-            if (Objects.nonNull(run.disposable)) {
-                run.disposable.dispose();
-            }
-        }
+        run.cancel();
         cleanup(run);
     }
 
-    /** 释放运行占用的资源：活动表、心跳与会话锁 */
-    private void cleanup(ActiveRun run) {
-        active.remove(run.runId);
-        cancelHeartbeat(run);
-        releaseLock(run.sessionId);
+    /** 冲刷所有活动运行的批缓冲 */
+    private void flushAll() {
+        for (ActiveRun run : active.values()) {
+            try {
+                flush(run);
+            } catch (Exception e) {
+                log.error("[run.event.flush] runId={} 冲刷失败 {}", run.runId, e.getMessage());
+            }
+        }
     }
 
-    /** 单批事件：先持久化再推送，落库失败不中断输出；推送侧对批内连续增量合帧 */
-    private void deliver(ActiveRun run, List<RunEventDTO> batch) {
+    /** 冲刷单个运行：先落库再推送，落库失败不中断输出 */
+    private void flush(ActiveRun run) {
+        List<RunEventDTO> batch = run.drain();
         if (batch.isEmpty()) {
             return;
         }
@@ -255,7 +268,7 @@ public class RunService {
                 next.blockType(), merged, payload, next.occurredAt());
     }
 
-    /** 推送 SSE 帧；客户端断开时中断运行 */
+    /** 推送 SSE 帧；客户端断开时取消运行 */
     private void push(ActiveRun run, RunEventDTO event) {
         if (run.settled.get()) {
             return;
@@ -263,10 +276,8 @@ public class RunService {
         try {
             run.sink.send(event.seq(), event.eventType(), JSONUtil.toJsonStr(event));
         } catch (RuntimeException e) {
-            log.warn("[run.sse] runId={} 推送失败，中断运行 {}", run.runId, e.getMessage());
-            if (Objects.nonNull(run.disposable)) {
-                run.disposable.dispose();
-            }
+            log.warn("[run.sse] runId={} 推送失败，取消运行 {}", run.runId, e.getMessage());
+            run.cancel();
         }
     }
 
@@ -275,6 +286,7 @@ public class RunService {
         if (!run.settled.compareAndSet(false, true)) {
             return;
         }
+        flush(run);
         String stopReason = run.exceeded.get()
                 ? StopReasonEnum.MAX_ITERS.getCode() : StopReasonEnum.COMPLETED.getCode();
         WbRunDO dbRun = runMapper.selectById(run.runId);
@@ -287,7 +299,7 @@ public class RunService {
                 "runId", run.runId,
                 "status", RunStatusEnum.SUCCESS.getCode(),
                 "stopReason", stopReason,
-                "usage", run.usage));
+                "usage", Map.of("inputTokens", run.usage[0], "outputTokens", run.usage[1])));
         completeSink(run);
         cleanup(run);
         log.info("[run.end] runId={} status={} cost={}ms", run.runId, RunStatusEnum.SUCCESS.getCode(),
@@ -300,6 +312,7 @@ public class RunService {
             return;
         }
         log.error("[run.failed] runId={} error={}", run.runId, error.getMessage(), error);
+        flush(run);
         WbRunDO dbRun = runMapper.selectById(run.runId);
         if (Objects.nonNull(dbRun)) {
             settleTerminal(dbRun, RunStatusEnum.FAILED.getCode(), StopReasonEnum.ERROR.getCode(),
@@ -313,12 +326,13 @@ public class RunService {
         cleanup(run);
     }
 
-    /** 中断收尾：取消信号或 abort 触发 */
+    /** 中断收尾：取消请求或推送失败触发 */
     private void settleAborted(ActiveRun run) {
         if (!run.settled.compareAndSet(false, true)) {
             return;
         }
         log.info("[run.aborted] runId={}", run.runId);
+        flush(run);
         WbRunDO dbRun = runMapper.selectById(run.runId);
         if (Objects.nonNull(dbRun)) {
             settleTerminal(dbRun, RunStatusEnum.ABORTED.getCode(), StopReasonEnum.ABORTED.getCode(),
@@ -329,7 +343,7 @@ public class RunService {
                 "runId", run.runId,
                 "status", RunStatusEnum.ABORTED.getCode(),
                 "stopReason", StopReasonEnum.ABORTED.getCode(),
-                "usage", run.usage));
+                "usage", Map.of("inputTokens", run.usage[0], "outputTokens", run.usage[1])));
         completeSink(run);
         cleanup(run);
     }
@@ -402,18 +416,19 @@ public class RunService {
         messageIndexMapper.add(message);
     }
 
-    /** 近 N 条历史消息转 SDK 消息（时间正序），排除本轮运行已落的消息，避免本轮输入重复注入 */
+    /** 近 N 条历史消息转内核消息（时间正序），排除本轮运行已落的消息，避免本轮输入重复注入 */
     private List<Msg> loadHistory(String sessionId, String runId) {
-        List<MessageDocDTO> recent = messageIndexMapper.listBySession(sessionId, HISTORY_LIMIT, runId);
+        List<MessageDocDTO> recent = messageIndexMapper.listBySession(sessionId,
+                agentProperties.getHistory().getLimit(), runId);
         if (recent.isEmpty()) {
             return Collections.emptyList();
         }
-        List<Msg> messages = new ArrayList<>();
+        List<Msg> messages = new ArrayList<>(recent.size());
         recent.forEach(message -> {
             if (MessageRoleEnum.USER.getCode().equals(message.role())) {
-                messages.add(new UserMessage(StrUtil.nullToEmpty(message.content())));
+                messages.add(Msg.user(StrUtil.nullToEmpty(message.content())));
             } else if (MessageRoleEnum.ASSISTANT.getCode().equals(message.role())) {
-                messages.add(new AssistantMessage(StrUtil.nullToEmpty(message.content())));
+                messages.add(Msg.assistant(StrUtil.nullToEmpty(message.content()), new ArrayList<>()));
             }
         });
         return messages;
@@ -429,9 +444,7 @@ public class RunService {
                 run.sink.ping();
             } catch (Exception e) {
                 cancelHeartbeat(run);
-                if (Objects.nonNull(run.disposable)) {
-                    run.disposable.dispose();
-                }
+                run.cancel();
             }
         }, RunConst.SSE_HEARTBEAT_MS, RunConst.SSE_HEARTBEAT_MS, TimeUnit.MILLISECONDS);
     }
@@ -448,6 +461,14 @@ public class RunService {
         } catch (Exception e) {
             log.warn("[run.lock] 释放失败 sessionId={} {}", sessionId, e.getMessage());
         }
+    }
+
+    /** 释放运行占用的资源：待冲刷事件、活动表、心跳与会话锁 */
+    private void cleanup(ActiveRun run) {
+        flush(run);
+        active.remove(run.runId);
+        cancelHeartbeat(run);
+        releaseLock(run.sessionId);
     }
 
     /** 归属校验：按 (运行, 用户) 查，查不到即 404，不泄露他人资源是否存在 */
@@ -502,13 +523,16 @@ public class RunService {
         return vo;
     }
 
+    /** 关闭调度器 */
     @PreDestroy
     public void shutdown() {
         heartbeatExecutor.shutdownNow();
+        flushExecutor.shutdownNow();
     }
 
-    /** 单次活动运行：SSE 通道 + 订阅 + 观测累积 */
+    /** 单次活动运行：SSE 通道 + 句柄 + 批缓冲 + 观测累积 */
     private static final class ActiveRun {
+
         final String runId;
         final String userId;
         final String sessionId;
@@ -520,14 +544,39 @@ public class RunService {
         final long[] usage = new long[2];
         volatile long seq = RunConst.EVENT_SEQ_START - 1;
         volatile int modelCalls = 0;
-        volatile Disposable disposable;
+        volatile RunHandle handle;
         volatile ScheduledFuture<?> heartbeat;
+
+        private final List<RunEventDTO> buffer = new ArrayList<>();
 
         ActiveRun(String runId, String userId, String sessionId, RunSink sink) {
             this.runId = runId;
             this.userId = userId;
             this.sessionId = sessionId;
             this.sink = sink;
+        }
+
+        /** 事件入批：由冲刷调度器按批大小与时间阈值统一落库推送 */
+        synchronized void offer(RunEventDTO event) {
+            buffer.add(event);
+        }
+
+        /** 取出并清空批缓冲 */
+        synchronized List<RunEventDTO> drain() {
+            if (buffer.isEmpty()) {
+                return List.of();
+            }
+            List<RunEventDTO> batch = new ArrayList<>(buffer);
+            buffer.clear();
+            return batch;
+        }
+
+        /** 请求取消，句柄存在才生效 */
+        void cancel() {
+            RunHandle current = handle;
+            if (Objects.nonNull(current)) {
+                current.cancel();
+            }
         }
 
         /** 从事件流提取答案文本、用量与迭代数 */

@@ -12,7 +12,7 @@
 
 ## 2. ID 规范
 
-- 全部 ULID，格式 `业务前缀_` + 26 位大写 ULID。
+- 业务 ID 全部 ULID，格式 `业务前缀_` + 26 位大写 ULID；种子数据（菜单、内置提示词）例外，用 `前缀_ + 26 位零填充序号` 保证升级时可稳定对账。
 - 生成入口唯一：`common.IdGenerator`。
 - 关联表（`sys_user_role`、`sys_role_menu`）不引入代理主键，用复合主键。
 
@@ -61,12 +61,13 @@
 |---|---|---|
 | `user_id` | varchar(40) PK | `USER_` |
 | `username` | varchar(64) | 登录名，全局唯一（`deleted = false` 范围内） |
-| `password_hash` | varchar(128) | SHA-256(密码 + salt) 摘要 |
+| `password_hash` | varchar(256) | 口令摘要，格式 `pbkdf2$迭代次数$盐$Base64`；校验兼容旧 `SHA-256(密码 + 盐)` 记录 |
 | `password_salt` | varchar(32) | 随机盐 |
 | `nickname` | varchar(64) | 显示名 |
 | `email` | varchar(128) | 邮箱 |
 | `avatar_url` | varchar(512) | 头像 |
 | `last_login_at` | timestamptz | 最近登录 |
+| `pwd_reset_required` | boolean | 是否必须先改密（种子账号为 true），改密成功后置 false |
 | `state` | varchar(24) | `normal` `disabled` `locked` |
 | 审计字段 | | |
 
@@ -89,7 +90,7 @@
 |---|---|---|
 | `menu_id` | varchar(40) PK | `MENU_` |
 | `parent_id` | varchar(40) | 父菜单，根为 `0` |
-| `menu_name` | varchar(64) | 菜单名（i18n key） |
+| `menu_name` | varchar(64) | 菜单名，**存 i18n key 而非中文**，如 `menu.userManage`、`menu.groupSystem` |
 | `menu_type` | varchar(16) | `dir` 目录 / `menu` 路由页 / `button` 权限点 |
 | `route_path` | varchar(128) | 前端路由路径 |
 | `component` | varchar(128) | 前端组件路径 |
@@ -99,6 +100,10 @@
 | `visible` | boolean | 是否显示 |
 | `state` | varchar(24) | `normal` `disabled` |
 | 审计字段 | | |
+
+**menu_name 的 i18n key 规则**：不得让同一段"既是叶子又是分组"（`menu.system` 与 `menu.system.user` 会互相遮蔽，vue-i18n 点路径解析下菜单退化成裸 key 或直接显示英文）。路由菜单 `menu.<camelCase>`、目录 `menu.group<Thing>`、权限点 `menu.<路由key><Action>`。
+
+**种子对账**：种子 ID 为 `MENU_ + 26 位零填充序号`（如 `MENU_00000000000000000000000011`），启动时按 ID upsert 回写全部字段，并软删"`route_path` 或 `perm_code` 命中种子、但 `menu_id` 不在种子内"的历史残留行。同理，内置提示词 ID 为 `PRPT_ + 26 位零填充序号`。
 
 ### 4.4 sys_user_role / sys_role_menu
 
@@ -418,6 +423,7 @@ CREATE TABLE IF NOT EXISTS lw_doc (
 | `lw:cache:perm:{userId}` | set | 用户权限标识缓存，TTL 10min |
 | `lw:cache:menu:{userId}` | string | 用户可见菜单树缓存（JSON），TTL 10min，菜单 / 授权 / 用户角色变更即清 |
 | `lw:cache:overview` | string | 仪表盘汇总指标缓存（JSON），TTL 60s |
+| `lw:auth:fail:{username}` | string | 登录失败连续计数，达到 5 次锁定 10 分钟 |
 | `lw:idem:{prefix}:{userId}:{digest}` | string | 幂等占位，TTL 默认 10s |
 | `lw:rl:{prefix}:{主体}:{窗口号}` | string | 接口限流计数（@RateLimit 固定窗口），TTL 窗口 + 5s |
 | `satoken:login:session:{userId}` | — | Sa-Token 会话（库自带命名空间） |

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- LiteWorkbench 后端：Spring Boot 3.5.12 + MyBatis 3.0.4 + AgentScope 2.0.3 -->
+<!-- LiteWorkbench 后端：Spring Boot 3.5.12 + MyBatis 3.0.4 + Hutool 5.8.46 + 自研 Agent 内核 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
@@ -22,8 +22,7 @@
         <maven.compiler.release>17</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <mybatis.starter.version>3.0.4</mybatis.starter.version>
-        <hutool.version>5.8.36</hutool.version>
-        <agentscope.version>2.0.3</agentscope.version>
+        <hutool.version>5.8.46</hutool.version>
         <sa.token.version>1.42.0</sa.token.version>
         <ulid.version>5.1.0</ulid.version>
         <minio.version>8.5.17</minio.version>
@@ -66,10 +65,15 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- 工具库 -->
+        <!-- 工具库：hutool-all 已聚合 hutool-ai，此处显式声明避免依赖传递裁剪 -->
         <dependency>
             <groupId>cn.hutool</groupId>
             <artifactId>hutool-all</artifactId>
+            <version>${hutool.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>cn.hutool</groupId>
+            <artifactId>hutool-ai</artifactId>
             <version>${hutool.version}</version>
         </dependency>
         <dependency>
@@ -87,6 +91,13 @@
             <groupId>org.apache.pdfbox</groupId>
             <artifactId>pdfbox</artifactId>
             <version>${pdfbox.version}</version>
+            <exclusions>
+                <!-- 排除 commons-logging，统一由 spring-jcl 提供，否则启动期打印 discovery 告警 -->
+                <exclusion>
+                    <groupId>commons-logging</groupId>
+                    <artifactId>commons-logging</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <!-- 切面 -->
@@ -114,30 +125,6 @@
             <version>${minio.version}</version>
         </dependency>
 
-        <!-- AgentScope：只引 core 与三个模型扩展。
-             harness 会带入 kubernetes-client 等重型传递依赖，本项目不用，不引；
-             官方 Spring Boot starter 编译基线为 Boot 4.x，与 3.5.12 不匹配，改为 config 包自建 Bean -->
-        <dependency>
-            <groupId>io.agentscope</groupId>
-            <artifactId>agentscope-core</artifactId>
-            <version>${agentscope.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>io.agentscope</groupId>
-            <artifactId>agentscope-extensions-model-openai</artifactId>
-            <version>${agentscope.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>io.agentscope</groupId>
-            <artifactId>agentscope-extensions-model-anthropic</artifactId>
-            <version>${agentscope.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>io.agentscope</groupId>
-            <artifactId>agentscope-extensions-model-ollama</artifactId>
-            <version>${agentscope.version}</version>
-        </dependency>
-
         <!-- 全文检索：Manticore 官方 Java SDK（Jersey + Jackson），走 HTTP JSON API。
              SDK 的 UtilsApi.sql 对应 /sql 端点只支持 SELECT，DDL 与运维 SQL 改走 /cli（Hutool HTTP），
              读写检索全部走 IndexApi / SearchApi -->
@@ -150,6 +137,11 @@
                 <exclusion>
                     <groupId>org.glassfish.jersey.connectors</groupId>
                     <artifactId>jersey-apache-connector</artifactId>
+                </exclusion>
+                <!-- 与 spring-jcl 冲突并在启动期打印 discovery 告警 -->
+                <exclusion>
+                    <groupId>commons-logging</groupId>
+                    <artifactId>commons-logging</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>

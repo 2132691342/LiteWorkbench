@@ -66,13 +66,18 @@ mvn test                           # 跑测试
 | `liteworkbench.agent.provider` | `openai` | 默认供应方 |
 | `liteworkbench.agent.loop.max-iters` | 20 | 单轮最大迭代 |
 | `liteworkbench.agent.model.default-name` | `qwen-plus` | 兜底模型名 |
+| `liteworkbench.agent.model.context-window` | 32000 | 上下文窗口 token 数，超窗口即压缩 |
+| `liteworkbench.agent.model.reserve-tokens` | 4096 | 预留给模型输出的 token 数 |
+| `liteworkbench.agent.model.sync-timeout-seconds` | 120 | 同步模型调用超时 |
+| `liteworkbench.agent.model.stream-timeout-seconds` | 180 | 流式模型调用超时 |
+| `liteworkbench.agent.history.limit` | 40 | 组装上下文时从 `lw_msg` 读取的历史消息条数上限 |
 | `liteworkbench.agent.skill.enabled` | true | 是否注入技能 |
 | `liteworkbench.kb.chunk.target-size` | 600 | 知识库分块目标字符数 |
 | `liteworkbench.kb.chunk.overlap` | 120 | 相邻分块重叠字符数 |
 | `liteworkbench.runtime.python.path` | 空 | 指定解释器路径，空则走探测 |
 | `liteworkbench.runtime.data-dir` | `./data` | Python 工作目录与运行时数据的根 |
 | `sa-token.timeout` | 7200 | 登录态有效期（秒），环境变量 `LITEWORKBENCH_AUTH_TOKEN_TIMEOUT` |
-| `liteworkbench.auth.default-password` | `admin123` | 种子账号初始密码 |
+| `liteworkbench.auth.admin-password` | 空 | 种子账号初始密码，环境变量 `LITEWORKBENCH_ADMIN_PASSWORD`；留空则随机生成并仅打印一次 |
 | `liteworkbench.security.secret` | 开发默认值 | 供应方密钥加密因子，生产必改 |
 | `liteworkbench.degradation.allow-start` | true | 中间件不可用时是否允许降级启动 |
 
@@ -116,7 +121,7 @@ npm run typecheck  # vue-tsc --noEmit
 
 | 文件 | 覆盖 |
 |---|---|
-| `service/RunEventPipelineTest` | 事件长链路：SDK 事件归一 → 批内合帧，增量合并、类型切换保序、工具输出捕获、超长裁剪 |
+| `service/RunEventPipelineTest` | 事件长链路：内核事件归一 → 批内合帧，增量合并、类型切换保序、工具输出捕获、超长裁剪 |
 | `service/FlowGraphTest` | 画布校验与拓扑执行序：合法链、有环、孤立节点、非法节点与悬空连线 |
 | `api/SseFrameContractTest` | SSE 帧契约：`id` 为 seq、事件名 `run.event`、心跳只发注释行 |
 | `config/PermissionContractTest` | 控制器注解与 `PermConst` 的权限点全部存在于菜单种子 |
@@ -134,8 +139,10 @@ npm run typecheck  # vue-tsc --noEmit
 
 | 想改什么 | 改哪里 |
 |---|---|
-| 加一个工具 | `agent/WorkbenchTools.java` + `resources/db/schema.sql` 的 `wb_tool` 种子 |
-| 加一个模型供应方协议 | `agent/ModelFactory.java` + `wb_provider` 记录 |
+| 加一个工具 | `agent/tool/WorkbenchTools.java` + `resources/db/schema.sql` 的 `wb_tool` 种子 |
+| 加一个模型供应方协议 | `agent/model/` 新增 `XxxClient` + `agent/ModelFactory.java` 登记 + `wb_provider` 记录 |
+| 改推理循环 | `agent/loop/AgentLoop.java`（纯逻辑，可离线单测） |
+| 改 SSE 帧或事件归一 | `agent/event/AgentEventAdapter.java` + `api/SseRunSink.java` |
 | 加一个权限点 | `config/DataInitializer.java` 的 `MENU_SEEDS`（`menu_type=button`）+ 控制器注解 |
 | 加一个内置角色 | `domain/constant/RoleCodeConst.java` + `DataInitializer` 角色与授权 |
 | 加一类日志检索字段 | `observability/ManticoreLogAppender.java` + `mapper/LogSearchMapper.java` 表定义 |

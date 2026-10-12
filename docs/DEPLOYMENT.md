@@ -44,7 +44,7 @@ Manticore 的 9308（HTTP JSON API）只对同网络容器暴露，不发布宿�
 
 ### 3.1 共享中间件的所有权与禁改清单
 
-中间件是**跨项目共享基础设施**，云主机上编排原件在 `/root/infra/docker-compose.yaml`（只读参照），数据卷为 `infra_pgdata` / `infra_minio_data`。任何部署与运维操作必须遵守：
+中间件是**跨项目共享基础设施**，云主机上编排原件在 `/root/infra/docker-compose.yaml`（只读参照），数据卷为 `infra_pgdata` / `infra_minio_data`；**Manticore 的数据目录 `/var/lib/manticore` 挂在编排生成的匿名卷上**（该编排未给它声明命名卷），因此**禁止执行 `podman volume prune`**——那会一次性抹掉全部会话消息、知识块与日志索引。任何部署与运维操作必须遵守：
 
 | 规则 | 说明 |
 |---|---|
@@ -93,6 +93,7 @@ podman run -d --name liteworkbench -p 24399:8080 \
 | RabbitMQ 凭据 | `LITEWORKBENCH_MQ_USERNAME` / `LITEWORKBENCH_MQ_PASSWORD` | admin / admin_public（开发默认） |
 | 默认供应方 | `LITEWORKBENCH_AGENT_PROVIDER` | openai |
 | 登录态有效期 | `LITEWORKBENCH_AUTH_TOKEN_TIMEOUT` | 7200 |
+| 种子账号初始密码 | `LITEWORKBENCH_ADMIN_PASSWORD` | 空（缺失时随机生成并只打印一次） |
 | 数据加密密钥 | `LITEWORKBENCH_SECURITY_SECRET` | liteworkbench-default-secret（开发默认，生产必覆盖） |
 | 运行时数据目录 | `LITEWORKBENCH_RUNTIME_DATA_DIR` | `/var/lib/liteworkbench` |
 | 降级启动开关 | `LITEWORKBENCH_DEGRADATION_ALLOW_START` | true |
@@ -106,7 +107,8 @@ podman run -d --name liteworkbench -p 24399:8080 \
 
 | 类型 | 内容 |
 |---|---|
-| 种子账号 | `admin`（超级管理员）、`demo`（普通用户），初始密码 `admin123` |
+| 种子账号 | `admin`（超级管理员）、`demo`（普通用户）；密码取 `LITEWORKBENCH_ADMIN_PASSWORD`，未配置则随机生成并仅在启动日志 WARN 打印一次；两个账号置 `pwd_reset_required = true`，首登强制改密 |
+| 存量库升级 | `pwd_reset_required` 列以 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` 补齐，默认 `false`：**已存在的账号不会被强制改密**，只有本次新建的种子账号与管理员新建的用户带该标记 |
 | 内置角色 | `super_admin`、`admin`、`user`（代码常量定义，不可删除改码） |
 | 菜单树 | 仪表盘、工作台、创作台、提示词、工作流、文件、技能、知识库、日志、监控、设置、系统管理（含按钮权限点） |
 | 内置工具 | Python 执行、文件读写、HTTP 请求、知识库检索（固定 ID 幂等重放） |
@@ -123,6 +125,24 @@ Manticore 的 `lw_log`、`lw_msg`、`lw_kbchunk`、`lw_doc` 表在应用启动�
 | 回滚 | 用旧镜像 tag 再跑一次 `deploy-app.sh`；新增列不删除，保证旧版本可读 |
 | 中间件升级 | 不随应用发布，单独改编排并重启对应服务 |
 | 用户数据导出 | `pg_dump` 按 `user_id` 过滤导出 |
+
+### 7.1 本机没有容器运行时的验证部署
+
+本机装不了 Docker / Podman 时，用"本地打包 → 服务器提交镜像层"的等价流程验证修复，服务器不必装 Maven 与 Node：
+
+1. **本地打单文件产物**：`mvn -DskipTests package` 后用 `jar uf target/lite-workbench-server.jar -C <stage> .` 把前端（stage 内为 `static/**`）注入 fat jar。这样 jar 自身即可完整运行，`classpath:/static/` 有全套前端。
+2. **传输前端目录要用 tar，不要用 zip**：Windows 的 `Compress-Archive` 会把条目名写成 `assets\Foo.js`，Linux 侧 `python3 -m zipfile -e` 解压后不会形成目录，页面会全线 404；`tar -czf` 才产生 `assets/Foo.js`。
+3. **服务器以已发布的运行镜像为基础派生**，免去重新下载基础镜像与重复安装 python3：
+   ```dockerfile
+   FROM <当前运行的镜像>
+   COPY app.jar /app/app.jar
+   COPY static/ /app/static/
+   ```
+   运行镜像入口是 `/app/app.jar`，且显式带 `--spring.web.resources.static-locations=file:/app/static/,classpath:/static/`；镜像内那份**旧前端必须一并替换**，否则新 jar 里的 `classpath:/static/` 会被旧的 `file:/app/static/` 遮住。
+4. **按正式流程启动**：`podman build -t <本地tag> -f Dockerfile.verify .` → `export LITEWORKBENCH_IMAGE=<本地tag>` → `podman rm -f liteworkbench` → 清 24399 的 `CNI-HOSTPORT-DNAT` 残留 → `podman-compose -f docker-compose.app.yaml up -d` → 等 `/actuator/health` 为 UP。
+5. **`LITEWORKBENCH_SECURITY_SECRET` 必须沿用线上原值**：它参与供应方 API Key 的加解密，换值等于把已存密钥全部作废。
+
+这套临时物（`app.jar`、`static/`、`Dockerfile.verify`、本地 tag 镜像）不进发布链，下次 CI 发布会被正式镜像覆盖，可手工清理。
 
 ## 8. 健康检查
 
@@ -152,8 +172,8 @@ Manticore 无文档级 TTL，日志表保留由应用定时任务（每日一次
 |---|---|
 | PostgreSQL | `pg_dump` 每日一次，保留 7 份 |
 | MinIO | `mc mirror` 到备份桶（对象键已含用户前缀，可按用户恢复） |
-| Redis | 消息与知识块是用户资产：共享实例需开启 RDB 快照（`save 900 1` 级别）并落到持久卷；缓存类键丢了可重建 |
-| Manticore | 消息与知识块表随 Manticore 数据目录持久化；检索表可按 PG 原件与 MinIO 重建（文档）或重解析（知识块） |
+| Redis | **无需备份**：只承载登录态、权限/菜单/供应方缓存与幂等限流计数，全部可由 PG 重建；会话消息与知识块不在这里 |
+| Manticore | **消息、知识块、日志的真正落点**：随 Manticore 数据卷持久化，卷是唯一需要跟备份的对象；知识块可从 MinIO 原件重解析，日志 30 天过期即弃 |
 | 配置 | 环境变量清单入库外保管 |
 
 ## 11. JVM 参数
@@ -237,7 +257,10 @@ Manticore 无文档级 TTL，日志表保留由应用定时任务（每日一次
 | 启动失败：DDL 报错 | `spring.sql.init` 日志 | schema.sql 幂等，检查是否手工改过表结构导致类型冲突 |
 | 全部接口 401 | 登录后仍 401 | Redis 被清空或重启，Sa-Token 会话丢失属预期，重新登录；检查 Redis 是否被写满 |
 | 会话提交报 3002 `SESSION_BUSY` | 该会话有运行未收尾 | 等锁 TTL 自动释放，或对残留运行执行 abort |
-| 运行中断不生效 | abort 后仍输出 | 看 `[run.abort]` 日志：有活动实例走 dispose，无实例则直接结算终态 |
+| 运行中断不生效 | abort 后仍输出 | 看 `[run.abort]` 日志：有活动实例走 `RunHandle.cancel()`，无实例则直接结算终态 |
+| 健康页 manticore DOWN，detail 含 `only SELECT queries are supported` | `/sql` 非 raw 模式把语句编译成搜索查询，`SELECT 1` / `SHOW TABLES` 这类没有 `FROM <索引>` 的语句会被 501 | 探测语句必须查真实索引（如 `SELECT log_id FROM lw_log LIMIT 1`）；要跑任意语句得加 `raw_response=true`；`/cli` 失败也回 `Query OK`，不能当健康判据 |
+| 启动日志出现 `Multiplier must be > 1.0 for effective exponential backoff` | RabbitMQ 监听重试的 `multiplier` 为默认 1.0 | 应用已显式配置 `initial-interval` / `max-interval` / `multiplier=2`；若仍出现说明配置被覆盖 |
+| 启动日志出现 `Standard Commons Logging discovery ... remove commons-logging.jar` | Manticore SDK 传递引入 `commons-logging` | 已在 Maven 里 exclude `commons-logging`；仍出现说明有新依赖带进来 |
 | 模型调用 4002 / 4003 | 运行失败 | 供应方页面测试连通；核对 baseUrl（含 `/v1`）、模型名、密钥 |
 | 无可用供应方 4001 | 对话直接失败 | 供应方列表为空或 `enabled=false`：补充配置并启用 |
 | Python 7001 | 工具返回运行时未就绪 | 容器内确认 `python3 --version`，或用 `LITEWORKBENCH_RUNTIME_PYTHON_PATH` 指定，监控页重探 |
@@ -245,7 +268,7 @@ Manticore 无文档级 TTL，日志表保留由应用定时任务（每日一次
 | 文件 6002 / 6003 | 上传失败 / 超限 | 查 MinIO 健康与桶存在性；单文件上限 100MB |
 | 知识库文档一直 pending | 状态不流转 | MQ 不可用或消费者掉线：看 `[kb.parse]` 日志，恢复后重解析 |
 | 知识库 8604 / 8605 | 上传被拒 / 解析失败 | 8604 换支持的格式；8605 看文档行 `error_message`，修原件后重解析 |
-| 消息或知识块消失 | 旧会话消息读不全 | 共享 Redis 的 `allkeys-lru` 会逐出无 TTL 的用户资产，改 `volatile-lru` 并调大 maxmemory，见 DATA-MODEL §7 |
+| 会话消息 / 知识块读不到 | 旧会话消息不全 | 这两类是 Manticore 文档，与 Redis 无关：查 Manticore 容器与数据卷是否被重建、`lw_msg` / `lw_kbchunk` 索引是否还在（用带 `FROM` 的语句探测，`SELECT 1` 在本版本会被 501，证明不了任何事） |
 | 日志中心查不到 | 检索为空 | MQ 降级时日志只落文件（记 warn）；索引启动幂等创建；文档 30 天 TTL 过期即不可查 |
 | 事件回放缺尾部 | 回放不完整 | 事件按 100 条 / 200ms 攒批，断电可能丢最后一批；以会话助手消息为准 |
 | 容器连不上中间件 | Connection refused 但中间件健康 | aardvark-dns 残留记录把主机名解析到旧 IP：对涉事容器逐个 `network disconnect` + `connect`；严禁对共享网络 `network rm` |

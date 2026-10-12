@@ -21,6 +21,8 @@ public class LoginRESP implements Serializable {
     private List<String> roleCodes;
     /** 权限标识集合 */
     private List<String> perms;
+    /** 是否必须先改密，前端据此强制跳转改密页 */
+    private Boolean pwdResetRequired;
     /** 当前用户可见菜单树 */
     private List<MenuVO> menus;
 }

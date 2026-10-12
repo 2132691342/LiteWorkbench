@@ -56,11 +56,14 @@
 | `service` | `FlowEngine` | 按拓扑序串行执行节点，逐节点落事件；`llm` / `python` / `knowledge` / `tool` 四类执行器 |
 | `service` | `KbDocService` | 文档上传（MinIO + MQ 派发）、状态查询、分块检索、文档删除 |
 | `service` | `DocTextExtractor` | 从 MinIO 拉原件提取纯文本：txt/md 直接读，docx 解包取 XML，pdf 走 pdfbox |
-| `agent` | `AgentScopeAgentRuntime` | 每次运行装配 ReActAgent（复用缓存的 Model 实例），注入工具与技能 |
-| `agent` | `AgentEventAdapter` | 把 AgentScope `AgentEvent` 归一化为工作台 `RunEventDTO` |
-| `agent` | `ModelFactory` | 按供应方构建并缓存模型实例，解密密钥，三级模型名兜底 |
+| `agent` | `AgentLoop` | 自研推理循环：思考 → 工具调用 → 观察 → 收敛，含迭代上限、取消、重复调用护栏 |
+| `agent` | `AgentKernelRuntime` | `AgentRuntime` 实现：装配 `AgentLoop` 与工具集，把内核事件写入订阅者 |
+| `agent` | `AgentEventAdapter` | 把内核 `AgentEvent` 归一化为工作台 `RunEventDTO` 并分配 `seq` |
+| `agent` | `ModelFactory` | 按供应方构建并缓存 `ModelClient`，解密密钥，三级模型名兜底 |
+| `agent` | `model/*Client` | 三协议出站：`OpenAiCompatClient` / `AnthropicClient` / `OllamaClient`，共用 SSE 解析与取消 |
 | `agent` | `ModelCaller` | 模型同步调用，供 AI 辅助写作与工作流 `llm` 节点复用，不建 Run |
 | `agent` | `WorkbenchTools` | 内置工具集：`python_exec`、`file_read`、`file_write`、`http_get`、`kb_search` |
+| `agent` | `AgentMemory` | 上下文组装与确定性压缩（不调模型）：配对修复、Token 估算、切点选择 |
 | `runtime` | `LocalPythonRuntime` | Python 解释器探测、脚本落盘、进程执行、超时与进程树终止 |
 | `mapper` | `LogSearchMapper` / `MessageIndexMapper` / `KbChunkIndexMapper` / `DocIndexMapper` | Manticore 表创建、写入、检索：日志 / 会话消息 / 知识库分块 / 创作文档 |
 | `observability` | `ManticoreLogAppender` | Logback 扩展，异步把日志送达 Manticore |
@@ -75,13 +78,20 @@
 ### 4.1 登录链路
 
 ```
-POST /api/v1/auth/login  { username, password }
-  ├─ 1 按 username 查用户，校验存在且未停用          UserMapper
-  ├─ 2 校验密码（SHA-256 + 盐）与账号状态            AuthService
-  ├─ 3 StpUtil.login(userId)，会话写入 Redis         Sa-Token
-  ├─ 4 组装 LoginUser（userId + roleCodes + perms）缓存进 TokenSession
-  └─ 5 返回 token 与用户信息（含菜单权限标识）
+GET  /api/v1/auth/public-key → { keyId, publicKey(SPKI 的 Base64), algorithm }
+POST /api/v1/auth/login  { username, password(密文), keyId }
+  ├─ 1 按 keyId 取内存私钥解密，失败即 CREDENTIAL_INVALID  AuthService
+  ├─ 2 按 username 查用户，校验存在且未停用                  UserMapper
+  ├─ 3 失败计数（Redis 连续 5 次锁 10 分钟）                  AuthService
+  ├─ 4 校验密码（SHA-256 + 盐）与账号状态                     AuthService
+  ├─ 5 StpUtil.login(userId)，会话写入 Redis                  Sa-Token
+  ├─ 6 组装 LoginUser（userId + roleCodes + perms）缓存进 TokenSession
+  └─ 7 返回 token、用户信息、pwdResetRequired 与菜单权限标识
 ```
+
+登录与改密的密码字段一律 RSA/PKCS#1 v1.5 密文（浏览器端 JSEncrypt，避免明文 HTTP 下 `crypto.subtle` 不可用）；密钥对进程内存持有，每 6 小时或每 1000 次加密轮换一次，轮换后旧钥保留一轮兜住在途请求。明文密码不出浏览器、不进日志、不进 Redis。
+
+`pwdResetRequired = true` 的账号（种子账号）在改密前只放行 `/auth/current` 与 `/auth/password`，其余接口返回 `PASSWORD_RESET_REQUIRED`。
 
 `LoginUser` 结构：
 
@@ -110,6 +120,18 @@ POST /api/v1/auth/login  { username, password }
 - 单资源访问按 `(主键, user_id)` 查询，查不到直接 404，不泄露他人资源是否存在。
 - 平台级表（`sys_menu`、`sys_user_role`、`sys_role_menu`、`wb_tool`、`wb_provider`）由管理角色的权限点控制读写。
 
+### 4.4 菜单种子对账
+
+菜单是平台级定义，升级时**只增不改**会留下两类脏数据：历史随机 ID 的重复菜单、新旧混排的 i18n key。因此 `DataInitializer` 每次启动做一次对账：
+
+```
+initMenus()
+  ├─ 1 逐条种子：按固定 menu_id 存在即 upsert（回写 name/route/component/perm/icon/sort/visible）
+  └─ 2 残留清理：把"route_path 落在种子集合内、或 perm_code 落在种子集合内，但 menu_id 不在种子内"的行软删
+```
+
+种子 ID 采用 `MENU_ + 26 位零填充序号`，人不直接维护；菜单中文名一律以 i18n key 形式存储（见 AGENTS.md §2.5），改文案不动库。
+
 ## 5. 关键流程
 
 ### 5.1 一次对话的完整链路
@@ -120,8 +142,8 @@ POST /api/v1/chat/stream
   ├─ 1 校验会话归属（user_id），获取会话级运行锁   SessionService
   ├─ 2 创建 Run（queued）+ 用户消息写入 Manticore lw_msg     RunService
   ├─ 3 建立 SseEmitter                      RunController
-  ├─ 4 构建 ReActAgent（Model 实例按 provider+model 缓存复用）   AgentScopeAgentRuntime
-  ├─ 5 组装历史消息（消息索引最近 20 条）→ 订阅 agent.streamEvents
+  ├─ 4 构建 AgentLoop（ModelClient 按 provider+model 缓存复用）  AgentKernelRuntime
+  ├─ 5 组装历史消息（消息索引最近 20 条，经 AgentMemory 压缩）→ 启动内核
   │     ├─ 归一化事件 → seq 递增
   │     ├─ 批量攒批写入 wb_event
   │     └─ 同步推送 SSE
@@ -131,23 +153,22 @@ POST /api/v1/chat/stream
 
 ### 5.2 事件归一
 
-AgentScope 的 `AgentEvent` 是开放结构，不做第二套记账，只在出口做一次归一：
+内核事件是收敛过的封闭集合（`agent/event/AgentEventType`），不做第二套记账，只在出口做一次归一：
 
-| AgentScope 事件 | 工作台事件类型 | blockType |
+| 内核事件 | 工作台事件类型 | blockType |
 |---|---|---|
-| `AgentStartEvent` | `run.start` | — |
-| `TextBlockDeltaEvent` | `text.delta` | `text` |
-| `ThinkingBlockDeltaEvent` | `thinking.delta` | `thinking` |
-| `ToolCallStartEvent` | `tool.call`（start 阶段） | `tool_call` |
-| `ToolCallEndEvent` | `tool.call`（end 阶段） | `tool_call` |
-| `ToolResultEndEvent` | `tool.result` | `tool_result` |
-| `ModelCallStartEvent` / `ModelCallEndEvent` | `model.call` | — |
-| `AgentResultEvent` | `run.result` | `text` |
-| `ExceedMaxItersEvent` | `run.exceed` | — |
-| `AgentEndEvent` | `run.end` | — |
-| 其余未列出事件 | `custom` | — |
+| `AGENT_START` | `run.start` | — |
+| `TEXT_DELTA` | `text.delta` | `text` |
+| `THINKING_DELTA` | `thinking.delta` | `thinking` |
+| `TOOL_CALL_START` / `TOOL_CALL_END` | `tool.call`（`phase=start/end`） | `tool_call` |
+| `TOOL_RESULT` | `tool.result` | `tool_result` |
+| `MODEL_CALL_START` / `MODEL_CALL_END` | `model.call`（带用量与耗时） | — |
+| `AGENT_RESULT` | `run.result` | `text` |
+| `EXCEED_MAX_ITERS` | `run.exceed` | — |
+| `AGENT_END` | `run.end` | — |
+| `AGENT_ERROR` | `run.error` | — |
 
-`tool.call` 以载荷中的 `phase: start / end` 区分起止；归一在 `AgentEventAdapter` 一处完成，前端只消费工作台事件，不感知 SDK 版本变化。
+三协议出站的差异（OpenAI 的 `data:` SSE、Anthropic 的命名事件、Ollama 的 NDJSON）在 `model` 包内被拉平为同一组内核事件，`AgentEventAdapter` 只认内核事件，因此前端与模型协议彻底解耦。
 
 三条硬规则：
 
@@ -163,12 +184,12 @@ AgentScope 的 `AgentEvent` 是开放结构，不做第二套记账，只在出�
 ```
 POST /api/v1/run/abort/{runId}
   → 校验运行归属（user_id）与状态
-  → 本进程有活动订阅：dispose（Reactor）→ doOnCancel → 终态记 aborted
-  → 本进程无活动订阅（进程重启后的孤儿运行）：直接结算为 aborted
+  → 本进程有活动运行：置取消标志 + 关闭当前响应的 InputStream → 内核在安全点收敛 → 终态记 aborted
+  → 本进程无活动运行（进程重启后的孤儿运行）：直接结算为 aborted
   → 推送 run.end
 ```
 
-中断靠释放订阅实现，不做线程中断，避免半写状态。运行注册表在进程内存（单实例部署），重启后的孤儿运行在 abort 时直接落终态。
+中断是**协作式取消**，不做线程中断：`RunHandle.cancel()` 置原子标志并关闭流式连接，内核每轮循环开头与每个工具执行前检查标志，在"消息已落库、事件已发完"的安全点退出，因此不会留下半截状态。运行注册表在进程内存（单实例部署），重启后的孤儿运行在 abort 时直接落终态。
 
 ### 5.4 限流
 
@@ -252,7 +273,7 @@ POST /api/v1/flow/run（flowId + inputs）
 
 | 点 | 做法 |
 |---|---|
-| Agent 实例 | Model 按 `provider + model` 缓存复用；ReActAgent 每次运行构建（构建成本低，天然无跨会话状态） |
+| Agent 实例 | `ModelClient` 按 `provider + model` 缓存复用（持有连接与重试策略）；`AgentLoop` 每次运行新建，天然无跨会话状态 |
 | 登录态 | Sa-Token 会话与权限缓存进 Redis，权限查询一次后缓存 10 分钟 |
 | 菜单树 | 用户可见菜单树缓存 Redis（TTL 10min），菜单 / 授权 / 用户角色变更即清，路由加载不打穿库 |
 | 仪表盘 | 汇总指标全局缓存 60s，趋势统计免高频重算 |
@@ -271,10 +292,11 @@ POST /api/v1/flow/run（flowId + inputs）
 |---|---|---|
 | 阻塞式 MVC + SseEmitter | MyBatis / JDBC / 进程执行天然适配，无需响应式改造 | 单实例并发受线程池上限约束 |
 | 事件流为唯一事实来源 | 可回放、可审计、前端一个 reducer | 事件量大，需要批量写与裁剪 |
-| Agent 单例 + RuntimeContext 隔离 | 省内存与构建开销 | 上下文必须落库，不能只靠进程内存 |
+| Agent 无状态 + 每次运行新建循环 | 省内存，天然无跨会话污染 | 上下文必须落库，不能只靠进程内存 |
 | 行级用户隔离（不建 MyBatis 自动拦截） | SQL 可读、可控，避免隐式条件 | 每个查询都要记得带 `user_id` |
 | Sa-Token 而非自研 JWT | 注解鉴权、会话管理、踢人下线开箱即用 | 登录态强依赖 Redis |
-| 归一一次事件 | 前端与 SDK 解耦 | 新增 SDK 事件需同步适配表 |
+| 归一一次事件 | 前端与模型协议解耦，换协议不动前端 | 新增内核事件需同步适配表 |
+| 自研内核而非引 Agent 框架 | 依赖面极小（只有 hutool-ai），循环与工具完全可控，可单测 | ReAct 循环、工具 Schema、上下文压缩都要自己维护 |
 | 日志双写（文件 + Manticore） | 既有原文又有检索 | 写入路径变长，靠 MQ 削峰 |
 | 消息存 Manticore 不存 PG | 全文检索免费获得，写路径短，与日志同一套设施 | 消息资产依赖 Manticore 持久化，容量规划要算上它 |
 | 知识检索用关键词全文（Manticore + ICU 分词） | 零额外依赖、零 embedding 成本，中文按词典切分，短查询够用 | 无语义召回，同义改写查不到 |
@@ -289,17 +311,18 @@ POST /api/v1/flow/run（flowId + inputs）
 
 | 依赖 | 事实 | 本项目的做法 |
 |---|---|---|
-| AgentScope | groupId 是 `io.agentscope` | 坐标统一按此写 |
-| AgentScope | 官方 Spring Boot starter 编译基线为 Boot 4.x | **不引 starter**，`config` 包自建 `@Bean` 装配 `Model` 与 `ReActAgent` |
-| AgentScope | `agentscope-harness` 带入 kubernetes-client 等重型传递依赖 | **不引**，只用 `agentscope-core` + 三个模型扩展 |
-| AgentScope | `Memory` / `UserAgent` / 旧 `agent.Event` 已标注 `forRemoval` | 禁用；事件一律用 `io.agentscope.core.event.*` |
-| AgentScope | 流式入口是 `ReActAgent.streamEvents(...)` → `Flux<AgentEvent>` | 订阅侧直接消费，不做二次包装 |
+| hutool-ai | `AIService` 只返回裸字符串，无 usage / tool_calls / finish_reason 模型 | 只借用其配置与出站 HTTP；请求体构造、响应解析、工具调用全部自研 |
+| hutool-ai | 流式是"逐行原样回调 + 后台线程即弃"，无 `data:` 解析、不可取消 | 自建 `ModelStreamSink`：剥 `data:` / 识别 `[DONE]` / 合 delta / 支持取消；`hutool-ai` 的流式入口不使用 |
+| hutool-ai | `Message` 无 `tool_calls` / `tool_call_id` | 内核自带消息模型 `AgentMessage`，出站时按协议转 JSON |
+| hutool-ai | ollama 无 `AIUtil.getOllamaService` | Ollama 走 `agent/model/OllamaClient` 直连 `/api/chat`（NDJSON） |
 | Hutool | `IdUtil` 无 ULID，`fastUUID` 不是有序 ID | ULID 只走 `IdGenerator`（`ulid-creator`） |
 | Hutool | `CollectionUtil` 是 `CollUtil` 别名 | 统一用 `CollUtil` |
 | Sa-Token | 登录态存 Redis | Redis 不可用时登录链路不可用，不为此做本地降级 |
+| RabbitMQ | `spring.rabbitmq.listener.simple.retry` 的 `multiplier` 默认 1.0，会触发 `ExponentialBackOffPolicy` 告警 | 显式配置 `initial-interval` / `max-interval` / `multiplier=2` |
 | Manticore | 默认 charset_table 下文本不入索引；`text stored` 只存不索引 | 建表统一 `charset_table='non_cont,cjk' morphology='icu_chinese'`，文本列一律 `text indexed stored` |
-| Manticore | HTTP `/sql` 只支持 SELECT | DDL 走 `/cli`，写入走 `/insert` `/update` `/delete` `/bulk`，检索走 `/search` |
+| Manticore | 非 raw 模式下 `/sql` 把语句编译成搜索查询，`SELECT 1` / `SHOW TABLES` 会被回 501 `only SELECT queries are supported` | DDL 走 `/cli`，写入走 `/insert` `/update` `/delete` `/bulk`，检索走 `/search`；**健康探测必须带 `FROM <索引>`** |
 | Manticore | 9308 不发布宿主机 | 应用容器与中间件同网络，`manticore:9308` 服务名直连 |
+| Manticore SDK | 传递依赖 `commons-logging` 与 `spring-jcl` 冲突并打印告警 | Maven 排除 `commons-logging` |
 
 ## 9. 约束
 

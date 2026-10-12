@@ -38,6 +38,7 @@ import type {
   PasswordREQ,
   ProviderREQ,
   ProviderVO,
+  PublicKeyVO,
   PythonStatusVO,
   ResetPasswordREQ,
   RoleGrantREQ,
@@ -141,6 +142,7 @@ export function post<T>(url: string, data?: unknown, config?: AxiosRequestConfig
 /* ===== 认证 ===== */
 
 export const authApi = {
+  publicKey: () => get<PublicKeyVO>('/auth/public-key'),
   login: (data: LoginREQ) => post<LoginRESP>('/auth/login', data),
   logout: () => post<void>('/auth/logout'),
   current: () => get<LoginRESP>('/auth/current'),

@@ -5,22 +5,26 @@
 
 -- 用户
 CREATE TABLE IF NOT EXISTS sys_user (
-    user_id       varchar(40)  PRIMARY KEY,
-    username      varchar(64)  NOT NULL,
-    password_hash varchar(128) NOT NULL,
-    password_salt varchar(32)  NOT NULL,
-    nickname      varchar(64),
-    email         varchar(128),
-    avatar_url    varchar(512),
-    last_login_at timestamptz,
-    state         varchar(24)  NOT NULL DEFAULT 'normal',
-    created_by    varchar(40),
-    created_at    timestamptz  NOT NULL DEFAULT now(),
-    updated_by    varchar(40),
-    updated_at    timestamptz,
-    deleted       boolean      NOT NULL DEFAULT false,
-    remark        varchar(512)
+    user_id             varchar(40)  PRIMARY KEY,
+    username            varchar(64)  NOT NULL,
+    password_hash       varchar(256) NOT NULL,
+    password_salt       varchar(32)  NOT NULL,
+    nickname            varchar(64),
+    email               varchar(128),
+    avatar_url          varchar(512),
+    last_login_at       timestamptz,
+    pwd_reset_required  boolean      NOT NULL DEFAULT false,
+    state               varchar(24)  NOT NULL DEFAULT 'normal',
+    created_by          varchar(40),
+    created_at          timestamptz  NOT NULL DEFAULT now(),
+    updated_by          varchar(40),
+    updated_at          timestamptz,
+    deleted             boolean      NOT NULL DEFAULT false,
+    remark              varchar(512)
 );
+-- 已有库的列补齐，幂等
+ALTER TABLE sys_user ADD COLUMN IF NOT EXISTS pwd_reset_required boolean NOT NULL DEFAULT false;
+ALTER TABLE sys_user ALTER COLUMN password_hash TYPE varchar(256);
 CREATE UNIQUE INDEX IF NOT EXISTS uk_sys_user_username ON sys_user (username) WHERE deleted = false;
 
 -- 角色

@@ -15,6 +15,11 @@ const staticRoutes: RouteRecordRaw[] = [
     meta: { public: true },
   },
   {
+    path: '/force-password',
+    name: 'force-password',
+    component: () => import('@/views/ForcePassword.vue'),
+  },
+  {
     path: '/',
     name: 'shell',
     component: () => import('@/components/layout/AppShell.vue'),
@@ -98,6 +103,13 @@ router.beforeEach(async (to) => {
   if (!routesRegistered) {
     registerRoutes(store.menus)
     return { path: to.fullPath, replace: true }
+  }
+  // 首登强制改密：未改密时只允许停在改密页，已改密则不允许再进入改密页
+  if (store.pwdResetRequired && to.path !== '/force-password') {
+    return { path: '/force-password', replace: true }
+  }
+  if (!store.pwdResetRequired && to.path === '/force-password') {
+    return { path: '/dashboard', replace: true }
   }
   const perm = to.meta.perm
   if (typeof perm === 'string' && perm && !store.perms.includes(perm)) {

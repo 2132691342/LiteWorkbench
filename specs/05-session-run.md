@@ -57,10 +57,12 @@ POST /chat/stream
   ├─ 2 抢 Redis 锁，失败抛 SESSION_BUSY
   ├─ 3 落 wb_run（queued）与消息索引（user）
   ├─ 4 建 SseEmitter，注册超时与完成回调
-  ├─ 5 订阅 Agent 事件流，攒批落库 + 推送
-  ├─ 6 终态更新 wb_run 与消息索引（assistant）
+  ├─ 5 AgentRuntime.start()，把事件攒批落库 + 推送，句柄存入活动运行表
+  ├─ 6 终态更新 wb_run 与消息索引（assistant），从活动运行表摘除
   └─ 7 finally 释放锁，关闭 SseEmitter
 ```
+
+`POST /run/abort/{runId}` 从活动运行表取句柄调 `cancel()`；表里没有即视为孤儿运行，直接结算为 `aborted`。
 
 ## 取舍
 

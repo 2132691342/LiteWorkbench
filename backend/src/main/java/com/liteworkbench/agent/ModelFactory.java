@@ -6,6 +6,11 @@ import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.crypto.digest.DigestUtil;
 import cn.hutool.crypto.symmetric.SymmetricCrypto;
+import com.liteworkbench.agent.model.AnthropicClient;
+import com.liteworkbench.agent.model.ModelClient;
+import com.liteworkbench.agent.model.OllamaClient;
+import com.liteworkbench.agent.model.OpenAiCompatClient;
+import com.liteworkbench.agent.model.ProviderAIConfig;
 import com.liteworkbench.agent.spi.ProviderStore;
 import com.liteworkbench.common.BizException;
 import com.liteworkbench.common.ErrorCodeEnum;
@@ -13,11 +18,6 @@ import com.liteworkbench.config.AgentProperties;
 import com.liteworkbench.config.SecurityProperties;
 import com.liteworkbench.domain.constant.RedisKeyConst;
 import com.liteworkbench.domain.entity.WbProviderDO;
-import io.agentscope.core.model.GenerateOptions;
-import io.agentscope.core.model.Model;
-import io.agentscope.extensions.model.anthropic.AnthropicChatModel;
-import io.agentscope.extensions.model.ollama.OllamaChatModel;
-import io.agentscope.extensions.model.openai.OpenAIChatModel;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -34,8 +34,9 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
-/** 按平台级供应方配置构建并缓存模型实例，覆盖 OpenAI / Anthropic / Ollama 三条通用协议 */
+/** 按平台级供应方配置构建并缓存模型客户端，覆盖 OpenAI 兼容 / Anthropic / Ollama 三条通用协议 */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -43,8 +44,8 @@ public class ModelFactory {
 
     /** 供应方配置缓存 TTL */
     private static final Duration PROVIDER_CACHE_TTL = Duration.ofMinutes(5);
-    /** 模型实例缓存容量 */
-    private static final int MODEL_CACHE_CAPACITY = 64;
+    /** 模型客户端缓存容量 */
+    private static final int CLIENT_CACHE_CAPACITY = 64;
     /** 新格式加密算法 */
     private static final String GCM_TRANSFORMATION = "AES/GCM/NoPadding";
     /** GCM IV 长度，字节 */
@@ -54,38 +55,63 @@ public class ModelFactory {
     /** 旧格式加密算法，仅用于解密兼容 */
     private static final String LEGACY_TRANSFORMATION = "AES/ECB/PKCS5Padding";
 
+    private static final String PROTOCOL_ANTHROPIC = "anthropic";
+    private static final String PROTOCOL_OLLAMA = "ollama";
+
+    /** hutool-ai 内置的供应方码：命中即说明该协议有原生服务实现可复用 */
+    private static final Set<String> HUTOOL_AI_CODES =
+            Set.of("hutool", "deepseek", "openai", "doubao", "grok", "ollama", "gemini");
+
     private final ProviderStore providerStore;
     private final AgentProperties agentProperties;
     private final SecurityProperties securityProperties;
     private final StringRedisTemplate redisTemplate;
 
-    /** provider|model -> Model 实例，容量 64 的最近最少使用缓存 */
-    private final Map<String, Model> modelCache = Collections.synchronizedMap(
+    /** provider|model -> 客户端，容量 64 的最近最少使用缓存 */
+    private final Map<String, ModelClient> clientCache = Collections.synchronizedMap(
             new LinkedHashMap<>(16, 0.75f, true) {
                 @Override
-                protected boolean removeEldestEntry(Map.Entry<String, Model> eldest) {
-                    return size() > MODEL_CACHE_CAPACITY;
+                protected boolean removeEldestEntry(Map.Entry<String, ModelClient> eldest) {
+                    return size() > CLIENT_CACHE_CAPACITY;
                 }
             });
 
-    /** 取模型实例，带二级缓存：Redis 存配置快照，本地存构建好的 Model */
-    public Model get(String providerCode, String modelName) {
+    /** 取模型客户端，带二级缓存：Redis 存配置快照，本地存构建好的客户端 */
+    public ModelClient client(String providerCode, String modelName) {
         String cacheKey = StrUtil.format("{}.{}", providerCode, modelName);
-        Model cached = modelCache.get(cacheKey);
+        ModelClient cached = clientCache.get(cacheKey);
         if (Objects.nonNull(cached)) {
             return cached;
         }
-        WbProviderDO provider = loadProvider(providerCode);
-        Model model = buildModel(provider, modelName);
-        modelCache.put(cacheKey, model);
-        return model;
+        ModelClient client = build(loadProvider(providerCode), modelName);
+        clientCache.put(cacheKey, client);
+        return client;
+    }
+
+    /** 把供应方配置适配为 hutool-ai 的配置契约，内核与 hutool-ai 服务共用同一份 */
+    public ProviderAIConfig aiConfig(WbProviderDO provider, String modelName) {
+        ProviderAIConfig config = new ProviderAIConfig(provider.getProviderCode());
+        config.setApiUrl(provider.getBaseUrl());
+        config.setModel(modelName);
+        if (StrUtil.isNotBlank(provider.getApiKeyEnc())) {
+            config.setApiKey(decrypt(provider.getApiKeyEnc()));
+        }
+        config.setTimeout((int) Duration.ofSeconds(agentProperties.getModel().getConnectTimeoutSeconds()).toMillis());
+        config.setReadTimeout((int) Duration.ofSeconds(agentProperties.getModel().getStreamTimeoutSeconds()).toMillis());
+        config.putAdditionalConfigByKey("temperature", agentProperties.getModel().getTemperature());
+        return config;
+    }
+
+    /** 该供应方码是否有 hutool-ai 原生服务可复用 */
+    public boolean hutoolAiSupported(String providerCode) {
+        return HUTOOL_AI_CODES.contains(StrUtil.nullToEmpty(providerCode).toLowerCase());
     }
 
     /** 清除某供应方的全部缓存 */
     public void evictProvider(String providerCode) {
         String prefix = providerCode + ".";
-        modelCache.keySet().stream().filter(key -> key.startsWith(prefix)).toList()
-                .forEach(modelCache::remove);
+        clientCache.keySet().stream().filter(key -> key.startsWith(prefix)).toList()
+                .forEach(clientCache::remove);
     }
 
     /** 供应方配置：Redis 5 分钟缓存，未命中回源 */
@@ -131,56 +157,29 @@ public class ModelFactory {
         return agentProperties.getModel().getDefaultName();
     }
 
-    /** 按协议构建模型实例：openai / anthropic 必须配置密钥，ollama 免密钥 */
-    private Model buildModel(WbProviderDO provider, String modelName) {
+    /** 按协议构建客户端：openai / anthropic 必须配置密钥，ollama 免密钥 */
+    private ModelClient build(WbProviderDO provider, String modelName) {
+        ProviderAIConfig config = aiConfig(provider, modelName);
+        if (!PROTOCOL_OLLAMA.equals(resolveProtocol(provider)) && StrUtil.isBlank(config.getApiKey())) {
+            throw new BizException(ErrorCodeEnum.PROVIDER_NOT_CONFIGURED, provider.getProviderCode());
+        }
         return switch (resolveProtocol(provider)) {
-            case "openai" -> OpenAIChatModel.builder()
-                    .apiKey(requireApiKey(provider))
-                    .modelName(modelName)
-                    .stream(agentProperties.getModel().isStream())
-                    .baseUrl(provider.getBaseUrl())
-                    .generateOptions(generateOptions())
-                    .build();
-            case "anthropic" -> AnthropicChatModel.builder()
-                    .apiKey(requireApiKey(provider))
-                    .modelName(modelName)
-                    .stream(agentProperties.getModel().isStream())
-                    .baseUrl(provider.getBaseUrl())
-                    .defaultOptions(generateOptions())
-                    .build();
-            case "ollama" -> OllamaChatModel.builder()
-                    .modelName(modelName)
-                    .stream(agentProperties.getModel().isStream())
-                    .baseUrl(provider.getBaseUrl())
-                    .build();
-            default -> throw new BizException(ErrorCodeEnum.PROVIDER_NOT_CONFIGURED, provider.getProviderCode());
+            case PROTOCOL_ANTHROPIC -> new AnthropicClient(config);
+            case PROTOCOL_OLLAMA -> new OllamaClient(config);
+            default -> new OpenAiCompatClient(config);
         };
     }
 
     /** 协议判定：编码命中 anthropic/ollama 关键字即用对应协议，其余一律按 OpenAI 兼容端点处理 */
-    private String resolveProtocol(WbProviderDO provider) {
+    public String resolveProtocol(WbProviderDO provider) {
         String code = StrUtil.nullToEmpty(provider.getProviderCode()).toLowerCase();
-        if (code.contains("anthropic") || code.contains("claude")) {
-            return "anthropic";
+        if (code.contains(PROTOCOL_ANTHROPIC) || code.contains("claude")) {
+            return PROTOCOL_ANTHROPIC;
         }
-        if (code.contains("ollama")) {
-            return "ollama";
+        if (code.contains(PROTOCOL_OLLAMA)) {
+            return PROTOCOL_OLLAMA;
         }
         return "openai";
-    }
-
-    /** openai / anthropic 必须有密钥 */
-    private String requireApiKey(WbProviderDO provider) {
-        if (StrUtil.isBlank(provider.getApiKeyEnc())) {
-            throw new BizException(ErrorCodeEnum.PROVIDER_NOT_CONFIGURED, provider.getProviderCode());
-        }
-        return decrypt(provider.getApiKeyEnc());
-    }
-
-    private GenerateOptions generateOptions() {
-        return GenerateOptions.builder()
-                .temperature(agentProperties.getModel().getTemperature())
-                .build();
     }
 
     /** 密钥加密：AES/GCM，随机 IV 前置后 Base64 */

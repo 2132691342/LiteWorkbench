@@ -35,6 +35,31 @@ public final class PasswordUtil {
         return RandomUtil.randomString(AuthConst.SALT_LENGTH);
     }
 
+    /** 生成随机强密码：字母数字各半，长度取配置 */
+    public static String randomPassword() {
+        String letters = RandomUtil.randomString("abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ",
+                AuthConst.GENERATED_PASSWORD_LENGTH / 2);
+        String digits = RandomUtil.randomString("23456789", AuthConst.GENERATED_PASSWORD_LENGTH / 2);
+        return RandomUtil.randomString(letters + digits, AuthConst.GENERATED_PASSWORD_LENGTH);
+    }
+
+    /** 强度校验：至少配置长度且同时包含字母与数字 */
+    public static boolean isStrong(String rawPassword) {
+        if (StrUtil.isBlank(rawPassword) || rawPassword.length() < AuthConst.PASSWORD_MIN_LENGTH) {
+            return false;
+        }
+        boolean letter = false;
+        boolean digit = false;
+        for (char ch : rawPassword.toCharArray()) {
+            if (Character.isLetter(ch)) {
+                letter = true;
+            } else if (Character.isDigit(ch)) {
+                digit = true;
+            }
+        }
+        return letter && digit;
+    }
+
     /** 计算摘要，格式 pbkdf2$迭代次数$盐$Base64 哈希 */
     public static String hash(String rawPassword, String salt) {
         String effectiveSalt = StrUtil.isBlank(salt) ? randomSalt() : salt;

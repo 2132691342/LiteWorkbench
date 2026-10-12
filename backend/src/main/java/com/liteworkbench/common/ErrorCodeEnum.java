@@ -22,6 +22,10 @@ public enum ErrorCodeEnum {
     FORBIDDEN("2003", 403, "没有操作权限"),
     TOKEN_EXPIRED("2004", 401, "登录已过期"),
     OLD_PASSWORD_INVALID("2005", 400, "原密码不正确"),
+    PASSWORD_RESET_REQUIRED("2006", 403, "请先修改初始密码"),
+    ACCOUNT_LOCKED("2007", 403, "登录失败次数过多，请稍后再试"),
+    PASSWORD_WEAK("2008", 400, "密码强度不足，至少 8 位且同时包含字母与数字"),
+    PAYLOAD_DECRYPT_FAILED("2009", 400, "凭据解析失败，请刷新页面后重试"),
 
     // 用户 2200
     USER_NOT_FOUND("2201", 404, "用户不存在"),

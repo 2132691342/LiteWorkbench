@@ -25,4 +25,6 @@ public class LoginUser implements Serializable {
     private List<String> roleCodes;
     /** 权限标识集合 */
     private List<String> perms;
+    /** 是否必须先改密（种子账号为 true），改密成功后置 false */
+    private Boolean pwdResetRequired;
 }

@@ -176,6 +176,23 @@
 - 不放标题以外的图例装饰，tooltip 白底 1px 边框 圆角 8。
 - 顶部提供视图分段切换（运行趋势 / Token 趋势），选中态为浅紫底 + 主紫文字 + 轻阴影。
 
-## 10. 暗色模式
+## 10. 菜单与标签渲染
+
+- 菜单标签一律经 `utils/menu.ts#menuLabel(name)`：命中 i18n 用译文；未命中时把 key 末段拆驼峰为词（`menu.userManageCreate` → `User Manage Create`），**绝不裸显 `menu.xxx` 这样的原始 key**。
+- 侧栏目录展开/收起 200ms 旋转箭头；选中项主紫文字 + `--lw-secondary-selected` 底；悬停黑色 5% 叠加。
+- 目录下的子项缩进 36px，行高 36px；目录行高 40px。
+- 图标只允许线性描边风格（stroke 2、圆角端点、24×24 viewBox），禁止混用实心图标集。
+
+## 11. 焦点与可访问性
+
+| 项 | 规则 |
+|---|---|
+| 焦点环 | `outline: 2px solid var(--lw-primary); outline-offset: 2px`，只在 `:focus-visible` 出现 |
+| 键盘 | 所有可点击元素可 Tab 到达、Enter/Space 触发；弹窗打开即锁焦点并在关闭后归还 |
+| 对比度 | 正文对底 ≥ 4.5:1；`--lw-on-secondary` 专供 `--lw-secondary` 底，不得用于主紫底 |
+| 语义 | 图标按钮必须有 `aria-label`；加载态按钮带 `aria-busy="true"` |
+| 动效 | 尊重 `prefers-reduced-motion`，命中时关闭缩放与位移动画，仅保留颜色过渡 |
+
+## 12. 暗色模式
 
 当前只交付浅色主题，令牌结构预留 `data-theme="dark"`，不做半成品切换。

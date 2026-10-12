@@ -1,35 +1,29 @@
 package com.liteworkbench.service;
 
 import com.liteworkbench.agent.AgentEventAdapter;
-import com.liteworkbench.agent.ToolOutputCapture;
+import com.liteworkbench.agent.event.AgentEvent;
+import com.liteworkbench.agent.event.AgentEventType;
 import com.liteworkbench.domain.constant.EventTypeEnum;
 import com.liteworkbench.domain.dto.RunEventDTO;
-import io.agentscope.core.event.AgentStartEvent;
-import io.agentscope.core.event.TextBlockDeltaEvent;
-import io.agentscope.core.event.ThinkingBlockDeltaEvent;
-import io.agentscope.core.event.ToolCallStartEvent;
-import io.agentscope.core.event.ToolResultEndEvent;
-import io.agentscope.core.message.ToolResultState;
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-/** 事件长链路：SDK 事件归一 → 批内合帧，覆盖增量合并、类型切换、工具输出与超长裁剪 */
+/** 事件长链路：内核事件归一 → 批内合帧，覆盖增量合并、类型切换、工具输出与超长裁剪 */
 class RunEventPipelineTest {
 
     private final AgentEventAdapter adapter = new AgentEventAdapter();
 
     @Test
     void 连续正文增量归一后合并为单帧且seq取尾() {
-        List<RunEventDTO> batch = new ArrayList<>();
-        batch.add(adapt(new TextBlockDeltaEvent("r1", "b1", "你"), 1));
-        batch.add(adapt(new TextBlockDeltaEvent("r1", "b1", "好"), 2));
-        batch.add(adapt(new TextBlockDeltaEvent("r1", "b1", "！"), 3));
+        List<RunEventDTO> batch = List.of(
+                adapt(AgentEvent.builder().type(AgentEventType.TEXT_DELTA).textDelta("你").build(), 1),
+                adapt(AgentEvent.builder().type(AgentEventType.TEXT_DELTA).textDelta("好").build(), 2),
+                adapt(AgentEvent.builder().type(AgentEventType.TEXT_DELTA).textDelta("！").build(), 3));
 
         List<RunEventDTO> frames = RunService.mergeFrames(batch);
         assertEquals(1, frames.size());
@@ -40,29 +34,28 @@ class RunEventPipelineTest {
 
     @Test
     void 思考与正文交替不跨类型合并且非增量事件保序() {
-        List<RunEventDTO> batch = new ArrayList<>();
-        batch.add(adapt(new AgentStartEvent("n", "s", "reply-1"), 1));
-        batch.add(adapt(new ThinkingBlockDeltaEvent("r1", "b1", "先想"), 2));
-        batch.add(adapt(new TextBlockDeltaEvent("r1", "b1", "再答"), 3));
-        batch.add(new RunEventDTO("RUN_1", "SESS_1", 4, EventTypeEnum.RUN_END.getCode(),
-                null, null, new HashMap<>(), 1000L));
+        List<RunEventDTO> batch = List.of(
+                adapt(AgentEvent.builder().type(AgentEventType.AGENT_START).build(), 1),
+                adapt(AgentEvent.builder().type(AgentEventType.THINKING_DELTA).textDelta("先想").build(), 2),
+                adapt(AgentEvent.builder().type(AgentEventType.TEXT_DELTA).textDelta("再答").build(), 3),
+                new RunEventDTO("RUN_1", "SESS_1", 4, EventTypeEnum.RUN_END.getCode(),
+                        null, null, new HashMap<>(), 1000L));
 
         List<RunEventDTO> frames = RunService.mergeFrames(batch);
         assertEquals(List.of(EventTypeEnum.RUN_START.getCode(), EventTypeEnum.THINKING_DELTA.getCode(),
-                EventTypeEnum.TEXT_DELTA.getCode(), EventTypeEnum.RUN_END.getCode()),
+                        EventTypeEnum.TEXT_DELTA.getCode(), EventTypeEnum.RUN_END.getCode()),
                 frames.stream().map(RunEventDTO::eventType).toList());
         assertEquals("先想", frames.get(1).textDelta());
         assertEquals("再答", frames.get(2).textDelta());
     }
 
     @Test
-    void 工具调用起止与结果输出各占一帧且读捕获内容() {
-        ToolOutputCapture capture = new ToolOutputCapture();
-        capture.record("python_exec", "42\n");
-        List<RunEventDTO> batch = new ArrayList<>();
-        batch.add(adapt(new ToolCallStartEvent("r1", "call-1", "python_exec"), 5));
-        batch.add(adapter.adapt(new ToolResultEndEvent("r1", "call-1", "python_exec", ToolResultState.ERROR),
-                "RUN_1", "SESS_1", 6, capture));
+    void 工具调用起止与结果各占一帧且携带输出与失败标记() {
+        List<RunEventDTO> batch = List.of(
+                adapt(AgentEvent.builder().type(AgentEventType.TOOL_CALL_START).toolCallId("call-1")
+                        .toolName("python_exec").arguments("{\"code\":\"1\"}").build(), 5),
+                adapt(AgentEvent.builder().type(AgentEventType.TOOL_RESULT).toolCallId("call-1")
+                        .toolName("python_exec").output("42\n").error(Boolean.TRUE).build(), 6));
 
         List<RunEventDTO> frames = RunService.mergeFrames(batch);
         assertEquals(2, frames.size());
@@ -75,13 +68,23 @@ class RunEventPipelineTest {
 
     @Test
     void 超长思考增量归一即裁剪不越界() {
-        RunEventDTO event = adapt(new ThinkingBlockDeltaEvent("r1", "b1", "x".repeat(5000)), 2);
+        RunEventDTO event = adapt(AgentEvent.builder().type(AgentEventType.THINKING_DELTA)
+                .textDelta("x".repeat(5000)).build(), 2);
         assertEquals(EventTypeEnum.THINKING_DELTA.getCode(), event.eventType());
         assertEquals(4096, event.textDelta().length());
         assertEquals(4096, String.valueOf(event.payload().get("delta")).length());
     }
 
-    private RunEventDTO adapt(io.agentscope.core.event.AgentEvent event, long seq) {
-        return adapter.adapt(event, "RUN_1", "SESS_1", seq, new ToolOutputCapture());
+    @Test
+    void 模型调用结束帧带数字用量供入账() {
+        RunEventDTO event = adapt(AgentEvent.builder().type(AgentEventType.MODEL_CALL_END)
+                .inputTokens(120L).outputTokens(45L).durationMs(800L).build(), 7);
+        assertEquals(EventTypeEnum.MODEL_CALL.getCode(), event.eventType());
+        assertEquals(120L, event.payload().get("inputTokens"));
+        assertEquals(45L, event.payload().get("outputTokens"));
+    }
+
+    private RunEventDTO adapt(AgentEvent event, long seq) {
+        return adapter.adapt(event, "RUN_1", "SESS_1", seq);
     }
 }

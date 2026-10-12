@@ -41,7 +41,7 @@ MQ 不可用时跳过索引，只留文件，不阻塞业务线程。
 |---|---|---|
 | PostgreSQL | `SELECT 1` | 3s |
 | Redis | 取一次连接后立即释放 | 2s |
-| Manticore | `SHOW TABLES` | 3s |
+| Manticore | `SELECT log_id FROM lw_log LIMIT 1`（必须带 `FROM <索引>`；非 raw 模式下 `SELECT 1` / `SHOW TABLES` 会被回 501） | 3s |
 | MinIO | bucket exists | 5s |
 | RabbitMQ | 连接打开 | 3s |
 | Python | 版本探测 | 5s |

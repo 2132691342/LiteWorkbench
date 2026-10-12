@@ -6,6 +6,7 @@ import com.liteworkbench.common.R;
 import com.liteworkbench.domain.dto.LoginREQ;
 import com.liteworkbench.domain.dto.PasswordREQ;
 import com.liteworkbench.domain.vo.LoginRESP;
+import com.liteworkbench.domain.vo.PublicKeyVO;
 import com.liteworkbench.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +24,14 @@ public class AuthController {
 
     private final AuthService authService;
 
-    /** 登录：登录名 + 密码，按 IP 限流防爆破 */
+    /** 登录加密公钥：免登录，按 IP 限流防公钥轮换被打爆 */
+    @RateLimit(prefix = "auth:key", limit = 60, windowSeconds = 60, keyBy = RateLimit.KeyBy.IP)
+    @GetMapping("/public-key")
+    public R<PublicKeyVO> publicKey() {
+        return R.ok(authService.publicKey());
+    }
+
+    /** 登录：登录名 + 密码密文，按 IP 限流防爆破 */
     @RateLimit(prefix = "auth:login", limit = 10, windowSeconds = 60, keyBy = RateLimit.KeyBy.IP)
     @PostMapping("/login")
     public R<LoginRESP> login(@RequestBody @Valid LoginREQ req) {

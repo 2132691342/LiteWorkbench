@@ -20,7 +20,8 @@
 | 画布 | AntV X6 2.18.1 | 工作流编排画布 |
 | 富文本 | WangEditor 5.1.23 | 创作台富文本模式 |
 | 文件处理 | XLSX、docx-preview、vue-pdf-embed | 文件空间在线预览，按需异步加载 |
-| 国际化 | Vue I18n 9.10.2 | 中英双语 |
+| 国际化 | Vue I18n 9.10.2 | 中英双语，菜单标签经 `menuLabel()` 兜底 |
+| 安全 | WebCrypto（浏览器原生） | 登录密码 RSA-OAEP 加密，见 `utils/crypto.ts` |
 
 ### 目录
 
@@ -35,12 +36,16 @@
 | `composables/` | 复用逻辑：`useRunStream`（SSE 订阅）、`usePermission`（权限判断） |
 | `styles/tokens.css` | 唯一色值来源 |
 | `locales/` | 中英双语 |
+| `utils/crypto.ts` | 公钥获取与密码加密（RSA-OAEP/SHA-256） |
+| `utils/menu.ts` | `menuLabel()`：i18n 命中即用译文，未命中降级为 key 末段可读形式 |
+| `views/` | 登录页 `Login.vue` 与强制改密页 `ForcePassword.vue` 为静态路由 |
 
 ### 路由
 
 | 路径 | 页面 | 权限 |
 |---|---|---|
-| `/login` | 登录 | 公开 |
+| `/login` | 登录（密码 RSA 加密提交） | 公开 |
+| `/force-password` | 强制改密（`pwdResetRequired = true` 时唯一可达页） | 登录 |
 | `/dashboard` | 仪表盘 | 登录 |
 | `/console` | 工作台（会话 + 运行时间线） | 登录 |
 | `/writer` | 创作台（文档编辑 + 版本 + AI 辅助） | `wb:doc:list` |
@@ -117,6 +122,12 @@ await runStore.replay(runId)
   ├─ 有 token → GET /auth/current → 存用户/权限/菜单 → addRoute 动态注册
   ├─ 无 token → 跳 /login
   └─ 登录成功 → 同上有 token 分支
+
+登录
+  ├─ 进入页面即 GET /auth/public-key（失败即报"安全组件加载失败"，绝不降级明文）
+  ├─ 提交 → crypto.encrypt(password) → POST /auth/login { username, password:密文, keyId }
+  ├─ pwdResetRequired = true → 跳 /force-password，改密成功后强制重登
+  └─ 否则 → 按 redirect 或 /dashboard 进入外壳
 
 工作台
   ├─ 加载会话列表（骨架屏）

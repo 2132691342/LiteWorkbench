@@ -163,7 +163,7 @@ onMounted(load)
                   {{ t('common.edit') }}
                 </LwButton>
                 <LwButton v-if="hasPerm('system:role:grant')" variant="text" size="sm" @click="openGrant(row)">
-                  {{ t('menu.system.role.grant') }}
+                  {{ t('menu.systemRoleGrant') }}
                 </LwButton>
                 <LwButton
                   v-if="hasPerm('system:role:delete') && !row.builtin"

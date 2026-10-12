@@ -46,12 +46,21 @@ HTTP 状态码：成功 200，参数错误 400，未认证 401，无权限 403�
 
 登录态由 Sa-Token 管理，令牌放 `Authorization` 头，值为令牌本身（不加 `Bearer` 前缀），会话存 Redis，默认有效期 2 小时。
 
+**密码字段一律为密文**：前端先取公钥，用 RSA/PKCS#1 v1.5 加密（JSEncrypt），密文 Base64 放入 `password`，同时回传 `keyId`。明文密码不出浏览器。
+
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| POST | `/api/v1/auth/login` | 登录，入参 `username` `password` |
+| GET | `/api/v1/auth/public-key` | 取登录加密公钥，免登录 |
+| POST | `/api/v1/auth/login` | 登录，入参 `username` `password`(密文) `keyId` |
 | POST | `/api/v1/auth/logout` | 登出 |
 | GET | `/api/v1/auth/current` | 当前用户：资料 + 角色码 + 权限标识集合 + 菜单树 |
-| POST | `/api/v1/auth/password` | 修改自己的密码 |
+| POST | `/api/v1/auth/password` | 修改自己的密码，入参 `oldPassword` `newPassword`（均为密文） |
+
+公钥响应 `data`：
+
+```json
+{ "keyId": "k_01M4..", "algorithm": "RSA/PKCS1Padding", "publicKey": "MIIBIjANBgkq...", "expiresAt": 1710000000000 }
+```
 
 登录响应 `data`：
 
@@ -61,9 +70,14 @@ HTTP 状态码：成功 200，参数错误 400，未认证 401，无权限 403�
   "user": { "userId": "USER_..", "username": "admin", "nickname": "管理员", "avatarUrl": "" },
   "roleCodes": ["super_admin"],
   "perms": ["system:user:list", "system:user:create"],
-  "menus": [ { "menuId": "MENU_..", "menuName": "system.menu.dashboard", "routePath": "/dashboard" } ]
+  "pwdResetRequired": false,
+  "menus": [ { "menuId": "MENU_..", "menuName": "menu.dashboard", "routePath": "/dashboard" } ]
 }
 ```
+
+`pwdResetRequired = true` 时前端必须跳到强制改密页；后端同时只放行 `/auth/current` 与 `/auth/password`，其余接口返回 `PASSWORD_RESET_REQUIRED`（2006）。
+
+失败计数：同一用户名连续 5 次凭据错误锁定 10 分钟，返回 `ACCOUNT_LOCKED`（2007）；登录接口另有按 IP 的固定窗口限流。
 
 ## 4. 用户
 

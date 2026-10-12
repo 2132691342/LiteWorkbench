@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import type { MenuVO } from '@/types/api'
+import { menuLabel } from '@/utils/menu'
 import { menuIcon } from './icons'
 
 /** 侧栏菜单主体：菜单树渲染 + 目录展开 + 选中态 + 底部品牌卡片，桌面侧栏与移动抽屉共用 */
@@ -68,7 +69,7 @@ function handleClick(menu: MenuVO): void {
           @click="handleClick(menu)"
         >
           <el-icon :size="16"><component :is="menuIcon(menu.icon)" /></el-icon>
-          <span class="text-sm">{{ t(menu.menuName) }}</span>
+          <span class="text-sm">{{ menuLabel(menu.menuName) }}</span>
           <el-icon :size="12" class="ml-auto transition-transform duration-200" :class="{ 'rotate-90': isExpanded(menu) }">
             <component :is="menuIcon('list')" />
           </el-icon>
@@ -86,7 +87,7 @@ function handleClick(menu: MenuVO): void {
                 : 'color: var(--lw-ink)'
             "
           >
-            {{ t(child.menuName) }}
+            {{ menuLabel(child.menuName) }}
           </router-link>
         </template>
 
@@ -101,7 +102,7 @@ function handleClick(menu: MenuVO): void {
           "
         >
           <el-icon :size="16"><component :is="menuIcon(menu.icon)" /></el-icon>
-          <span>{{ t(menu.menuName) }}</span>
+          <span>{{ menuLabel(menu.menuName) }}</span>
         </router-link>
       </template>
     </div>

@@ -9,7 +9,6 @@ import com.liteworkbench.common.IdGenerator;
 import com.liteworkbench.common.PageResult;
 import com.liteworkbench.common.PasswordUtil;
 import com.liteworkbench.common.TimeUtil;
-import com.liteworkbench.config.AuthProperties;
 import com.liteworkbench.config.StpInterfaceImpl;
 import com.liteworkbench.domain.constant.IdPrefixConst;
 import com.liteworkbench.domain.constant.UserStateEnum;
@@ -38,7 +37,6 @@ public class UserService {
     private final SysUserMapper sysUserMapper;
     private final SysRoleMapper sysRoleMapper;
     private final StpInterfaceImpl stpInterface;
-    private final AuthProperties authProperties;
     private final MenuService menuService;
 
     /** 分页查询 */
@@ -67,8 +65,8 @@ public class UserService {
             throw new BizException(ErrorCodeEnum.USERNAME_CONFLICT, req.getUsername());
         }
         validateRoles(req.getRoleIds());
+        String rawPassword = requireStrong(req.getPassword(), "新建用户必须设置初始密码");
         String salt = PasswordUtil.randomSalt();
-        String rawPassword = StrUtil.blankToDefault(req.getPassword(), authProperties.getDefaultPassword());
         SysUserDO user = new SysUserDO();
         user.setUserId(IdGenerator.generate(IdPrefixConst.USER));
         user.setUsername(req.getUsername());
@@ -77,6 +75,8 @@ public class UserService {
         user.setNickname(req.getNickname());
         user.setEmail(req.getEmail());
         user.setState(UserStateEnum.NORMAL.getCode());
+        // 初始密码由管理员设定，首登强制改密，避免长期共用同一口令
+        user.setPwdResetRequired(Boolean.TRUE);
         user.setCreatedBy(operatorId);
         user.setRemark(req.getRemark());
         sysUserMapper.insert(user);
@@ -127,12 +127,13 @@ public class UserService {
         log.info("[user.toggle] userId={} state={}", userId, next);
     }
 
-    /** 重置密码 */
+    /** 重置密码：管理员重设后该用户首登仍需改密 */
     @Transactional(rollbackFor = Exception.class)
     public void resetPassword(ResetPasswordREQ req, String operatorId) {
         require(req.getUserId());
+        String newPassword = requireStrong(req.getNewPassword(), "新密码不能为空");
         String salt = PasswordUtil.randomSalt();
-        sysUserMapper.updatePassword(req.getUserId(), PasswordUtil.hash(req.getNewPassword(), salt), salt, operatorId);
+        sysUserMapper.updatePassword(req.getUserId(), PasswordUtil.hash(newPassword, salt), salt, true, operatorId);
         log.info("[user.reset] userId={} operatorId={}", req.getUserId(), operatorId);
     }
 
@@ -150,7 +151,7 @@ public class UserService {
         log.info("[user.delete] userId={} operatorId={}", userId, operatorId);
     }
 
-    /** 修改自己的密码 */
+    /** 修改自己的密码：校验原密码后换盐换摘要，并清除强制改密标记 */
     @Transactional(rollbackFor = Exception.class)
     public void changePassword(String userId, String oldPassword, String newPassword) {
         SysUserDO user = sysUserMapper.selectById(userId);
@@ -160,9 +161,24 @@ public class UserService {
         if (!PasswordUtil.matches(oldPassword, user.getPasswordSalt(), user.getPasswordHash())) {
             throw new BizException(ErrorCodeEnum.OLD_PASSWORD_INVALID);
         }
+        String checked = requireStrong(newPassword, "新密码不能为空");
+        if (Objects.equals(oldPassword, checked)) {
+            throw new BizException(ErrorCodeEnum.PARAM_INVALID, "新密码不能与原密码相同");
+        }
         String salt = PasswordUtil.randomSalt();
-        sysUserMapper.updatePassword(userId, PasswordUtil.hash(newPassword, salt), salt, userId);
+        sysUserMapper.updatePassword(userId, PasswordUtil.hash(checked, salt), salt, false, userId);
         log.info("[user.password] userId={}", userId);
+    }
+
+    /** 口令强度守门：空值与弱口令分别给不同错误码 */
+    private String requireStrong(String rawPassword, String blankMessage) {
+        if (StrUtil.isBlank(rawPassword)) {
+            throw new BizException(ErrorCodeEnum.PARAM_INVALID, blankMessage);
+        }
+        if (!PasswordUtil.isStrong(rawPassword)) {
+            throw new BizException(ErrorCodeEnum.PASSWORD_WEAK);
+        }
+        return rawPassword;
     }
 
     /** 校验角色存在 */

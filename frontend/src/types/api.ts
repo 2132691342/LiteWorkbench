@@ -26,14 +26,24 @@ export interface PageREQ {
 
 /* ===== 认证 ===== */
 
+export interface PublicKeyVO {
+  keyId: string
+  algorithm: string
+  publicKey: string
+  expiresAt: number
+}
+
 export interface LoginREQ {
   username: string
+  /** RSA 密文，明文不出浏览器 */
   password: string
+  keyId: string
 }
 
 export interface PasswordREQ {
   oldPassword: string
   newPassword: string
+  keyId: string
 }
 
 export interface ResetPasswordREQ {
@@ -46,6 +56,8 @@ export interface LoginRESP {
   user: UserVO
   roleCodes: string[]
   perms: string[]
+  /** 为 true 时前端必须强制跳转改密页 */
+  pwdResetRequired?: boolean
   menus: MenuVO[]
 }
 

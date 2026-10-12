@@ -4,7 +4,7 @@
 
 事件流是运行的唯一事实来源。一次 Run 由有序事件构成，落库后可回放，前端只需一个 reducer。
 
-边界：从 AgentScope 事件到工作台事件的归一化在本模块一处完成，前端不感知 SDK 版本差异。
+边界：从内核事件到工作台事件的归一化在本模块一处完成，前端不感知模型协议与内核版本差异。
 
 ## 设计
 
@@ -14,32 +14,33 @@
 | Event | Run 内的最小事实单元，带 `seq` 严格递增 |
 | Seq | 运行内序号，从 1 开始，由内存计数器分配 |
 
-归一映射表：
+内核事件是封闭集合（`agent/event/AgentEventType`），归一映射表：
 
-| AgentScope 事件 | 工作台类型 | blockType |
+| 内核事件 | 工作台类型 | blockType |
 |---|---|---|
-| `AgentStartEvent` | `run.start` | — |
-| `ThinkingBlockDeltaEvent` | `thinking.delta` | `thinking` |
-| `TextBlockDeltaEvent` | `text.delta` | `text` |
-| `ToolCallStartEvent` | `tool.call`（phase=start） | `tool_call` |
-| `ToolCallEndEvent` | `tool.call`（phase=end） | `tool_call` |
-| `ToolResultEndEvent` | `tool.result` | `tool_result` |
-| `ModelCallStartEvent` | `model.call`（phase=start） | — |
-| `ModelCallEndEvent` | `model.call`（phase=end，携带用量） | — |
-| `AgentResultEvent` | `run.result` | `text` |
-| `ExceedMaxItersEvent` | `run.exceed` | — |
-| `AgentEndEvent` | `run.end` | — |
+| `AGENT_START` | `run.start` | — |
+| `THINKING_DELTA` | `thinking.delta` | `thinking` |
+| `TEXT_DELTA` | `text.delta` | `text` |
+| `TOOL_CALL_START` | `tool.call`（phase=start） | `tool_call` |
+| `TOOL_CALL_END` | `tool.call`（phase=end） | `tool_call` |
+| `TOOL_RESULT` | `tool.result` | `tool_result` |
+| `MODEL_CALL_START` | `model.call`（phase=start） | — |
+| `MODEL_CALL_END` | `model.call`（phase=end，携带用量） | — |
+| `AGENT_RESULT` | `run.result` | `text` |
+| `EXCEED_MAX_ITERS` | `run.exceed` | — |
+| `AGENT_END` | `run.end` | — |
+| `AGENT_ERROR` | `run.error` | — |
 
-未列出的事件类型归一为 `custom`，不丢弃，便于后续扩展。
+协议差异（OpenAI 的 `data:` SSE、Anthropic 的命名事件、Ollama 的 NDJSON）在 `agent/model` 内被拉平，归一表只面对内核事件，因此换模型协议不动前端、不动落库结构。
 
 ## 契约
 
 ```java
 public record RunEventDTO(
-    String runId, String sessionId, long seq,
+    String runId, String sessionId, Long seq,
     String eventType, String blockType,
     String textDelta, Map<String, Object> payload,
-    long occurredAt) {}
+    Long occurredAt) {}
 ```
 
 SSE 帧（单一通道，`id` 字段为 `seq`，客户端可携 `Last-Event-ID` 断点续拉）：
@@ -79,11 +80,11 @@ GET /api/v1/run/events/{runId}?afterSeq=0
 
 ```
 POST /api/v1/run/abort/{runId}
-  → 有活动实例：释放订阅（dispose → doOnCancel）→ run.end(status=aborted)
+  → 有活动实例：RunHandle.cancel()（置取消标志 + 关闭流）→ 内核在检查点收敛 → run.end(status=aborted)
   → 无活动实例（进程重启后的孤儿运行）：直接结算为 aborted
 ```
 
-中断凭据是进程内的活动运行表，因此只对当前实例生效；单实例部署下等价于全局生效。已进入终态的运行抛 `RUN_NOT_ABORTABLE`。
+取消凭据是进程内的活动运行表，因此只对当前实例生效；单实例部署下等价于全局生效。已进入终态的运行抛 `RUN_NOT_ABORTABLE`。
 
 `run.result`（completed）与中断同时到达时，**中断裁决优先**，终态记 `aborted`，不写助手消息。
 
@@ -92,11 +93,12 @@ POST /api/v1/run/abort/{runId}
 | 选择 | 换来什么 | 代价 |
 |---|---|---|
 | 攒批写入 | 写放大降低一个量级 | 断电可能丢最后一批，靠终态兜底 |
-| 未识别事件归一为 custom | SDK 升级不会静默丢事件 | 前端需要容忍未知类型 |
+| 内核事件封闭集合 | 归一表穷举即可，编译期可查漏 | 新增能力必须显式加事件类型 |
 | seq 内存分配 | 严格递增且无锁竞争 | 运行不跨重启续写，回放一律读 `wb_event` |
+| 协作式取消 | 无半写状态 | 取消延迟取决于检查点密度 |
 
 ## 约束
 
-- `run.end` 与 `error` 必有且仅有其一。
+- `run.end` 与 `run.error` 必有且仅有其一。
 - 事件 `payload` 必须脱敏，不得含密钥。
 - 单条增量（`text.delta` / `thinking.delta`）超过 4KB 时截断，完整内容以 `run.result` 为准。
