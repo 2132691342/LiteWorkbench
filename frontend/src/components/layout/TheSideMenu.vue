@@ -91,8 +91,9 @@ function handleClick(menu: MenuVO): void {
           </router-link>
         </template>
 
+        <!-- 叶子分支必须显式排除带子节点的目录：v-else-if 挂在子菜单模板块上，目录收起时会二次渲染出同名条目 -->
         <router-link
-          v-else-if="menu.routePath"
+          v-else-if="!menu.children?.length && menu.routePath"
           :to="menu.routePath"
           class="h-10 rounded-lg flex items-center px-3 gap-3 text-sm transition-all duration-200 hover:bg-black/5"
           :style="

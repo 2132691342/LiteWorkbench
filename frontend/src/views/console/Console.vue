@@ -2,10 +2,9 @@
 import { Delete, Edit, Position, Promotion, RefreshLeft, VideoPlay } from '@element-plus/icons-vue'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
+import ConsoleQuickStart from '@/components/console/ConsoleQuickStart.vue'
 import LwButton from '@/components/ui/LwButton.vue'
-import LwEmpty from '@/components/ui/LwEmpty.vue'
 import LwErrorBar from '@/components/ui/LwErrorBar.vue'
 import LwMarkdown from '@/components/ui/LwMarkdown.vue'
 import LwSkeleton from '@/components/ui/LwSkeleton.vue'
@@ -18,17 +17,9 @@ import type { RunVO } from '@/types/api'
 
 /** 工作台：左侧会话与运行历史，右侧流式时间线（实时与回放同路径） */
 const { t } = useI18n()
-const router = useRouter()
 const sessionStore = useSessionStore()
 const runStore = useRunStore()
 const { start: startStream, dispose: disposeStream } = useRunStream()
-
-/** 空态创作入口：跳到对应页面继续创作闭环 */
-const quickEntries = [
-  { route: '/writer', titleKey: 'console.goWriter', descKey: 'console.goWriterDesc' },
-  { route: '/prompt', titleKey: 'console.goPrompt', descKey: 'console.goPromptDesc' },
-  { route: '/kb', titleKey: 'console.goKb', descKey: 'console.goKbDesc' },
-]
 
 const draft = ref('')
 const streamError = ref('')
@@ -318,30 +309,9 @@ onMounted(async () => {
 
       <div ref="timelineEl" class="flex-1 min-h-0 overflow-auto px-6">
         <LwSkeleton v-if="sessionStore.loadingMessages" :rows="6" />
-        <div v-else-if="!sessionStore.activeSessionId" class="h-full flex items-center justify-center">
-          <LwEmpty :description="t('console.noSession')" />
-        </div>
-        <div v-else-if="!messages.length" class="h-full flex items-center justify-center">
-          <!-- 空态不是留白：给三个创作入口 + 工具能力说明 -->
-          <div class="max-w-lg w-full flex flex-col gap-4">
-            <div class="text-center">
-              <h3 class="text-base font-bold" style="color: var(--lw-primary)">{{ t('console.quickTitle') }}</h3>
-              <p class="text-xs mt-1" style="color: var(--lw-ink-muted)">{{ t('console.quickDesc') }}</p>
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <button
-                v-for="entry in quickEntries"
-                :key="entry.route"
-                class="p-4 rounded-xl border text-left flex flex-col gap-2 transition-all duration-200 hover:-translate-y-0.5 hover:lw-shadow-md"
-                style="background: var(--lw-surface-raised); border-color: var(--lw-border)"
-                @click="router.push(entry.route)"
-              >
-                <span class="text-sm font-bold" style="color: var(--lw-primary)">{{ t(entry.titleKey) }}</span>
-                <span class="text-xs" style="color: var(--lw-ink-muted)">{{ t(entry.descKey) }}</span>
-              </button>
-            </div>
-            <p class="text-xs text-center" style="color: var(--lw-ink-muted)">{{ t('console.toolsHint') }}</p>
-          </div>
+        <!-- 两种空态（未选会话 / 会话内无消息）都给创作入口，不留白也不重复实现 -->
+        <div v-else-if="!sessionStore.activeSessionId || !messages.length" class="h-full flex items-center justify-center">
+          <ConsoleQuickStart />
         </div>
         <div v-else class="max-w-3xl mx-auto flex flex-col gap-4 pb-4">
           <template v-for="(message, index) in messages" :key="index">

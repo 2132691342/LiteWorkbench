@@ -4,9 +4,6 @@ frontend/dist/
 frontend/node_modules/
 *.class
 
-# 线上验证截图（本地留存，不入库）
-.shots/
-
 # 日志
 /logs/
 *.log
@@ -29,8 +26,8 @@ Thumbs.db
 backend/data/
 data/
 
-# 本地验证产物与一次性凭据（不进仓库）
-.secrets/
+# 线上验证产物与本地一次性凭据（不入库）
 .shots/
+.secrets/
 .playwright-cli/
 
