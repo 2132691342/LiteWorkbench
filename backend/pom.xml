@@ -65,15 +65,10 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- 工具库：hutool-all 已聚合 hutool-ai，此处显式声明避免依赖传递裁剪 -->
+        <!-- 工具库：hutool-all 已聚合 hutool-ai 模块，无需单独声明 -->
         <dependency>
             <groupId>cn.hutool</groupId>
             <artifactId>hutool-all</artifactId>
-            <version>${hutool.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>cn.hutool</groupId>
-            <artifactId>hutool-ai</artifactId>
             <version>${hutool.version}</version>
         </dependency>
         <dependency>

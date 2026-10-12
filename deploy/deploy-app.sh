@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 应用发布：在云主机上拉取新镜像、重启应用容器并做就绪自检
+# 应用发布：拉取新镜像、重建应用容器、清理端口转发残留并按健康端点做就绪自检
 # 用法：bash deploy-app.sh <镜像:tag>，工作目录为 docker-compose.app.yaml 所在目录
 set -uo pipefail
 
@@ -8,11 +8,14 @@ CONTAINER=liteworkbench
 COMPOSE_FILE=docker-compose.app.yaml
 PORT=24399
 
-# 每步都打点：失败时能直接看出死在哪一步
 step() { echo "[deploy] $*"; }
 
-# 重建前先删同名容器：podman-compose 1.0.6 的 up -d 只比对配置哈希，不感知镜像 ID 变化
-# 同时清理同端口的 CNI-HOSTPORT-DNAT 残留规则：rootless podman 重建后会留下指向已删容器的转发
+# podman-compose 1.0.6 的 up -d 只比对配置哈希不认镜像 ID，重建前必须删掉同名容器
+drop_container() {
+  podman rm -f "$CONTAINER" 2>/dev/null || true
+}
+
+# rootless podman 重建后会留下指向已删容器的 CNI-HOSTPORT-DNAT 规则，导致宿主机端口不可达
 drop_stale_dnat() {
   local dropped=0 ln
   while true; do
@@ -25,11 +28,11 @@ drop_stale_dnat() {
   step "清理 CNI-HOSTPORT-DNAT 残留规则 $dropped 条"
 }
 
+# 关键步骤显式判失败，非关键步骤允许非零继续，因此不开 set -e
 step "拉取镜像 $IMAGE"
 export LITEWORKBENCH_IMAGE="$IMAGE"
-# 不走 set -e：关键步骤显式判失败，非关键步骤允许非零继续
 podman-compose -f "$COMPOSE_FILE" pull || { echo "拉取镜像失败"; exit 1; }
-podman rm -f "$CONTAINER" 2>/dev/null || true
+drop_container
 drop_stale_dnat
 
 step "启动容器"
@@ -49,6 +52,7 @@ for _ in $(seq 1 36); do
   sleep 5
 done
 
+# 未就绪即失败并打印现场，避免把启动失败的容器留在线上
 if [ "$ready" != "1" ]; then
   echo "=== 应用未就绪，打印容器与端口现场 ==="
   podman ps --format '{{.Names}} | {{.Status}} | {{.Ports}}'

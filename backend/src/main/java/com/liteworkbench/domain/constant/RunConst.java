@@ -3,8 +3,6 @@ package com.liteworkbench.domain.constant;
 /** 运行相关静态常量 */
 public interface RunConst {
 
-    /** 事件攒批条数阈值 */
-    int EVENT_BATCH_SIZE = 100;
     /** 事件攒批时间阈值，毫秒 */
     long EVENT_BATCH_INTERVAL_MS = 200L;
     /** 单次运行输入最大长度 */

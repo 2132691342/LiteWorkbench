@@ -11,7 +11,7 @@
 | 环节 | 做法 |
 |---|---|
 | 传输 | 密码字段为 `RSA/ECB/PKCS1Padding` 密文（与浏览器端 JSEncrypt 对齐），公钥随请求前取；明文 HTTP 下 WebCrypto 不可用，故不依赖 `crypto.subtle` |
-| 存储 | `SHA-256(密码 + 32 位随机盐)`，盐与摘要分列存 `sys_user` |
+| 存储 | `PBKDF2-HMAC-SHA256`，十万次迭代 + 随机盐，摘要形如 `pbkdf2$迭代次数$盐$Base64`，与盐分列存 `sys_user`；校验兼容旧的 `SHA-256(密码 + 盐)` 格式 |
 | 回显 | 明文密码不出现在页面、日志、接口响应、文档中的任何位置 |
 | 初值 | 环境变量 `LITEWORKBENCH_ADMIN_PASSWORD`；来自配置时不打印，缺失时随机 16 位强密码并仅启动日志 WARN 打印一次 |
 | 首登 | 种子账号 `pwd_reset_required = true`，改密前仅放行两个接口 |
@@ -43,18 +43,19 @@ public interface SecretCodec {
 
 ```
 GET /auth/public-key
-  → keyId = 轮换序 + 时间戳；私钥留在内存，公钥可安全下发
+  → keyId = k_ + 16 位随机串；私钥留在内存，公钥（SPKI Base64）可安全下发
+  → 轮换时旧钥保留一把，在途请求仍能解密
 
 POST /auth/login
   ├─ 1 按 username 查 Redis 失败计数，命中锁定 → ACCOUNT_LOCKED(2007)
   ├─ 2 decrypt(keyId, password)；失败 → CREDENTIAL_INVALID(2002)，计数 +1
-  ├─ 3 查用户，比对 SHA-256(newPassword + salt)；失败 → 计数 +1 并统一提示
+  ├─ 3 查用户，比对摘要（PBKDF2，旧格式回退 SHA-256）；失败 → 计数 +1 并统一提示
   ├─ 4 计数清零；StpUtil.login(userId)；写 last_login_at
   └─ 5 返回 token 与 pwdResetRequired
 
 POST /auth/password
   ├─ 1 两段密文解密；新密码强度校验（≥8 位且含字母与数字），否则 PASSWORD_WEAK(2008)
-  ├─ 2 校原密码 → 换新盐与新摘要 → pwd_reset_required = false
+  ├─ 2 校原密码 → 生成新盐与新 PBKDF2 摘要 → pwd_reset_required = false
   └─ 3 StpUtil.logout()，强制用新密码重新登录
 ```
 

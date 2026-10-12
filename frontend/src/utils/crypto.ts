@@ -2,10 +2,7 @@ import JSEncrypt from 'jsencrypt'
 import { authApi } from '@/api'
 import type { PublicKeyVO } from '@/types/api'
 
-/**
- * 凭据加密：公钥由服务端下发，用 RSA/PKCS#1 v1.5 加密后提交。
- * 加密失败一律报错，绝不降级为明文。
- */
+/** 凭据加密：公钥由服务端下发，RSA/PKCS#1 v1.5 加密后提交，失败即报错不降级明文 */
 
 /** 本地缓存的公钥，临期前 30 秒视为过期 */
 let cached: PublicKeyVO | null = null

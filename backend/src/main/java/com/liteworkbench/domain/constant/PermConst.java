@@ -63,13 +63,6 @@ public interface PermConst {
     String WB_PROMPT_UPDATE = "wb:prompt:update";
     String WB_PROMPT_DELETE = "wb:prompt:delete";
 
-    // 工作台 · 工作流
-    String WB_FLOW_LIST = "wb:flow:list";
-    String WB_FLOW_CREATE = "wb:flow:create";
-    String WB_FLOW_UPDATE = "wb:flow:update";
-    String WB_FLOW_DELETE = "wb:flow:delete";
-    String WB_FLOW_RUN = "wb:flow:run";
-
     // 工作台 · 模型供应方
     String WB_PROVIDER_LIST = "wb:provider:list";
     String WB_PROVIDER_CREATE = "wb:provider:create";

@@ -216,20 +216,6 @@ CREATE TABLE IF NOT EXISTS wb_provider (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uk_wb_provider_code ON wb_provider (provider_code) WHERE deleted = false;
 
--- 异步任务
-CREATE TABLE IF NOT EXISTS wb_task (
-    task_id       varchar(40) PRIMARY KEY,
-    user_id       varchar(40) NOT NULL,
-    task_type     varchar(32) NOT NULL,
-    payload       jsonb,
-    state         varchar(16) NOT NULL DEFAULT 'pending',
-    retry_count   int         NOT NULL DEFAULT 0,
-    error_message text,
-    created_at    timestamptz NOT NULL DEFAULT now(),
-    updated_at    timestamptz
-);
-CREATE INDEX IF NOT EXISTS idx_wb_task_owner ON wb_task (user_id, state);
-
 -- 知识库
 CREATE TABLE IF NOT EXISTS wb_kb (
     kb_id      varchar(40)  PRIMARY KEY,
@@ -331,26 +317,6 @@ CREATE TABLE IF NOT EXISTS wb_prompt (
 );
 CREATE INDEX IF NOT EXISTS idx_wb_prompt_owner ON wb_prompt (user_id, created_at DESC) WHERE deleted = false;
 
--- 工作流画布（节点与连线整体存 graph_json）
-CREATE TABLE IF NOT EXISTS wb_flow (
-    flow_id     varchar(40)  PRIMARY KEY,
-    user_id     varchar(40)  NOT NULL,
-    flow_name   varchar(128) NOT NULL,
-    description varchar(512),
-    graph_json  jsonb,
-    node_count  int          NOT NULL DEFAULT 0,
-    last_run_id varchar(40),
-    state       varchar(24)  NOT NULL DEFAULT 'draft',
-    created_by  varchar(40),
-    created_at  timestamptz  NOT NULL DEFAULT now(),
-    updated_by  varchar(40),
-    updated_at  timestamptz,
-    deleted     boolean      NOT NULL DEFAULT false,
-    remark      varchar(512)
-);
-CREATE UNIQUE INDEX IF NOT EXISTS uk_wb_flow_name ON wb_flow (user_id, flow_name) WHERE deleted = false;
-CREATE INDEX IF NOT EXISTS idx_wb_flow_owner ON wb_flow (user_id, updated_at DESC) WHERE deleted = false;
-
 -- ============================== 内置工具种子 ==============================
 
 -- 工具种子用固定 ID 而非 ULID：ON CONFLICT 幂等重放，重启不产生重复行
@@ -367,9 +333,9 @@ ON CONFLICT (tool_id) DO NOTHING;
 -- 只针对仍然存在的表；已下线表的语句不得保留，否则建表脚本会整段失败
 
 ALTER TABLE wb_run ADD COLUMN IF NOT EXISTS state varchar(16) NOT NULL DEFAULT 'queued';
-ALTER TABLE wb_task ADD COLUMN IF NOT EXISTS state varchar(16) NOT NULL DEFAULT 'pending';
 ALTER TABLE wb_event ADD COLUMN IF NOT EXISTS user_id varchar(40) NOT NULL DEFAULT '';
 
--- 工作流运行不挂会话，session_id 允许为空
-ALTER TABLE wb_run ALTER COLUMN session_id DROP NOT NULL;
-ALTER TABLE wb_event ALTER COLUMN session_id DROP NOT NULL;
+-- ============================== 已下线表清理 ==============================
+-- 可视化编排画布（wb_flow）与异步任务预留表（wb_task）随创作台定位调整移除，无存量数据需保留
+DROP TABLE IF EXISTS wb_flow;
+DROP TABLE IF EXISTS wb_task;

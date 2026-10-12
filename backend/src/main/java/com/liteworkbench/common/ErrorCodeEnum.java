@@ -103,11 +103,6 @@ public enum ErrorCodeEnum {
     PROMPT_TITLE_CONFLICT("8803", 409, "同名提示词已存在"),
     PROMPT_VARIABLE_MISSING("8804", 400, "变量未填写完整"),
 
-    // 工作流 8900
-    FLOW_NOT_FOUND("8901", 404, "工作流不存在"),
-    FLOW_NAME_CONFLICT("8902", 409, "同名工作流已存在"),
-    FLOW_GRAPH_INVALID("8903", 400, "画布结构不合法"),
-
     // 系统 9000
     DB_UNAVAILABLE("9001", 503, "数据库不可用"),
     REDIS_UNAVAILABLE("9002", 503, "缓存不可用"),

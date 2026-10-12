@@ -88,6 +88,10 @@ public interface SysRoleMapper {
     @Delete("DELETE FROM sys_role_menu WHERE role_id = #{roleId}")
     int deleteRoleMenus(@Param("roleId") String roleId);
 
+    /** 按菜单清理所有角色的授权关系，菜单下线时用 */
+    @Delete("DELETE FROM sys_role_menu WHERE menu_id = #{menuId}")
+    int deleteRoleMenusByMenuId(@Param("menuId") String menuId);
+
     /** 角色下的用户 ID 列表，用于清理权限缓存 */
     List<String> selectUserIdsByRoleId(@Param("roleId") String roleId);
 }

@@ -1,4 +1,4 @@
-# 三阶段构建：后端 Maven 编译 → 前端 Vite 构建 → 运行时只放 JRE + jar + 静态资源
+# 三阶段构建：后端 Maven 编译 → 前端 Vite 构建 → 运行时只保留 JRE + jar + 前端静态资源
 FROM maven:3.9-eclipse-temurin-17 AS backend-build
 WORKDIR /build/backend
 COPY backend/pom.xml ./

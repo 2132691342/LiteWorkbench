@@ -2,6 +2,7 @@
 import { Delete, Edit, Position, Promotion, RefreshLeft, VideoPlay } from '@element-plus/icons-vue'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import LwButton from '@/components/ui/LwButton.vue'
 import LwEmpty from '@/components/ui/LwEmpty.vue'
@@ -17,9 +18,17 @@ import type { RunVO } from '@/types/api'
 
 /** 工作台：左侧会话与运行历史，右侧流式时间线（实时与回放同路径） */
 const { t } = useI18n()
+const router = useRouter()
 const sessionStore = useSessionStore()
 const runStore = useRunStore()
 const { start: startStream, dispose: disposeStream } = useRunStream()
+
+/** 空态创作入口：跳到对应页面继续创作闭环 */
+const quickEntries = [
+  { route: '/writer', titleKey: 'console.goWriter', descKey: 'console.goWriterDesc' },
+  { route: '/prompt', titleKey: 'console.goPrompt', descKey: 'console.goPromptDesc' },
+  { route: '/kb', titleKey: 'console.goKb', descKey: 'console.goKbDesc' },
+]
 
 const draft = ref('')
 const streamError = ref('')
@@ -182,6 +191,19 @@ function formatTime(value?: number): string {
   return new Date(value).toLocaleString()
 }
 
+/** 运行元信息：耗时与 Token 用量，两者都有才展示 */
+function runMeta(run: RunVO): string {
+  const parts: string[] = []
+  if (run.durationMs) {
+    parts.push(run.durationMs >= 1000 ? `${(run.durationMs / 1000).toFixed(1)}s` : `${run.durationMs}ms`)
+  }
+  const tokens = (run.inputTokens ?? 0) + (run.outputTokens ?? 0)
+  if (tokens > 0) {
+    parts.push(`${tokens.toLocaleString()} tokens`)
+  }
+  return parts.join(' · ')
+}
+
 watch(() => runStore.timeline.length, scrollToBottom)
 
 onMounted(async () => {
@@ -258,6 +280,7 @@ onMounted(async () => {
               <LwTag :tone="runStatusTone(run)">{{ runStatusText(run) }}</LwTag>
             </div>
             <div class="text-xs truncate mt-0.5">{{ run.prompt }}</div>
+            <div v-if="runMeta(run)" class="text-xs opacity-50 mt-0.5 font-mono">{{ runMeta(run) }}</div>
           </div>
         </div>
       </div>
@@ -299,7 +322,26 @@ onMounted(async () => {
           <LwEmpty :description="t('console.noSession')" />
         </div>
         <div v-else-if="!messages.length" class="h-full flex items-center justify-center">
-          <LwEmpty :description="t('console.emptyTimeline')" />
+          <!-- 空态不是留白：给三个创作入口 + 工具能力说明 -->
+          <div class="max-w-lg w-full flex flex-col gap-4">
+            <div class="text-center">
+              <h3 class="text-base font-bold" style="color: var(--lw-primary)">{{ t('console.quickTitle') }}</h3>
+              <p class="text-xs mt-1" style="color: var(--lw-ink-muted)">{{ t('console.quickDesc') }}</p>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <button
+                v-for="entry in quickEntries"
+                :key="entry.route"
+                class="p-4 rounded-xl border text-left flex flex-col gap-2 transition-all duration-200 hover:-translate-y-0.5 hover:lw-shadow-md"
+                style="background: var(--lw-surface-raised); border-color: var(--lw-border)"
+                @click="router.push(entry.route)"
+              >
+                <span class="text-sm font-bold" style="color: var(--lw-primary)">{{ t(entry.titleKey) }}</span>
+                <span class="text-xs" style="color: var(--lw-ink-muted)">{{ t(entry.descKey) }}</span>
+              </button>
+            </div>
+            <p class="text-xs text-center" style="color: var(--lw-ink-muted)">{{ t('console.toolsHint') }}</p>
+          </div>
         </div>
         <div v-else class="max-w-3xl mx-auto flex flex-col gap-4 pb-4">
           <template v-for="(message, index) in messages" :key="index">

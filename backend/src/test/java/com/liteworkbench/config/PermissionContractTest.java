@@ -4,7 +4,6 @@ import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.liteworkbench.api.AuthController;
 import com.liteworkbench.api.DocController;
 import com.liteworkbench.api.FileController;
-import com.liteworkbench.api.FlowController;
 import com.liteworkbench.api.KbController;
 import com.liteworkbench.api.MenuController;
 import com.liteworkbench.api.MonitorController;
@@ -27,7 +26,7 @@ import java.util.TreeSet;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** 权限契约：控制器注解与常量声明的权限点必须全部存在于菜单种子，防止授权漂移 */
+/** 权限契约：控制器注解与常量声明的权限点必须全部落进菜单种子，防止授权漂移 */
 class PermissionContractTest {
 
     /** 控制器清单：新增控制器时同步登记 */
@@ -35,25 +34,19 @@ class PermissionContractTest {
             AuthController.class, UserController.class, RoleController.class, MenuController.class,
             SessionController.class, RunController.class, ToolController.class, SkillController.class,
             FileController.class, KbController.class, DocController.class, PromptController.class,
-            FlowController.class, ProviderController.class, MonitorController.class);
+            ProviderController.class, MonitorController.class);
 
     @Test
-    void controllerPermissionsShouldExistInMenuSeeds() {
+    void 控制器注解与权限常量应全部存在于菜单种子() throws IllegalAccessException {
         List<String> seeds = DataInitializer.seedPermCodes();
         TreeSet<String> missing = new TreeSet<>();
+
         for (Class<?> controller : CONTROLLERS) {
-            collectTypePermissions(controller.getAnnotationsByType(SaCheckPermission.class), seeds, missing);
+            collect(controller.getAnnotationsByType(SaCheckPermission.class), seeds, missing);
             for (Method method : controller.getDeclaredMethods()) {
-                collectTypePermissions(method.getAnnotationsByType(SaCheckPermission.class), seeds, missing);
+                collect(method.getAnnotationsByType(SaCheckPermission.class), seeds, missing);
             }
         }
-        assertTrue(missing.isEmpty(), "控制器使用了菜单种子未声明的权限点: " + missing);
-    }
-
-    @Test
-    void permConstShouldExistInMenuSeeds() throws IllegalAccessException {
-        List<String> seeds = DataInitializer.seedPermCodes();
-        TreeSet<String> missing = new TreeSet<>();
         for (Field field : PermConst.class.getDeclaredFields()) {
             if (field.getType() == String.class) {
                 String value = (String) field.get(null);
@@ -62,11 +55,10 @@ class PermissionContractTest {
                 }
             }
         }
-        assertTrue(missing.isEmpty(), "PermConst 声明的权限点未进菜单种子: " + missing);
+        assertTrue(missing.isEmpty(), "以下权限点未进菜单种子: " + missing);
     }
 
-    private void collectTypePermissions(SaCheckPermission[] annotations, List<String> seeds,
-                                        TreeSet<String> missing) {
+    private void collect(SaCheckPermission[] annotations, List<String> seeds, TreeSet<String> missing) {
         for (SaCheckPermission annotation : annotations) {
             for (String value : annotation.value()) {
                 if (Objects.nonNull(value) && !seeds.contains(value)) {

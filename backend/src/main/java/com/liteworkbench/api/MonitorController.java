@@ -7,6 +7,7 @@ import com.liteworkbench.common.R;
 import com.liteworkbench.domain.constant.PermConst;
 import com.liteworkbench.domain.vo.HealthRESP;
 import com.liteworkbench.domain.vo.LogDocVO;
+import com.liteworkbench.domain.vo.LogStatsVO;
 import com.liteworkbench.domain.vo.OverviewRESP;
 import com.liteworkbench.domain.vo.PythonStatusVO;
 import com.liteworkbench.service.MonitorService;
@@ -55,15 +56,26 @@ public class MonitorController {
         return R.ok(monitorService.pythonStatus());
     }
 
-    /** 日志检索，Manticore 全文，按时间倒序分页 */
+    /** 日志检索，Manticore 全文 + 等值过滤，按时间倒序分页 */
     @SaCheckPermission(PermConst.MONITOR_LOG_LIST)
     @GetMapping("/log/search")
     public R<PageResult<LogDocVO>> logSearch(@RequestParam(required = false) String keyword,
+                                             @RequestParam(required = false) String field,
                                              @RequestParam(required = false) String level,
+                                             @RequestParam(required = false) String logger,
+                                             @RequestParam(required = false) String traceId,
                                              @RequestParam(defaultValue = "0") long from,
                                              @RequestParam(defaultValue = "0") long to,
                                              @RequestParam(defaultValue = "1") long page,
                                              @RequestParam(defaultValue = "20") long size) {
-        return R.ok(monitorService.searchLogs(keyword, level, from, to, page, size));
+        return R.ok(monitorService.searchLogs(keyword, field, level, logger, traceId, from, to, page, size));
+    }
+
+    /** 日志分布概览：级别计数 + 小时直方图，未传时间范围时默认近 24 小时 */
+    @SaCheckPermission(PermConst.MONITOR_LOG_LIST)
+    @GetMapping("/log/stats")
+    public R<LogStatsVO> logStats(@RequestParam(defaultValue = "0") long from,
+                                  @RequestParam(defaultValue = "0") long to) {
+        return R.ok(monitorService.logStats(from, to));
     }
 }

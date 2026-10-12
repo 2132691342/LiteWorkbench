@@ -110,7 +110,7 @@ podman run -d --name liteworkbench -p 24399:8080 \
 | 种子账号 | `admin`（超级管理员）、`demo`（普通用户）；密码取 `LITEWORKBENCH_ADMIN_PASSWORD`，未配置则随机生成并仅在启动日志 WARN 打印一次；两个账号置 `pwd_reset_required = true`，首登强制改密 |
 | 存量库升级 | `pwd_reset_required` 列以 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` 补齐，默认 `false`：**已存在的账号不会被强制改密**，只有本次新建的种子账号与管理员新建的用户带该标记 |
 | 内置角色 | `super_admin`、`admin`、`user`（代码常量定义，不可删除改码） |
-| 菜单树 | 仪表盘、工作台、创作台、提示词、工作流、文件、技能、知识库、日志、监控、设置、系统管理（含按钮权限点） |
+| 菜单树 | 仪表盘、工作台、创作台、提示词、文件、技能、知识库、日志、监控、设置、组件库、系统管理（含按钮权限点） |
 | 内置工具 | Python 执行、文件读写、HTTP 请求、知识库检索（固定 ID 幂等重放） |
 | 内置供应方 | `ollama` 本地供应方（无密钥，指向宿主机 Ollama） |
 | 内置提示词 | 文章大纲、标题构思、润色改写、要点摘要、中英互译、代码讲解（固定 ID 幂等重放，只读） |
@@ -125,24 +125,6 @@ Manticore 的 `lw_log`、`lw_msg`、`lw_kbchunk`、`lw_doc` 表在应用启动�
 | 回滚 | 用旧镜像 tag 再跑一次 `deploy-app.sh`；新增列不删除，保证旧版本可读 |
 | 中间件升级 | 不随应用发布，单独改编排并重启对应服务 |
 | 用户数据导出 | `pg_dump` 按 `user_id` 过滤导出 |
-
-### 7.1 本机没有容器运行时的验证部署
-
-本机装不了 Docker / Podman 时，用"本地打包 → 服务器提交镜像层"的等价流程验证修复，服务器不必装 Maven 与 Node：
-
-1. **本地打单文件产物**：`mvn -DskipTests package` 后用 `jar uf target/lite-workbench-server.jar -C <stage> .` 把前端（stage 内为 `static/**`）注入 fat jar。这样 jar 自身即可完整运行，`classpath:/static/` 有全套前端。
-2. **传输前端目录要用 tar，不要用 zip**：Windows 的 `Compress-Archive` 会把条目名写成 `assets\Foo.js`，Linux 侧 `python3 -m zipfile -e` 解压后不会形成目录，页面会全线 404；`tar -czf` 才产生 `assets/Foo.js`。
-3. **服务器以已发布的运行镜像为基础派生**，免去重新下载基础镜像与重复安装 python3：
-   ```dockerfile
-   FROM <当前运行的镜像>
-   COPY app.jar /app/app.jar
-   COPY static/ /app/static/
-   ```
-   运行镜像入口是 `/app/app.jar`，且显式带 `--spring.web.resources.static-locations=file:/app/static/,classpath:/static/`；镜像内那份**旧前端必须一并替换**，否则新 jar 里的 `classpath:/static/` 会被旧的 `file:/app/static/` 遮住。
-4. **按正式流程启动**：`podman build -t <本地tag> -f Dockerfile.verify .` → `export LITEWORKBENCH_IMAGE=<本地tag>` → `podman rm -f liteworkbench` → 清 24399 的 `CNI-HOSTPORT-DNAT` 残留 → `podman-compose -f docker-compose.app.yaml up -d` → 等 `/actuator/health` 为 UP。
-5. **`LITEWORKBENCH_SECURITY_SECRET` 必须沿用线上原值**：它参与供应方 API Key 的加解密，换值等于把已存密钥全部作废。
-
-这套临时物（`app.jar`、`static/`、`Dockerfile.verify`、本地 tag 镜像）不进发布链，下次 CI 发布会被正式镜像覆盖，可手工清理。
 
 ## 8. 健康检查
 
@@ -270,7 +252,7 @@ Manticore 无文档级 TTL，日志表保留由应用定时任务（每日一次
 | 知识库 8604 / 8605 | 上传被拒 / 解析失败 | 8604 换支持的格式；8605 看文档行 `error_message`，修原件后重解析 |
 | 会话消息 / 知识块读不到 | 旧会话消息不全 | 这两类是 Manticore 文档，与 Redis 无关：查 Manticore 容器与数据卷是否被重建、`lw_msg` / `lw_kbchunk` 索引是否还在（用带 `FROM` 的语句探测，`SELECT 1` 在本版本会被 501，证明不了任何事） |
 | 日志中心查不到 | 检索为空 | MQ 降级时日志只落文件（记 warn）；索引启动幂等创建；文档 30 天 TTL 过期即不可查 |
-| 事件回放缺尾部 | 回放不完整 | 事件按 100 条 / 200ms 攒批，断电可能丢最后一批；以会话助手消息为准 |
+| 事件回放缺尾部 | 回放不完整 | 事件按 200ms 定时攒批落库，进程被强杀可能丢最后一批；以会话助手消息为准 |
 | 容器连不上中间件 | Connection refused 但中间件健康 | aardvark-dns 残留记录把主机名解析到旧 IP：对涉事容器逐个 `network disconnect` + `connect`；严禁对共享网络 `network rm` |
 | 端口不可达但容器在跑 | 容器内 8080 返回 UP，宿主机 24399 失败 | rootless Podman 的 `CNI-HOSTPORT-DNAT` 残留指向已删容器 IP：删除该端口的 iptables 规则后重建，或重跑 `deploy-app.sh` |
 | 磁盘紧张 | 容器占用上涨 | 日志含 30 天滚动与总量上限；Redis 256MB LRU；MinIO 按需清理 |

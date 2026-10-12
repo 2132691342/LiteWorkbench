@@ -31,7 +31,7 @@ backend/src/main/resources/
   mapper/*.xml  db/schema.sql  logback-spring.xml  application.yaml
 
 frontend/src/
-  api/ components/{layout,ui,charts}/ composables/
+  api/ components/{layout,ui,charts,settings}/ composables/
   locales/ router/ stores/ styles/ types/ utils/ views/
 ```
 
@@ -63,7 +63,7 @@ mvn test                           # 跑测试
 | `liteworkbench.storage.endpoint` | `http://localhost:9000` | MinIO |
 | `liteworkbench.manticore.url` | `http://localhost:9308` | Manticore HTTP JSON API |
 | `liteworkbench.manticore.log-retention-days` | 30 | 日志表保留天数，每日定时清理 |
-| `liteworkbench.agent.provider` | `openai` | 默认供应方 |
+| `liteworkbench.agent.provider` | `openai` | 默认供应方，环境变量 `LITEWORKBENCH_AGENT_PROVIDER` |
 | `liteworkbench.agent.loop.max-iters` | 20 | 单轮最大迭代 |
 | `liteworkbench.agent.model.default-name` | `qwen-plus` | 兜底模型名 |
 | `liteworkbench.agent.model.context-window` | 32000 | 上下文窗口 token 数，超窗口即压缩 |
@@ -93,7 +93,7 @@ mvn test                           # 跑测试
 | 状态 / 路由 | Pinia 2.1.7 + Vue Router 4.3.2 |
 | UI | Element Plus 2.9.0 + UnoCSS 0.58.6 |
 | HTTP | Axios 1.6.8（唯一出口 `src/api/index.ts`） |
-| 可视化 | ECharts 5.5.0（仪表盘图表）、AntV X6 2.18.1（工作流画布） |
+| 可视化 | ECharts 5.5.0（仪表盘图表、日志中心分布与直方图） |
 | 富文本 | WangEditor 5.1.23（创作台富文本模式） |
 | 文件处理 | XLSX、docx-preview、vue-pdf-embed（文件空间在线预览，按需异步加载） |
 | 国际化 | Vue I18n 9.10.2 |
@@ -117,23 +117,25 @@ npm run typecheck  # vue-tsc --noEmit
 
 ## 6. 测试策略
 
-只保留覆盖长链路、复杂场景与跨模块契约的测试，简单断言与薄单元测试不写；共 4 个文件，随 `mvn test` 一次跑完（约 1 秒）。
+只保留覆盖长链路、复杂场景与跨模块契约的测试：简单断言（ID 格式、字符串清洗、空参校验）、纯算法与薄 mock 单测一律不写，**共 3 个文件 4 个用例**，一次 `mvn test` 跑完（不到 1 秒）。
 
-| 文件 | 覆盖 |
-|---|---|
-| `service/RunEventPipelineTest` | 事件长链路：内核事件归一 → 批内合帧，增量合并、类型切换保序、工具输出捕获、超长裁剪 |
-| `service/FlowGraphTest` | 画布校验与拓扑执行序：合法链、有环、孤立节点、非法节点与悬空连线 |
-| `api/SseFrameContractTest` | SSE 帧契约：`id` 为 seq、事件名 `run.event`、心跳只发注释行 |
-| `config/PermissionContractTest` | 控制器注解与 `PermConst` 的权限点全部存在于菜单种子 |
+| 文件 | 用例 | 覆盖 |
+|---|---|---|
+| `service/RunEventPipelineTest` | 2 | 事件长链路：一次完整运行的归一与合帧（增量合并边界、类型切换保序、工具起止与结果、用量入账）＋ 边界路径（超长裁剪、失败工具标记、异常事件） |
+| `api/SseFrameContractTest` | 1 | SSE 帧契约：业务帧带 `id=seq` 与固定事件名 `run.event`，心跳只发注释行 |
+| `config/PermissionContractTest` | 1 | 权限契约：控制器注解与 `PermConst` 声明的权限点全部存在于菜单种子 |
 
-前端不写快照测试与纯渲染测试。
+约定：用例名用中文直述业务断言，一个用例串起一条完整链路，一个文件只答一个契约问题；前端不写快照测试与纯渲染测试。
 
 ## 7. 代码风格
 
+格式约定：
+
 - Java：4 空格，行长 120，实体用 Lombok `@Data` / `@Builder`，构造注入。
-- 注释：文件头一行，方法一行，字段只在有歧义时注释，禁止连续注释块。
 - TypeScript：2 空格，单引号，行尾无分号，禁止 `any` 泛滥。
 - 提交信息：`feat(scope): 描述`，scope 取模块名。
+
+命名、分层、注释、幂等、日志、错误码等**强制规则**全部在 [AGENTS.md](../AGENTS.md)，写代码前查阅，此处不复述。
 
 ## 8. 常见改动入口
 
@@ -142,14 +144,31 @@ npm run typecheck  # vue-tsc --noEmit
 | 加一个工具 | `agent/tool/WorkbenchTools.java` + `resources/db/schema.sql` 的 `wb_tool` 种子 |
 | 加一个模型供应方协议 | `agent/model/` 新增 `XxxClient` + `agent/ModelFactory.java` 登记 + `wb_provider` 记录 |
 | 改推理循环 | `agent/loop/AgentLoop.java`（纯逻辑，可离线单测） |
-| 改 SSE 帧或事件归一 | `agent/event/AgentEventAdapter.java` + `api/SseRunSink.java` |
+| 改 SSE 帧或事件归一 | `agent/AgentEventAdapter.java` + `api/SseRunSink.java` + `service/RunService.java` 的合帧与心跳 |
 | 加一个权限点 | `config/DataInitializer.java` 的 `MENU_SEEDS`（`menu_type=button`）+ 控制器注解 |
 | 加一个内置角色 | `domain/constant/RoleCodeConst.java` + `DataInitializer` 角色与授权 |
 | 加一类日志检索字段 | `observability/ManticoreLogAppender.java` + `mapper/LogSearchMapper.java` 表定义 |
 | 加一种知识库文档格式 | `service/DocTextExtractor.java` + `domain/constant/KbConst.java` 扩展名清单 |
 | 加一个 AI 辅助动作 | `domain/constant/DocConst.java` 的 `ASSIST_TEMPLATES` + 前端动作下拉与文案 |
-| 加一类工作流节点 | `domain/constant/FlowNodeTypeEnum.java` + `service/FlowEngine.java` 的 `executeNode` 分派 |
 | 加一种在线预览格式 | `views/files/FileList.vue` 的 `kindOf` 与对应渲染分支 |
 | 加一个前端页面 | `frontend/src/views/` + `DataInitializer` 菜单种子（`component` 指向该文件） |
 | 改配色 | `frontend/src/styles/tokens.css`（唯一色值来源） |
 | 加一个写接口 | 控制器加 `@SaCheckPermission` + `@Idempotent` + `@PostMapping` |
+
+## 9. 脚本与流水线
+
+仓库内的可执行资产只有下面五份，各自单一职责，不在别处再放临时脚本：
+
+| 文件 | 职责 |
+|---|---|
+| `deploy/Dockerfile` | 三阶段构建：Maven 打包 → Vite 构建 → 运行时镜像（JRE + jar + 前端静态资源 + python3 / curl / tzdata） |
+| `deploy/docker-compose.yaml` | 中间件编排：PostgreSQL(pgvector) / Manticore / Redis / MinIO / RabbitMQ，本机与云主机共用同一份 |
+| `deploy/docker-compose.app.yaml` | 应用容器编排：单容器、限内存 1152m、接入中间件网络、对外端口 24399 |
+| `deploy/deploy-app.sh` | 云主机侧发布：拉取镜像 → 删旧容器 → 重建 → 清理同端口转发残留 → 按健康端点就绪自检 |
+| `.github/workflows/ci.yml` | 流水线：后端构建与测试 → 前端类型检查与构建 → 构建镜像推 GHCR → 同步编排与发布脚本 → SSH 执行发布 |
+
+本机起中间件：
+
+```bash
+docker compose -f deploy/docker-compose.yaml up -d
+```

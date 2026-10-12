@@ -76,7 +76,7 @@ public class AnthropicClient implements ModelClient {
                 return consume(data, listener, result, text, thinking, blocks);
             });
         } catch (IOException e) {
-            throw new BizException(ErrorCodeEnum.MODEL_CALL_FAILED, StrUtil.format("模型调用失败 {}", e.getMessage()));
+            throw HttpModelSupport.ioFailure(e);
         } finally {
             HttpModelSupport.close(connection);
         }

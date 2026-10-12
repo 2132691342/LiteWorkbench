@@ -3,7 +3,7 @@ import * as echarts from 'echarts'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { chartAxis, chartTooltip, token } from '@/utils/theme'
 
-/** 柱状图：主色圆柱圆角 6，辅助色可切第二序列色 */
+/** 柱状图：主色圆柱圆角 6，辅助色可切第二序列色；点击柱子抛出桶下标，用于时间范围钻取 */
 const props = withDefaults(
   defineProps<{
     /** x 轴类目 */
@@ -16,12 +16,27 @@ const props = withDefaults(
     height?: number
     /** 使用辅助色 */
     secondary?: boolean
+    /** 是否响应柱子点击 */
+    clickable?: boolean
   }>(),
-  { name: 'value', height: 300, secondary: false },
+  { name: 'value', height: 300, secondary: false, clickable: false },
 )
+
+const emit = defineEmits<{ (e: 'bucket-click', index: number): void }>()
 
 const container = ref<HTMLDivElement | null>(null)
 let chart: echarts.ECharts | null = null
+
+/** 点击穿透：命中柱子时按类目下标抛出 */
+function bindClick(): void {
+  chart?.off('click')
+  if (!props.clickable) return
+  chart?.on('click', (params) => {
+    if (typeof params.dataIndex === 'number') {
+      emit('bucket-click', params.dataIndex)
+    }
+  })
+}
 
 function buildOption(): echarts.EChartsOption {
   const color = props.secondary ? token('--lw-secondary') : token('--lw-primary')
@@ -60,6 +75,7 @@ onMounted(() => {
   if (!container.value) return
   chart = echarts.init(container.value)
   chart.setOption(buildOption())
+  bindClick()
   window.addEventListener('resize', resize)
 })
 
@@ -74,6 +90,8 @@ watch(
   () => chart?.setOption(buildOption()),
   { deep: true },
 )
+
+watch(() => props.clickable, bindClick)
 </script>
 
 <template>

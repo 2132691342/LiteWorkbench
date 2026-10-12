@@ -20,7 +20,7 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 import java.util.Objects;
 
-/** 模型同步调用：辅助写作与工作流 llm 节点共用，不建 Run、不落事件；优先复用 hutool-ai 原生服务 */
+/** 模型同步调用：创作台 AI 辅助与供应方连通性测试共用，不建 Run、不落事件；优先复用 hutool-ai 原生服务 */
 @Slf4j
 @Component
 @RequiredArgsConstructor

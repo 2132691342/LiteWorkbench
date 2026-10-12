@@ -13,33 +13,26 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
-/** SSE 帧契约：id 为 seq、事件名固定 run.event、data 为 JSON 原文、心跳只发注释行 */
+/** SSE 帧契约：业务帧 id 为 seq、事件名固定 run.event，心跳只发注释行不触发事件 */
 class SseFrameContractTest {
 
     @Test
-    void frameShouldCarrySeqAsIdAndJsonPayload() throws Exception {
-        SseEmitter emitter = mock(SseEmitter.class);
-        SseRunSink sink = new SseRunSink(emitter);
+    void 业务帧应带seq与固定事件名而心跳应为纯注释行() throws Exception {
+        SseEmitter businessEmitter = mock(SseEmitter.class);
+        new SseRunSink(businessEmitter).send(12, "text.delta", "{\"seq\":12,\"eventType\":\"text.delta\"}");
 
-        sink.send(12, "text.delta", "{\"seq\":12,\"eventType\":\"text.delta\"}");
+        String business = captureFrame(businessEmitter);
+        assertTrue(business.contains("id:12"), business);
+        assertTrue(business.contains("event:run.event"), business);
+        assertTrue(business.contains("{\"seq\":12"), business);
 
-        String frame = captureFrame(emitter);
-        assertTrue(frame.contains("id:12"), frame);
-        assertTrue(frame.contains("event:run.event"), frame);
-        assertTrue(frame.contains("{\"seq\":12"), frame);
-    }
+        SseEmitter heartbeatEmitter = mock(SseEmitter.class);
+        new SseRunSink(heartbeatEmitter).ping();
 
-    @Test
-    void heartbeatShouldBeCommentOnly() throws Exception {
-        SseEmitter emitter = mock(SseEmitter.class);
-        SseRunSink sink = new SseRunSink(emitter);
-
-        sink.ping();
-
-        String frame = captureFrame(emitter);
-        assertTrue(frame.contains("ping"), frame);
-        assertFalse(frame.contains("data:"), frame);
-        assertFalse(frame.contains("event:"), frame);
+        String heartbeat = captureFrame(heartbeatEmitter);
+        assertTrue(heartbeat.contains("ping"), heartbeat);
+        assertFalse(heartbeat.contains("data:"), heartbeat);
+        assertFalse(heartbeat.contains("event:"), heartbeat);
     }
 
     /** 捕获 emitter 收到的帧并拼成文本；帧实现类为包可见，反射读取需放开访问 */

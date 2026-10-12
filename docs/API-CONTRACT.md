@@ -54,7 +54,7 @@ HTTP 状态码：成功 200，参数错误 400，未认证 401，无权限 403�
 | POST | `/api/v1/auth/login` | 登录，入参 `username` `password`(密文) `keyId` |
 | POST | `/api/v1/auth/logout` | 登出 |
 | GET | `/api/v1/auth/current` | 当前用户：资料 + 角色码 + 权限标识集合 + 菜单树 |
-| POST | `/api/v1/auth/password` | 修改自己的密码，入参 `oldPassword` `newPassword`（均为密文） |
+| POST | `/api/v1/auth/password` | 修改自己的密码，入参 `oldPassword` `newPassword`（均为密文）`keyId` |
 
 公钥响应 `data`：
 
@@ -67,13 +67,24 @@ HTTP 状态码：成功 200，参数错误 400，未认证 401，无权限 403�
 ```json
 {
   "token": "xxxx",
-  "user": { "userId": "USER_..", "username": "admin", "nickname": "管理员", "avatarUrl": "" },
+  "user": {
+    "userId": "USER_..", "username": "admin", "nickname": "管理员", "avatarUrl": "",
+    "email": "", "state": "normal", "roleIds": ["ROLE_.."], "lastLoginAt": 1710000000000, "createdAt": 1700000000000
+  },
   "roleCodes": ["super_admin"],
   "perms": ["system:user:list", "system:user:create"],
   "pwdResetRequired": false,
-  "menus": [ { "menuId": "MENU_..", "menuName": "menu.dashboard", "routePath": "/dashboard" } ]
+  "menus": [
+    {
+      "menuId": "MENU_..", "parentId": "MENU_..", "menuName": "menu.dashboard", "menuType": "menu",
+      "routePath": "/dashboard", "component": "Dashboard", "icon": "dashboard", "permCode": null,
+      "sortNo": 10, "visible": true, "children": []
+    }
+  ]
 }
 ```
+
+`menus` 是完整菜单树（`dir` / `menu` 两级，按钮权限点不进树），前端按 `component` 映射组件并注册路由。
 
 `pwdResetRequired = true` 时前端必须跳到强制改密页；后端同时只放行 `/auth/current` 与 `/auth/password`，其余接口返回 `PASSWORD_RESET_REQUIRED`（2006）。
 
@@ -184,7 +195,7 @@ Content-Type: application/json
 | POST | `/api/v1/tool/toggle/{toolId}` | 启停，权限 `wb:tool:toggle` |
 | POST | `/api/v1/tool/invoke/{toolName}` | 页面手工执行，用于调试，权限 `wb:tool:invoke` |
 
-`/tool/invoke/{toolName}` 请求体 `{ "args": { ... }, "confirmed": false }`：`safe` 工具直接执行；`confirm` / `danger` 工具必须显式携带 `"confirmed": true`，否则返回 409 `TOOL_CONFIRM_REQUIRED`（页面由确认勾选承接）。Agent 自主调用不走该闸门，统一由平台级启停开关控制。接口加 `@Idempotent`，超时与参数校验同 Agent 内执行一致。
+`/tool/invoke/{toolName}` 请求体 `{ "args": { ... }, "confirmed": false, "timeoutSeconds": 120 }`：`safe` 工具直接执行；`confirm` / `danger` 工具必须显式携带 `"confirmed": true`，否则返回 409 `TOOL_CONFIRM_REQUIRED`（页面由确认勾选承接）。工具被停用时返回 `TOOL_DISABLED`。Agent 自主调用不走确认闸门，统一由平台级启停开关控制。接口加 `@Idempotent`，超时默认 120 秒，可用 `timeoutSeconds` 覆盖。
 
 限流：登录接口按 IP 每分钟 10 次，`/chat/stream` 按用户每分钟 20 次（`@RateLimit` 固定窗口），超限返回 429 `RATE_LIMITED`。
 
@@ -229,7 +240,7 @@ Content-Type: application/json
 
 - 支持格式：`.txt` `.md` `.csv` `.json` `.html` `.xml` `.log`（UTF-8 文本）、`.docx`、`.pdf`；单文件 ≤ 20MB。
 - 上传立即返回 `KbDocVO(state=pending)`，解析经 MQ 异步执行，前端轮询文档状态到 `ready` / `failed`；失败可 `reparse` 重放。
-- `kb/search` 返回 `PageResult<KbChunkVO>`：`chunkId` `kbId` `docId` `docName` `seq` `content`；高亮由前端按 `keyword` 分段渲染，后端只回原文，避免注入富文本。
+- `kb/search` 返回 `PageResult<KbChunkVO>`：`chunkId` `kbId` `docId` `docName` `seq` `content` `userId` `score` `createdAt`；高亮由前端按 `keyword` 分段渲染，后端只回原文，避免注入富文本。
 - Agent 侧工具 `kb_search` 由平台工具启停控制（`wb_tool` 种子），对话中模型按需检索当前用户的知识库。
 
 ## 13. 模型供应方
@@ -250,11 +261,26 @@ Content-Type: application/json
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/v1/log/search` | Manticore 检索，参数 `keyword` `level` `from` `to` `page` `size`，返回 `PageResult<LogDocVO>`，权限 `monitor:log:list` |
+| GET | `/api/v1/log/search` | Manticore 检索，参数 `keyword` `field` `level` `logger` `traceId` `from` `to` `page` `size`，返回 `PageResult<LogDocVO>`，权限 `monitor:log:list` |
+| GET | `/api/v1/log/stats` | 分布概览：级别计数 + 按小时时间直方图，参数 `from` `to`，权限 `monitor:log:list` |
 | GET | `/api/v1/monitor/health` | 各组件健康状态，权限 `monitor:health:list` |
 | GET | `/api/v1/monitor/overview` | 仪表盘汇总指标，权限 `monitor:health:list` |
 | GET | `/api/v1/runtime/python` | Python 运行时探测结果，权限 `monitor:health:list` |
 | POST | `/api/v1/runtime/python/reprobe` | 重新探测 Python 运行时，权限 `monitor:python:reprobe` |
+
+`log/search` 参数语义：
+
+| 参数 | 说明 |
+|---|---|
+| `keyword` | 关键字，全文匹配列由 `field` 决定，默认 `message` |
+| `field` | 关键字匹配列：`message`（默认，ICU 中文分词全文）/ `logger`（类名，精确前缀匹配）/ `traceId`（精确匹配） |
+| `level` | 级别等值：`INFO` / `WARN` / `ERROR` |
+| `logger` | Logger 名等值（如 `com.liteworkbench.service.RunService`） |
+| `traceId` | 链路标识等值，用于把一次请求的全部日志串成时间线 |
+| `from` / `to` | 时间范围，毫秒时间戳；两者都传才生效 |
+| `page` / `size` | 分页，按 `ts` 倒序 |
+
+`log/stats` 返回 `{ levels: [{level, count}], histogram: [{hour, count}] }`：`histogram` 按小时粒度覆盖查询区间，上限 168 个桶（7 天），更早的区间按天聚合由前端决定是否展示。
 
 `monitor/overview` 返回：`sessionCount` / `runCount` / `successRunCount` / `todayRunCount` / `totalTokens` / `runTrend` / `tokenTrend` / `toolDistribution`。
 
@@ -278,7 +304,7 @@ Content-Type: application/json
 约定：
 
 - `doc/update` 每次调用：`version_no + 1`、写一条 `wb_doc_version` 快照、覆盖 `lw_doc` 文档，三者在同一事务内，索引写失败只告警不回滚。
-- `doc/assist` 入参：`docId`(可选) `action` `selection`(选中的正文) `instruction`(补充要求) `kbId`(可选引用知识库)；返回 `{ text }`。内部经 `ModelCaller` 同步调用模型，不建 Run（不产生事件流），结果由前端决定插入或替换选区。
+- `doc/assist` 入参：`docId`(可选) `action` `selection`(选中的正文) `instruction`(补充要求) `kbId`(可选引用知识库)；返回 `{ action, text, durationMs }`。内部经 `ModelCaller` 同步调用模型，不建 Run（不产生事件流），结果由前端决定插入或替换选区。
 - 正文上限 200000 字，超出抛 `DOC_CONTENT_TOO_LONG`。
 
 ## 16. 提示词
@@ -299,30 +325,11 @@ Content-Type: application/json
 - `variables` 为 `[{name,label,defaultValue}]`，渲染用 `{{name}}` 占位替换；缺失且无默认值抛 `PROMPT_VARIABLE_MISSING`。
 - 渲染与"发送到工作台"都在前端完成后续动作，后端只负责产出文本。
 
-## 17. 工作流画布
+## 17. 预留结构
 
-| 方法 | 路径 | 说明 |
-|---|---|---|
-| GET | `/api/v1/flow/page` | 分页，参数 `keyword`，权限 `wb:flow:list` |
-| GET | `/api/v1/flow/detail/{flowId}` | 详情（含 `graphJson`） |
-| POST | `/api/v1/flow/create` | 新建，权限 `wb:flow:create`，`@Idempotent` |
-| POST | `/api/v1/flow/update` | 保存画布（含结构校验），权限 `wb:flow:update`，`@Idempotent` |
-| POST | `/api/v1/flow/delete/{flowId}` | 删除，权限 `wb:flow:delete`，`@Idempotent` |
-| POST | `/api/v1/flow/run` | 执行工作流：`{flowId, inputs}`，返回 `runId` 与每节点结果，权限 `wb:flow:run` |
-| GET | `/api/v1/flow/run/detail/{runId}` | 运行明细（节点级耗时与输出） |
+运行派生关系（`wb_run.relation` / `parent_run_id`）为预留结构，本期不暴露接口。
 
-约定：
-
-- `graphJson` 结构：`{nodes:[{id,type,label,config}], edges:[{source,target}]}`，节点类型 `start` `llm` `tool` `python` `knowledge` `end`。
-- 保存即校验：必须有且仅有一个 `start` 与至少一个 `end`、无环、无孤立节点；不合法抛 `FLOW_GRAPH_INVALID` 并带回具体原因。
-- `flow/run` 按拓扑序串行执行，逐节点落 `wb_event`（复用运行事件流），节点失败即中止并把运行置为 failed，已产生的输出保留在事件里可供回看。
-- 执行入口同步返回，节点耗时上限由各执行器自带超时控制（`llm` 用供应方超时，`python` 用运行时超时）。
-
-## 18. 预留结构
-
-异步任务（`wb_task`）与运行派生关系（`wb_run.relation` / `parent_run_id`）为预留结构，本期不暴露接口。
-
-## 19. 分页请求
+## 18. 分页请求
 
 GET 分页统一携带：
 
@@ -342,4 +349,3 @@ GET 分页统一携带：
 | SSE 而非 WebSocket | 单向流天然适配，自动重连，穿透代理好 | 无法实现客户端主动推消息 |
 | 动作式路径（`/delete/{id}`） | 与"只用 GET/POST"自洽，权限点可直接映射 URL | 资源语义弱化，靠文档对齐 |
 | AI 辅助写作走同步接口不建 Run | 结果短、需即时插入编辑器，落事件流反而增加回收成本 | 无法流式输出，长文辅助需等待 |
-| 工作流执行同步返回 | 画布规模小（≤ 20 节点），前端一次拿到全量结果最简单 | 超长流程会占用请求线程，靠节点超时兜底 |

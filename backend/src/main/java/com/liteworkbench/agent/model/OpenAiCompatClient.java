@@ -10,8 +10,6 @@ import com.liteworkbench.agent.model.ModelTypes.StreamResult;
 import com.liteworkbench.agent.model.ModelTypes.ToolCall;
 import com.liteworkbench.agent.model.ModelTypes.ToolSpec;
 import com.liteworkbench.agent.model.ModelTypes.Usage;
-import com.liteworkbench.common.BizException;
-import com.liteworkbench.common.ErrorCodeEnum;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
@@ -72,7 +70,7 @@ public class OpenAiCompatClient implements ModelClient {
                 return true;
             });
         } catch (IOException e) {
-            throw new BizException(ErrorCodeEnum.MODEL_CALL_FAILED, errorMessage(e));
+            throw HttpModelSupport.ioFailure(e);
         } finally {
             HttpModelSupport.close(connection);
         }
@@ -224,10 +222,6 @@ public class OpenAiCompatClient implements ModelClient {
 
     private JSONObject defaultSchema() {
         return JSONUtil.createObj().put("type", "object").put("properties", JSONUtil.createObj());
-    }
-
-    private String errorMessage(IOException e) {
-        return StrUtil.format("模型调用失败 {}", e.getMessage());
     }
 
     /** 流式分片的工具调用累积器：按 index 合并 id / name / arguments */

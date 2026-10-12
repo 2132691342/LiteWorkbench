@@ -4,6 +4,9 @@ frontend/dist/
 frontend/node_modules/
 *.class
 
+# 线上验证截图（本地留存，不入库）
+.shots/
+
 # 日志
 /logs/
 *.log

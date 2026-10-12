@@ -133,6 +133,18 @@ onMounted(load)
         </div>
       </div>
 
+      <!-- 首次使用引导：还没有任何运行时给出下一步动作，不留空白仪表盘 -->
+      <LwCard v-if="(overview?.runCount ?? 0) === 0" class="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+        <div class="flex-1">
+          <h3 class="text-sm font-bold" style="color: var(--lw-primary)">{{ t('dashboard.firstRunTitle') }}</h3>
+          <p class="text-xs mt-1" style="color: var(--lw-ink-muted)">{{ t('dashboard.firstRunDesc') }}</p>
+        </div>
+        <div class="flex gap-2 shrink-0">
+          <LwButton variant="secondary" size="sm" @click="router.push('/kb')">{{ t('dashboard.firstRunKb') }}</LwButton>
+          <LwButton size="sm" @click="router.push('/console')">{{ t('dashboard.firstRunConsole') }}</LwButton>
+        </div>
+      </LwCard>
+
       <LwCard
         :title="view === 'runs' ? t('dashboard.trendTitle') : t('dashboard.tokenTrendTitle')"
         :desc="t('dashboard.trendDesc')"

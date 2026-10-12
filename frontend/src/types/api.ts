@@ -328,11 +328,21 @@ export interface LogDocVO {
 
 export interface LogSearchParams {
   keyword?: string
+  /** 关键字匹配列：message（全文）/ logger / traceId */
+  field?: string
   level?: string
+  logger?: string
+  traceId?: string
   from?: number
   to?: number
   page?: number
   size?: number
+}
+
+/** 日志分布概览：级别计数与小时直方图 */
+export interface LogStatsVO {
+  levels?: { level: string; count: number }[]
+  histogram?: { hour: number; count: number }[]
 }
 
 /* ===== 知识库 ===== */
@@ -496,52 +506,4 @@ export interface PromptREQ {
 export interface PromptRenderREQ {
   promptId: string
   variables?: Record<string, string>
-}
-
-/* ===== 工作流 ===== */
-
-export interface FlowVO {
-  flowId: string
-  userId?: string
-  flowName: string
-  description?: string
-  graphJson?: string
-  nodeCount?: number
-  lastRunId?: string
-  state?: 'draft' | 'enabled' | 'disabled'
-  createdAt?: number
-  updatedAt?: number
-}
-
-export interface FlowREQ {
-  flowId?: string
-  flowName: string
-  description?: string
-  graphJson?: string
-  state?: string
-}
-
-export interface FlowRunREQ {
-  flowId: string
-  inputs?: Record<string, string>
-}
-
-export interface FlowNodeResult {
-  nodeId?: string
-  nodeType?: string
-  nodeLabel?: string
-  status?: string
-  output?: string
-  errorMessage?: string
-  durationMs?: number
-}
-
-export interface FlowRunVO {
-  runId: string
-  flowId?: string
-  status?: string
-  errorMessage?: string
-  output?: string
-  durationMs?: number
-  nodes?: FlowNodeResult[]
 }

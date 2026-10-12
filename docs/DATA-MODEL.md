@@ -35,8 +35,6 @@
 | `DOC_` | 创作文档 | `wb_doc` / Manticore `lw_doc` |
 | `DOCV_` | 文档版本 | `wb_doc_version` |
 | `PRPT_` | 提示词 | `wb_prompt` |
-| `FLOW_` | 工作流画布 | `wb_flow` |
-| `TASK_` | 异步任务（预留） | `wb_task` |
 | `LOGD_` | 日志文档 | Manticore `lw_log` |
 
 ## 3. 审计字段
@@ -140,8 +138,8 @@
 |---|---|---|
 | `run_id` | varchar(40) PK | `RUN_` |
 | `user_id` / `session_id` | varchar(40) | 归属 |
-| `parent_run_id` | varchar(40) | 父运行，重试/分支时使用 |
-| `relation` | varchar(16) | `original`（会话对话） / `flow`（工作流执行）；`retry` `fork` `recovery` 与 `parent_run_id` 同为预留 |
+| `parent_run_id` | varchar(40) | 父运行，重试/分支时使用（预留） |
+| `relation` | varchar(16) | `original`（会话对话）；`retry` `fork` `recovery` 与 `parent_run_id` 同为预留 |
 | `prompt` | text | 本次输入 |
 | `model_name` | varchar(64) | 实际使用模型 |
 | `state` | varchar(16) | `queued` `running` `success` `failed` `aborted` |
@@ -152,7 +150,7 @@
 | `started_at` / `ended_at` | timestamptz | 起止 |
 | `duration_ms` | bigint | 耗时 |
 
-索引：`(session_id, created_at DESC)`、`(user_id, created_at DESC)`。`session_id` 可空：工作流执行不挂会话，这类运行的 `session_id` 为 NULL。
+索引：`(session_id, created_at DESC)`、`(user_id, created_at DESC)`。所有运行都挂会话，`session_id` 非空。
 
 ### 5.3 wb_event
 
@@ -194,7 +192,7 @@
 | `tool_id` | varchar(40) PK | `TOOL_` |
 | `tool_name` | varchar(64) UNIQUE | 调用名 |
 | `tool_label` | varchar(64) | 展示名 |
-| `category` | varchar(24) | `runtime` `file` `network` |
+| `category` | varchar(24) | `runtime` `file` `network` `knowledge` |
 | `risk_level` | varchar(16) | `safe` `confirm` `danger` |
 | `enabled` | boolean | 是否启用 |
 | `schema_json` | jsonb | 参数 Schema |
@@ -240,19 +238,7 @@
 | `enabled` | boolean | 是否启用 |
 | 审计字段 | | |
 
-### 5.9 wb_task
-
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `task_id` | varchar(40) PK | `TASK_` |
-| `user_id` | varchar(40) | 归属用户 |
-| `task_type` | varchar(32) | 任务类型 |
-| `payload` | jsonb | 参数 |
-| `state` | varchar(16) | `pending` `running` `success` `failed` |
-| `retry_count` | int | 重试次数 |
-| `error_message` | text | 错误信息 |
-
-### 5.10 wb_kb
+### 5.9 wb_kb
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
@@ -263,7 +249,7 @@
 | `doc_count` / `chunk_count` | int | 文档与分块计数，冗余免实时聚合 |
 | 审计字段 | | |
 
-### 5.11 wb_kb_doc
+### 5.10 wb_kb_doc
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
@@ -281,7 +267,7 @@
 
 分块正文不落 PG：解析完成后按块写入 Manticore `lw_kbchunk`，原件在 MinIO，可随时重解析。解析走 MQ（`lw.kb.parse`）异步执行，上传接口只做 MinIO 落盘 + 置 `pending`。
 
-### 5.12 wb_doc（创作文档）
+### 5.11 wb_doc（创作文档）
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
@@ -302,7 +288,7 @@
 
 正文存 PG 保证强一致与事务；同时把 `content_text` 写 Manticore `lw_doc` 供全站检索，两份数据以 PG 为准，索引可重建。
 
-### 5.13 wb_doc_version（文档版本）
+### 5.12 wb_doc_version（文档版本）
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
@@ -317,7 +303,7 @@
 
 每次保存正文即写一条版本，保留最近 30 条，超出由清理接口按 `version_no` 裁剪。
 
-### 5.14 wb_prompt（提示词）
+### 5.13 wb_prompt（提示词）
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
@@ -331,21 +317,7 @@
 | `use_count` | int | 使用次数，排序用 |
 | 审计字段 | | |
 
-### 5.15 wb_flow（工作流画布）
-
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `flow_id` | varchar(40) PK | `FLOW_` |
-| `user_id` | varchar(40) | 归属用户 |
-| `flow_name` | varchar(128) | 名称，用户内唯一 |
-| `description` | varchar(512) | 描述 |
-| `graph_json` | jsonb | X6 画布结构：`{nodes:[], edges:[]}` |
-| `node_count` | int | 节点数，冗余 |
-| `last_run_id` | varchar(40) | 最近一次运行的 Run |
-| `state` | varchar(24) | `draft` `enabled` `disabled` |
-| 审计字段 | | |
-
-节点类型：`start` `llm` `tool` `python` `knowledge` `end`。画布结构只存 JSON，不建节点表：节点是画布的内部结构，没有独立查询需求。
+以上 5.1 – 5.12 即 PostgreSQL 的全部业务表；平台级表（`sys_*`、`wb_tool`、`wb_provider`）见第 3 节。
 
 ## 6. Manticore 检索表
 
@@ -375,7 +347,7 @@ CREATE TABLE IF NOT EXISTS lw_log (
 ) charset_table='non_cont,cjk' morphology='icu_chinese'
 ```
 
-检索：`level` 等值 + `ts` 范围过滤，关键字全文走 `message`，按 `ts` 倒序分页。保留 30 天：应用定时任务每日执行 `DELETE FROM lw_log WHERE ts < 截止毫秒`（Manticore 无文档级 TTL）。
+检索：`level` / `logger` / `trace_id` 等值过滤 + `ts` 范围过滤，关键字全文走 `message`（可用字段参数改判 `logger` / `trace_id`），按 `ts` 倒序分页；`/log/stats` 按级别计数与按小时直方图做分布概览。保留 30 天：应用定时任务每日执行 `DELETE FROM lw_log WHERE ts < 截止毫秒`（Manticore 无文档级 TTL）。
 
 ### 6.2 lw_msg（会话消息）
 
@@ -441,10 +413,8 @@ CREATE TABLE IF NOT EXISTS lw_doc (
 | 用量字段冗余在 Run 上 | 统计免 join 事件表 | 汇总与明细可能短暂不一致 |
 | 日志只保留 30 天 | 存储可控 | 长周期审计需外部归档 |
 | 密钥加密存库 | 配置可在页面修改 | 需要管理加密密钥 |
-| `wb_task` 保留表结构但本期不暴露接口 | 异步任务入口已预留 | 短期无消费者，表为空 |
 | 文档正文存 PG、索引存 Manticore | 编辑强一致，检索低成本 | 双写，索引落后时以 PG 为准，可重建 |
 | 每次保存即写版本行 | 回溯简单，无需 diff 算法 | 长文档版本行占空间，按 30 条裁剪 |
-| 画布结构存单个 jsonb | 节点无独立查询需求，一次读写整个图 | 不能按节点做条件统计，图过大时更新成本高 |
 | 提示词内置行归 `builtin` 用户 | 内置模板与用户模板同表同查询，免分表 | 内置行不可编辑，用户只能复制后用 |
 | 消息与知识块进 Manticore、不落 PG | 全文检索免建倒排、写路径短、与日志同一套检索设施 | 检索表与 PG 分居两处，清理与备份策略要分别覆盖 |
 | 知识块不落库表，原件进 MinIO | 可整篇重解析，块结构随分块策略升级 | 分块变更需重建索引 |

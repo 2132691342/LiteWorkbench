@@ -57,11 +57,28 @@ public class DataInitializer implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         long start = System.currentTimeMillis();
         reconcileMenus();
+        retireMenus();
         initRolesAndUsers();
         initProviders();
         grantNewMenusToAdminRoles();
         initBuiltinPrompts();
         log.info("[data.init] cost={}ms", System.currentTimeMillis() - start);
+    }
+
+    /** 下线菜单清理：离线菜单不在种子里，冲突裁剪覆盖不到，必须按固定 ID 软删并摘除授权 */
+    private void retireMenus() {
+        int retired = 0;
+        for (int seq : RETIRED_MENU_SEQS) {
+            String menuId = menuId(seq);
+            if (Objects.nonNull(sysMenuMapper.selectById(menuId))) {
+                sysMenuMapper.deleteById(menuId, SYSTEM);
+                sysRoleMapper.deleteRoleMenusByMenuId(menuId);
+                retired++;
+            }
+        }
+        if (retired > 0) {
+            log.info("[data.init.menu.retired] count={}", retired);
+        }
     }
 
     /**
@@ -274,10 +291,9 @@ public class DataInitializer implements ApplicationRunner {
     /** 普通用户可用的菜单与操作点：工作台功能 + 自己数据的增删改 */
     private static final List<String> USER_MENU_NAMES = List.of(
             "menu.dashboard", "menu.console", "menu.files", "menu.skills", "menu.kb", "menu.settings",
-            "menu.showcase", "menu.writer", "menu.prompt", "menu.flow",
+            "menu.showcase", "menu.writer", "menu.prompt",
             "menu.writerList", "menu.writerCreate", "menu.writerUpdate", "menu.writerDelete", "menu.writerSearch",
             "menu.promptList", "menu.promptCreate", "menu.promptUpdate", "menu.promptDelete",
-            "menu.flowList", "menu.flowCreate", "menu.flowUpdate", "menu.flowDelete", "menu.flowRun",
             "menu.filesDelete",
             "menu.skillsList", "menu.skillsCreate", "menu.skillsUpdate", "menu.skillsDelete",
             "menu.kbList", "menu.kbCreate", "menu.kbUpdate", "menu.kbDelete", "menu.kbUpload", "menu.kbSearch");
@@ -286,6 +302,9 @@ public class DataInitializer implements ApplicationRunner {
     private record MenuSeed(int seq, int parentSeq, String name, String type, String route,
                             String component, String icon, String perm, int sort) {
     }
+
+    /** 已下线的菜单种子 seq：不再随产品交付、但可能残留在旧库中的目录与按钮权限点 */
+    private static final List<Integer> RETIRED_MENU_SEQS = List.of(48, 140, 141, 142, 143, 144);
 
     /** 内置提示词种子：固定 ID 幂等写入，ID 形如 PRPT_ + 24 位序号 */
     private static final List<PromptService.BuiltinSeed> BUILTIN_PROMPTS = List.of(
@@ -333,7 +352,6 @@ public class DataInitializer implements ApplicationRunner {
         seeds.add(new MenuSeed(45, 0, "menu.kb", menu, "/kb", "kb/KbCenter", "book", null, 45));
         seeds.add(new MenuSeed(46, 0, "menu.writer", menu, "/writer", "writer/WriterStudio", "edit", null, 35));
         seeds.add(new MenuSeed(47, 0, "menu.prompt", menu, "/prompt", "prompts/PromptLibrary", "magic", null, 36));
-        seeds.add(new MenuSeed(48, 0, "menu.flow", menu, "/flow", "flow/FlowCanvas", "connection", null, 37));
         seeds.add(new MenuSeed(5, 0, "menu.logs", menu, "/logs", "logs/LogSearch", "document", "monitor:log:list", 50));
         seeds.add(new MenuSeed(6, 0, "menu.monitor", menu, "/monitor", "monitor/HealthPanel", "pulse", "monitor:health:list", 60));
         seeds.add(new MenuSeed(7, 0, "menu.showcase", menu, "/showcase", "showcase/Showcase", "palette", null, 70));
@@ -389,12 +407,6 @@ public class DataInitializer implements ApplicationRunner {
         seeds.add(new MenuSeed(131, 47, "menu.promptCreate", button, null, null, null, "wb:prompt:create", 1));
         seeds.add(new MenuSeed(132, 47, "menu.promptUpdate", button, null, null, null, "wb:prompt:update", 2));
         seeds.add(new MenuSeed(133, 47, "menu.promptDelete", button, null, null, null, "wb:prompt:delete", 3));
-        // 工作流操作点
-        seeds.add(new MenuSeed(140, 48, "menu.flowList", button, null, null, null, "wb:flow:list", 0));
-        seeds.add(new MenuSeed(141, 48, "menu.flowCreate", button, null, null, null, "wb:flow:create", 1));
-        seeds.add(new MenuSeed(142, 48, "menu.flowUpdate", button, null, null, null, "wb:flow:update", 2));
-        seeds.add(new MenuSeed(143, 48, "menu.flowDelete", button, null, null, null, "wb:flow:delete", 3));
-        seeds.add(new MenuSeed(144, 48, "menu.flowRun", button, null, null, null, "wb:flow:run", 4));
         return seeds;
     }
 }

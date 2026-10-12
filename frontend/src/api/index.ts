@@ -11,10 +11,6 @@ import type {
   DocVO,
   DocVersionVO,
   FileVO,
-  FlowREQ,
-  FlowRunREQ,
-  FlowRunVO,
-  FlowVO,
   PromptRenderREQ,
   PromptREQ,
   PromptVO,
@@ -27,6 +23,7 @@ import type {
   KbVO,
   LogDocVO,
   LogSearchParams,
+  LogStatsVO,
   LoginREQ,
   LoginRESP,
   MenuREQ,
@@ -291,18 +288,6 @@ export const promptApi = {
   render: (data: PromptRenderREQ) => post<string>('/prompt/render', data),
 }
 
-/* ===== 工作流 ===== */
-
-export const flowApi = {
-  page: (params: PageREQ) => get<PageResult<FlowVO>>('/flow/page', params),
-  detail: (flowId: string) => get<FlowVO>(`/flow/detail/${flowId}`),
-  create: (data: FlowREQ) => post<string>('/flow/create', data),
-  update: (data: FlowREQ) => post<void>('/flow/update', data),
-  remove: (flowId: string) => post<void>(`/flow/delete/${flowId}`),
-  run: (data: FlowRunREQ) => post<FlowRunVO>('/flow/run', data, { timeout: 600000 }),
-  runDetail: (runId: string) => get<FlowRunVO>(`/flow/run/detail/${runId}`),
-}
-
 /* ===== 模型供应方 ===== */
 
 export const providerApi = {
@@ -326,6 +311,7 @@ export const monitorApi = {
 
 export const logApi = {
   search: (params: LogSearchParams) => get<PageResult<LogDocVO>>('/log/search', params),
+  stats: (params: { from?: number; to?: number }) => get<LogStatsVO>('/log/stats', params),
 }
 
 /* ===== SSE 流式对话 ===== */

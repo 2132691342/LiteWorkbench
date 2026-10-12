@@ -83,6 +83,9 @@ management:
     health:
       # 探针免登录，不对外暴露组件细节
       show-details: never
+      # 开启 liveness / readiness 分组，容器编排按 readiness 判断是否接流量
+      probes:
+        enabled: true
 
 liteworkbench:
   # 日志目录，容器内用环境变量覆盖
@@ -91,7 +94,7 @@ liteworkbench:
     # 种子账号初始密码：生产用 LITEWORKBENCH_ADMIN_PASSWORD 注入，缺失则随机生成并仅打印一次
     admin-password: ${LITEWORKBENCH_ADMIN_PASSWORD:}
   agent:
-    provider: openai
+    provider: ${LITEWORKBENCH_AGENT_PROVIDER:openai}
     model:
       default-name: qwen-plus
       temperature: 0.3

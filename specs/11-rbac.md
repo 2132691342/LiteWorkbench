@@ -11,7 +11,7 @@
 ### 数据归属
 
 - 不做多租户。共享库共享表 + 行级 `user_id`，不做分库，不做 MyBatis 全局拦截器。
-- 用户拥有的资源（会话、运行、事件、消息、技能、文件、知识库与知识库文档、创作文档与版本、提示词、工作流）只允许归属用户读写；管理页面对象（用户、角色、菜单、工具、供应方）由权限点控制。
+- 用户拥有的资源（会话、运行、事件、消息、技能、文件、知识库与知识库文档、创作文档与版本、提示词）只允许归属用户读写；管理页面对象（用户、角色、菜单、工具、供应方）由权限点控制。
 
 ### 账号
 
@@ -31,7 +31,7 @@
 |---|---|---|
 | `super_admin` | 超级管理员 | 全部菜单与权限点，内置不可删 |
 | `admin` | 平台管理员 | 系统管理与工作台全部功能 |
-| `user` | 普通用户 | 用户级功能：仪表盘、会话、文件、技能、知识库、创作台、提示词、工作流 |
+| `user` | 普通用户 | 用户级功能：仪表盘、工作台、创作台、提示词、文件、技能、知识库、设置、组件库，以及自己数据的增删改权限点 |
 
 - 内置角色码不可改不可删；支持新建自定义角色，按角色分配菜单与权限点。
 - 角色与菜单多对多（`sys_role_menu`），授权变更后立即清除相关用户权限缓存。
@@ -40,8 +40,9 @@
 
 - 树形三级：`dir` 目录 / `menu` 路由页 / `button` 权限点。
 - `perm_code` 格式 `域:资源:动作`，例：`system:user:create`、`wb:session:delete`。
-- `menu_name` 存 i18n key（`menu.userManage` / `menu.groupSystem` / `menu.userManageCreate`），禁止"同段既是叶子又是分组"，规则见 AGENTS.md §2.5；前端经 `menuLabel()` 渲染，翻译缺失也不裸显 key。
-- 种子 ID 为 `MENU_ + 26 位零填充序号`；启动时按 ID upsert 回写全部字段，并软删 `route_path` 或 `perm_code` 命中种子但 ID 不在种子内的历史残留行。
+- `menu_name` 存 i18n key（`menu.groupSystem` / `menu.systemUserManage` / `menu.systemUserCreate`），禁止"同段既是叶子又是分组"，规则见 AGENTS.md §2.5；前端经 `menuLabel()` 渲染，翻译缺失也不裸显 key。
+- 种子 ID 为 `MENU_ + 26 位零填充序号`；启动时按 ID upsert 回写全部字段（名称、路由、组件、权限码、图标、排序），并软删 `route_path` 或 `perm_code` 命中种子但 ID 不在种子内的历史残留行。
+- 已下线菜单按固定 ID 显式清理（软删 + 摘除角色授权）：这类菜单的路由与权限码都不再出现在种子里，冲突裁剪覆盖不到，不清理会在菜单树里留下指向已删前端路由的目录项。
 - 前端菜单由后端下发，按钮可见性由 `perms` 集合控制。
 
 ### 会话（Sa-Token）
@@ -96,7 +97,6 @@ public class StpInterfaceImpl implements StpInterface {
 | 知识库 | `wb:kb:list` / `create` / `update` / `delete` / `upload` / `search` |
 | 创作文档 | `wb:doc:list` / `create` / `update` / `delete` / `search` |
 | 提示词 | `wb:prompt:list` / `create` / `update` / `delete`（`list` 同时用于变量渲染） |
-| 工作流 | `wb:flow:list` / `create` / `update` / `delete` / `run` |
 | 供应方 | `wb:provider:list` / `create` / `update` / `delete`（`update` 同时用于连通性测试） |
 | 监控 | `monitor:health:list` / `monitor:log:list` / `monitor:python:reprobe` |
 

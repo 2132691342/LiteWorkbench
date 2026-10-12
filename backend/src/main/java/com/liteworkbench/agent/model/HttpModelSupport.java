@@ -1,12 +1,15 @@
 package com.liteworkbench.agent.model;
 
 import cn.hutool.core.util.StrUtil;
+import com.liteworkbench.common.BizException;
+import com.liteworkbench.common.ErrorCodeEnum;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
+import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
@@ -81,6 +84,14 @@ public final class HttpModelSupport {
             // 错误响应体读取失败无需再抛，调用方只用于提示
         }
         return builder.toString();
+    }
+
+    /** 出站 I/O 异常归类：超时给专用错误码，其余归为调用失败，消息经截断后可直接进日志与响应 */
+    public static BizException ioFailure(IOException e) {
+        if (e instanceof SocketTimeoutException) {
+            return new BizException(ErrorCodeEnum.MODEL_CALL_TIMEOUT, "模型响应超时");
+        }
+        return new BizException(ErrorCodeEnum.MODEL_CALL_FAILED, truncate(e.getMessage()));
     }
 
     /** 去空白并截断 */

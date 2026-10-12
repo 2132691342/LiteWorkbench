@@ -17,28 +17,27 @@
 | 状态 / 路由 | Pinia 2.1.7 + Vue Router 4.3.2 | 状态与动态路由 |
 | 请求 | Axios 1.6.8 | 唯一出口封装 |
 | 可视化 | ECharts 5.5.0 | 仪表盘图表，色值经 `utils/theme.ts` 读令牌 |
-| 画布 | AntV X6 2.18.1 | 工作流编排画布 |
 | 富文本 | WangEditor 5.1.23 | 创作台富文本模式 |
 | 文件处理 | XLSX、docx-preview、vue-pdf-embed | 文件空间在线预览，按需异步加载 |
 | 国际化 | Vue I18n 9.10.2 | 中英双语，菜单标签经 `menuLabel()` 兜底 |
-| 安全 | WebCrypto（浏览器原生） | 登录密码 RSA-OAEP 加密，见 `utils/crypto.ts` |
+| 安全 | JSEncrypt | 登录密码 `RSA/ECB/PKCS1Padding` 加密，见 `utils/crypto.ts` |
+| 渲染 | markdown-it + highlight.js | 会话消息 Markdown 与代码高亮 |
 
 ### 目录
 
 | 目录 | 内容 |
 |---|---|
-| `views/` | 路由页：登录、仪表盘、工作台、创作台、提示词、工作流、文件、技能、知识库、日志、监控、设置、系统管理、组件库 |
+| `views/` | 路由页：登录、仪表盘、工作台、创作台、提示词、文件、技能、知识库、日志、监控、设置、系统管理、组件库 |
 | `components/layout/` | 顶栏、侧栏、外壳 |
-| `components/ui/` | 基础件：`LwButton`、`LwCard`、`LwEmpty`、`LwSkeleton`、`LwErrorBar`、`LwTag`、`LwPageState` |
+| `components/ui/` | 基础件：`LwButton`、`LwCard`、`LwEmpty`、`LwSkeleton`、`LwErrorBar`、`LwTag`、`LwPageState`、`LwMarkdown`、`LwProgressBar` |
 | `components/charts/` | ECharts 封装（面积图、环形图、柱状图），色值经 `utils/theme.ts` 读令牌 |
 | `components/settings/` | 平台级配置面板：`ProviderPanel`、`ToolPanel` |
 | `stores/` | Pinia setup store |
 | `composables/` | 复用逻辑：`useRunStream`（SSE 订阅）、`usePermission`（权限判断） |
 | `styles/tokens.css` | 唯一色值来源 |
 | `locales/` | 中英双语 |
-| `utils/crypto.ts` | 公钥获取与密码加密（RSA-OAEP/SHA-256） |
+| `utils/crypto.ts` | 公钥获取与密码加密（JSEncrypt，`RSA/ECB/PKCS1Padding`） |
 | `utils/menu.ts` | `menuLabel()`：i18n 命中即用译文，未命中降级为 key 末段可读形式 |
-| `views/` | 登录页 `Login.vue` 与强制改密页 `ForcePassword.vue` 为静态路由 |
 
 ### 路由
 
@@ -48,12 +47,11 @@
 | `/force-password` | 强制改密（`pwdResetRequired = true` 时唯一可达页） | 登录 |
 | `/dashboard` | 仪表盘 | 登录 |
 | `/console` | 工作台（会话 + 运行时间线） | 登录 |
-| `/writer` | 创作台（文档编辑 + 版本 + AI 辅助） | `wb:doc:list` |
-| `/prompt` | 提示词库 | `wb:prompt:list` |
-| `/flow` | 工作流画布 | `wb:flow:list` |
+| `/writer` | 创作台（文档编辑 + 版本 + AI 辅助） | 登录 |
+| `/prompt` | 提示词库 | 登录 |
 | `/files` | 文件空间（含在线预览） | 登录 |
 | `/skills` | 技能 | 登录 |
-| `/kb` | 知识库 | `wb:kb:list` |
+| `/kb` | 知识库 | 登录 |
 | `/logs` | 日志中心 | `monitor:log:list` |
 | `/monitor` | 健康监控 | `monitor:health:list` |
 | `/settings` | 设置 | 登录 |
@@ -64,7 +62,9 @@
 
 设置页内嵌两个平台级分区，按权限点显示：**模型供应方**（`wb:provider:*`）与**工具管理**（`wb:tool:*`），普通用户看不到这两块。
 
-路由分静态（登录、404）与动态（其余，含 `/showcase` 组件库演示页，后端 `menu/user-tree` 下发后 `router.addRoute` 注册）。
+表内“登录”表示菜单种子未挂 `perm_code`，登录即可达；`wb:doc:list` 这类 `*:list` 权限点作为按钮级权限存在，控制页面内列表/详情动作，不拦路由。
+
+路由分静态与动态：静态仅 `/login`、`/force-password`、外壳 `/`（重定向到 `/dashboard`）与兜底 404；其余全部由后端 `menu/user-tree` 下发后 `router.addRoute` 注册，`component` 字段映射到 `views/` 下的文件。
 
 ### 状态
 
@@ -74,7 +74,7 @@
 | `useSessionStore` | 会话列表与当前会话 |
 | `useRunStore` | 运行事件流与流式缓冲 |
 | `useMonitorStore` | 健康状态 |
-| `useAppStore` | 主题、语言、侧栏折叠 |
+| `useAppStore` | 语言、侧栏折叠状态 |
 
 大对象一律 `shallowRef`，标量用 `ref`。
 
@@ -143,11 +143,11 @@ await runStore.replay(runId)
   ├─ AI 辅助 → /doc/assist → 结果可插入末尾 / 替换选区 / 复制
   └─ 版本历史 → /doc/version/page → 回滚即再走一次保存
 
-工作流
-  ├─ 画布由 X6 渲染，节点顺序即执行顺序，可拖拽调位置
-  ├─ 节点配置在右侧编辑（prompt / script / 检索词 / 工具名 / 输出变量）
-  ├─ 保存 → /flow/update（服务端校验结构，不合法即拒绝）
-  └─ 执行 → /flow/run → 按节点展示状态、耗时与输出
+日志中心
+  ├─ 进入即拉 /log/stats（近 24 小时）渲染概览卡与时间直方图
+  ├─ 过滤：关键字 + 字段（message/logger/traceId）+ 级别 + logger + traceId + 时间预设
+  ├─ 查询 → /log/search → 结果行内高亮，点击展开异常栈
+  └─ 复制 traceId / 按 traceId 钻取过滤
 ```
 
 ## 取舍

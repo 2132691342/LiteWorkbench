@@ -106,7 +106,7 @@ public class SysUserDO implements Serializable { ... }
 
 同一个 Mapper 允许注解与 XML 共存：XML 里只留上述复杂语句，且不得与注解方法重名。
 
-**写入 `jsonb` 列必须显式 `CAST(#{x} AS jsonb)`**：PG 不做 varchar 参数到 jsonb 的隐式转换。现有列：`wb_event.payload`、`wb_prompt.variables`、`wb_flow.graph_json`、`wb_tool.schema_json`、`wb_task.payload`。
+**写入 `jsonb` 列必须显式 `CAST(#{x} AS jsonb)`**：PG 不做 varchar 参数到 jsonb 的隐式转换。现有列：`wb_event.payload`、`wb_prompt.variables`、`wb_tool.schema_json`。
 
 可空判断用 SQL 空值兜底，保持语句静态：
 
@@ -155,7 +155,7 @@ public class RunService {
 
 ### 3.1 数据归属模型
 
-- 用户拥有的业务表（会话、运行、事件、技能、文件、知识库、知识库文档、创作文档、文档版本、提示词、工作流画布、任务）带 `user_id varchar(40)`，行级隔离；会话消息与知识库分块不落库表，分别存 Manticore 表（`lw_msg`、`lw_kbchunk`），同样带 `user_id` 过滤。
+- 用户拥有的业务表（会话、运行、事件、技能、文件、知识库、知识库文档、创作文档、文档版本、提示词）带 `user_id varchar(40)`，行级隔离；会话消息与知识库分块不落库表，分别存 Manticore 表（`lw_msg`、`lw_kbchunk`），同样带 `user_id` 过滤。
 - 平台级表不带 `user_id`，仅管理角色可写：`sys_menu`、`sys_user_role`、`sys_role_menu`、`wb_tool`、`wb_provider`。
 - 用户身份由 `common.LoginContext` 提供，禁止从请求体采信 `userId`；Service 在请求线程内一律 `LoginContext.userId()` 取当前用户。请求上下文之外（异步线程、MQ 消费）必须把 `userId` 作为第一个业务参数显式传递。
 - 用户拥有的资源，Mapper 查询条件必须显式携带 `user_id`（平台级表除外）。
@@ -241,8 +241,6 @@ public R<String> create(@RequestBody @Valid UserREQ req) { ... }
 | `DOC_` | 创作文档 |
 | `DOCV_` | 创作文档版本 |
 | `PRPT_` | 提示词 |
-| `FLOW_` | 工作流画布 |
-| `TASK_` | 异步任务（预留） |
 | `LOGD_` | 日志文档（Manticore） |
 
 ## 7. 字段规范
@@ -356,69 +354,54 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 
 ## 14. 测试约定
 
-只保留覆盖长链路、复杂场景与跨模块契约的测试；简单断言（ID 格式、字符串清洗、空参校验）、纯算法与薄 mock 单元测试一律不写。
+只保留覆盖长链路、复杂场景与跨模块契约的测试；简单断言（ID 格式、字符串清洗、空参校验）、纯算法与薄 mock 单元测试一律不写。当前共 3 个文件 4 个用例，随 `mvn test` 一次跑完。
 
-| 文件 | 覆盖 |
+| 文件 | 用例 | 覆盖 |
+|---|---|---|
+| `service/RunEventPipelineTest` | 2 | 事件长链路：一次完整运行的归一与合帧（增量合并边界、类型切换保序、工具起止与结果、用量入账）＋ 边界路径（超长裁剪、失败工具标记、异常事件） |
+| `api/SseFrameContractTest` | 1 | SSE 帧契约：业务帧带 `id=seq` 与固定事件名，心跳只发注释行 |
+| `config/PermissionContractTest` | 1 | 权限契约：控制器注解与 `PermConst` 声明的权限点全部存在于菜单种子 |
+
+用例名用中文直述业务断言；一个用例串起一条完整链路，一个文件只答一个契约问题；前端不写快照测试与纯渲染测试。
+
+## 15. 依赖使用约定
+
+依赖只取其长处，能力缺口自研补齐。以下约定为强制项，违反即返工。
+
+### 15.1 Agent 内核与模型出站
+
+Agent 内核全部写在 `agent` 包内，不引任何 Agent 框架。
+
+| 约定 | 原因 |
 |---|---|
-| `service/RunEventPipelineTest` | 事件长链路：内核事件归一 → 批内合帧，增量合并、类型切换保序、工具输出捕获、超长裁剪 |
-| `service/FlowGraphTest` | 画布校验与拓扑执行序：合法链、有环、孤立节点、非法节点与悬空连线 |
-| `api/SseFrameContractTest` | SSE 帧契约：`id` 为 seq、事件名 `run.event`、心跳只发注释行 |
-| `config/PermissionContractTest` | 控制器注解与 `PermConst` 的权限点全部存在于菜单种子 |
+| 配置层复用 hutool-ai 的 `AIConfig` 契约：`ProviderAIConfig` 承载 `apiUrl` / `apiKey` / `model` / 连接与读超时 / 动态参数 | 一处配置，内核与同步路径共用 |
+| 同步文本路径（`ModelCaller`）优先走 hutool-ai 的原生服务，失败或空文本再回退自研客户端 | 复用现成实现，同时保证异常路径可用 |
+| 流式出站与工具调用自研：`agent/model` 的 `OpenAiCompatClient` / `AnthropicClient` / `OllamaClient` 共用 `HttpModelSupport` | 需要逐行剥协议前缀、累积工具调用增量、按 `usage` 入账，并且取消必须立即关闭连接 |
+| 工具调用请求体、消息模型、`usage` 与 `finish_reason` 解析全部自研 | 依赖只返回裸响应体，没有对应的 POJO |
 
-前端不写快照测试与纯渲染测试。
+### 15.2 Hutool 与 Sa-Token
 
-## 15. 第三方集成事实
-
-### 15.1 Agent 内核（自研，基于 hutool-ai）
-
-不使用任何 Agent 框架，Agent 内核写在 `agent` 包内，唯一的模型出站依赖是 hutool-ai。下表是 hutool-ai 的既定事实，内核按此补齐：
-
-| 事实 | 结论 |
+| 约定 | 原因 |
 |---|---|
-| 坐标与归属 | `cn.hutool:hutool-ai`，5.8.38 起随 `hutool-all` 引入，5.8.46 已含 openai / deepseek / doubao / grok / hutool / ollama / gemini 七家 SPI |
-| 出站实现 | 非流式走 `cn.hutool.http.HttpRequest`，流式走裸 `java.net.HttpURLConnection` 逐行读，**两条路径实现不一致** |
-| 只有裸字符串 | `XXServiceImpl.chat` 直接返回 `response.body()`，无 usage / finish_reason / tool_calls 的 POJO，需自行 `JSONUtil` 建模 |
-| 消息模型 | `cn.hutool.ai.core.Message` 只有 `role` + `Object content`，**无 `tool_calls` / `tool_call_id` / `name`** |
-| **不支持 function calling** | 代码从不构造 `tools` / `tool_choice`，工具调用必须自研请求体与消息模型 |
-| 流式回调 | `chat(msgs, Consumer<String>)` 把**每一行原样**回调（不剥 `data:`、不合 delta、不识别 `[DONE]`），且 `ThreadUtil.newThread(...)` 起线程后立即返回，**无句柄、不可取消** |
-| 配置 | `AIConfigBuilder` 链式构建，`apiUrl` / `apiKey` / `model` / `timeout` / `readTimeout` / 代理，`temperature` 等只能经 `putAdditionalConfig` 走动态参数 |
-| 统一门面缺失 | `AIService` 只有 `chat`，embedding / vision / tts 散落在各 provider 子接口 |
+| 只引 `hutool-all`（5.8.46，已含 AI 模块），不再单独声明子模块 | 聚合包已包含所需模块 |
+| 业务 ID 一律走 `common.IdGenerator`，禁止 `IdUtil` / `UlidCreator` | Hutool 不提供 ULID，业务 ID 需带业务前缀且字典序近似时间序 |
+| 集合工具统一用 `CollUtil` | `CollectionUtil` 只是它的别名 |
+| 登录态存 Redis，令牌放 `Authorization` 头（裸令牌），权限码由 `config/StpInterfaceImpl` 从 `LoginUser` 解析 | 不从请求体采信用户身份 |
 
-内核以此为准：
+### 15.3 Manticore
 
-- **配置层复用 hutool-ai**：`agent/model/ProviderAIConfig` 直接实现 `cn.hutool.ai.core.AIConfig`，供应方的 `apiUrl` / `apiKey` / `model` / 连接与读超时 / 动态参数都由这一份配置承载。
-- **同步文本路径优先用 hutool-ai**：`ModelCaller` 在 hutool-ai 覆盖的供应方码（hutool / deepseek / openai / doubao / grok / ollama / gemini）上先调 `AIUtil.chat(config, messages)`，失败或空文本再回退自研客户端。
-- **流式与工具调用自研**：hutool-ai 的流式是"逐行原样回调 + 后台线程即弃"，既无 `data:` 解析也不可取消，且完全不支持 `tools` / `tool_calls`；因此 `agent/model` 自建 `OpenAiCompatClient` / `AnthropicClient` / `OllamaClient`，共用 `HttpModelSupport` 做建连、逐行读流与取消。
+应用走 HTTP JSON API（`manticoresearch` SDK 10.2.0，服务端 `25.0.0`），MySQL 协议端口仅供人工排障。
 
-### 15.2 Hutool
-
-只引 `hutool-all`（版本 5.8.46，已含 `hutool-ai`）。`IdUtil` 无 ULID；`CollectionUtil` 是 `CollUtil` 的别名，二者等价，统一用 `CollUtil`。
-
-### 15.3 Sa-Token
-
-登录态存 Redis，令牌放 `Authorization` 头，令牌风格 `ulid`。权限码由 `StpInterfaceImpl` 从 `LoginUser` 解析，不从请求体采信。
-
-### 15.4 Manticore
-
-全文检索引擎，MySQL 协议 `9306` + HTTP JSON API `9308`；应用走 HTTP API（`manticoresearch` Java SDK，Jersey + Jackson）。下表是服务端 Manticore 25.0.0 的既定事实，实现按此约束：
-
-| 事实 | 结论 |
+| 约定 | 原因 |
 |---|---|
-| 坐标 | `com.manticoresearch:manticoresearch`，当前钉 **10.2.0**，服务端为 `manticoresearch/manticore:25.0.0`；SDK 与服务端各自独立版本轨，四张表的读写检索以服务端版本为准 |
-| 默认 charset_table | 该版本默认 charset_table 下文本**不入索引**，建表必须显式 `charset_table='non_cont,cjk'` |
-| 文本列声明 | `text stored` 只存不索引，**必须写 `text indexed stored`** 才有全文检索 |
-| 中文分词 | `morphology='icu_chinese'`（ICU 词典分词，内置），中英混排按词切分；不引语言包、不用 ngram（该版本 ngram 索引侧不工作） |
-| SDK 端点映射 | `IndexApi` → `/insert` `/replace` `/update` `/delete` `/bulk`；`SearchApi` → `/search`；`UtilsApi.sql` → `/sql` |
-| `/sql` 限制 | 非 raw 模式下 `/sql` 把语句**编译成搜索查询**，**必须带 `FROM <索引>`**：探测写 `SELECT 1`、运维写 `SHOW TABLES` 都会被回 **501 `only SELECT queries are supported`**。要跑任意语句必须 `raw_response=true`（等价 `mode=raw`）；SDK 的 `UtilsApi.sql(q, rawResponse)` 正把这个参数放在 query 上，`false` 即走编译路径。健康探测因此必须查真实索引（如 `SELECT log_id FROM lw_log LIMIT 1`） |
-| `/cli` 心跳 | `/cli` 只要 HTTP 200 就回 `Query OK`，不能作为可用性判据；探测一律用 `/search` 或带 `FROM` 的 `/sql` |
-| DDL | 建表（`CREATE TABLE IF NOT EXISTS`）走 HTTP `/cli`，**必须 text/plain 裸 body**：表单编码把单引号编成 `%27`、换行编成 `%0A`，该端点的表单解码不接受这两种编码，语句静默失败且仍回显 `Query OK` |
-| `/cli` 无错误回显 | 失败语句也回 `Query OK`，建表后必须用属性过滤 SELECT（如 `WHERE level='__probe__'`）校验表与列类型 |
-| `/insert` 隐式建表 | 表不存在时 `/insert` 按文档字段自动建表，字段全部建成 text/int 而非属性列；DDL 静默失败会被这个行为掩盖，靠上面的 SELECT 校验兜底 |
-| 范围过滤 | `QueryFilter.range(Range)` 序列化缺字段名包裹，报 `empty filter` / `only one element`；必须传 `Map.of("ts", Map.of("gte", x))` |
-| 删除计数 | `IndexApi.delete` 返回 `DeleteResponse.deleted`，幂等清理按此对账 |
-| 网络 | `9308` 不发布到宿主机，应用容器与中间件同网络，用服务名 `manticore:9308` 直连 |
-| 文档 ID | 业务主键是 string 列（`message_id` 等），文档数字 ID 由引擎自动分配；幂等写用"先删同键再插入" |
-| 保留策略 | Manticore 无文档级 TTL，日志 30 天保留由应用定时删除（`IndexApi.delete` + range 过滤）执行 |
+| 建表（`CREATE TABLE IF NOT EXISTS`）走 `/cli`，且必须以 text/plain 裸 body 提交 | 表单编码会把引号与换行转义，该端点不接受转义形式，语句会静默失败 |
+| 建表必须显式 `charset_table='non_cont,cjk'` 与 `morphology='icu_chinese'`，文本列写 `text indexed stored` | 默认 charset_table 下文本不入索引；只 `stored` 不索引则全文检索无结果 |
+| 建表后必须用属性过滤 SELECT 复验表与列类型 | DDL 失败也回 `Query OK`，且 `/insert` 遇到不存在的表会按文本类型隐式建表，会掩盖失败 |
+| 检索与聚合走 `/search`、带 `FROM <索引>` 的 `/sql`；健康探测同理 | 非 raw 模式下 `/sql` 把语句编译成搜索查询，没有 `FROM` 的 `SELECT 1` / `SHOW TABLES` 会被回 501 |
+| 范围过滤必须传 `Map.of("ts", Map.of("gte", x))` 形式 | 缺字段名包裹会被序列化成非法过滤器 |
+| 幂等写用「先删同键再插入」，删除结果按 `DeleteResponse.deleted` 对账 | 文档数字 ID 由引擎分配，业务主键是 string 列 |
+| 日志保留由应用定时任务删除，不依赖引擎 TTL | Manticore 无文档级 TTL |
+| `9308` 不发布宿主机，容器同网络用服务名直连 | 减少暴露面 |
 
 ## 16. 运行参数约定
 

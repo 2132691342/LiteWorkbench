@@ -1,9 +1,6 @@
 import { i18n } from '@/locales'
 
-/**
- * 菜单标签渲染：命中 i18n 用译文，未命中把 key 末段拆驼峰为可读词。
- * 任何情况下都不裸显 menu.xxx 这样的原始 key。
- */
+/** 菜单标签渲染：命中 i18n 用译文，未命中把 key 末段拆驼峰为可读词，绝不裸显原始 key */
 export function menuLabel(name: string | undefined | null): string {
   if (!name) {
     return ''

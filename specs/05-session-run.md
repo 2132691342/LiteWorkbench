@@ -62,7 +62,7 @@ POST /chat/stream
   └─ 7 finally 释放锁，关闭 SseEmitter
 ```
 
-`POST /run/abort/{runId}` 从活动运行表取句柄调 `cancel()`；表里没有即视为孤儿运行，直接结算为 `aborted`。
+`POST /run/abort/{runId}` 从活动运行表取句柄调 `cancel()`，并立即结算为 `aborted`（落终态、推 `run.end`、写入已产出的助手正文、释放会话锁）；表里没有即视为孤儿运行，按库中记录直接结算为 `aborted`。
 
 ## 取舍
 
@@ -79,7 +79,7 @@ POST /chat/stream
 
 - 所有查询必须带 `deleted = false`，用户资源必须带 `user_id` 条件。
 - 事件写入失败不得中断流式输出，记 error 日志后继续。
-- 中断只允许作用于 `running` 状态；中断与正常结束同时到达时按中断裁决。
-- Token 用量只在终态入账一次，`model.call` 事件不参与累加。
+- 中断只允许作用于非终态运行；中断与正常结束同时到达时按中断裁决。
+- Token 用量在事件攒批冲刷时从 `model.call`（phase=end）累加到运行时用量，终态一次性落库，避免每轮更新行。
 - 回放只重放已落库的事件，不重新执行 Agent。
 - 会话与运行按 `user_id` 归属，用户只能操作自己的数据。

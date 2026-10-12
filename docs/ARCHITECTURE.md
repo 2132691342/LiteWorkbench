@@ -29,8 +29,8 @@
 ├─────────────────────────────────────────────────────┤
 │ domain     entity / dto / vo / constant                  │
 └─────────────────────────────────────────────────────┘
-  侧翼：config  anno  aspect  mq  agent  runtime
-        observability  common```
+  侧翼：config  anno  aspect  mq  agent  runtime  observability  common
+```
 
 | 层 | 职责 | 禁止 |
 |---|---|---|
@@ -52,26 +52,29 @@
 | `service` | `DocService` | 创作文档 CRUD、版本快照、全文索引同步、版本回滚 |
 | `service` | `DocAssistService` | AI 辅助写作：动作模板 + 选区 + 可选知识库片段 → 同步调用模型返回文本 |
 | `service` | `PromptService` | 提示词模板 CRUD、内置只读保护、变量渲染 |
-| `service` | `FlowService` | 工作流画布 CRUD、结构校验、拓扑排序 |
-| `service` | `FlowEngine` | 按拓扑序串行执行节点，逐节点落事件；`llm` / `python` / `knowledge` / `tool` 四类执行器 |
 | `service` | `KbDocService` | 文档上传（MinIO + MQ 派发）、状态查询、分块检索、文档删除 |
+| `service` | `KbTextChunker` | 文档分块：按目标长度切分并保留相邻重叠 |
 | `service` | `DocTextExtractor` | 从 MinIO 拉原件提取纯文本：txt/md 直接读，docx 解包取 XML，pdf 走 pdfbox |
+| `service` | `StartupGuardService` | 启动自检：中间件连通性校验与降级开关判定 |
+| `service` | `AgentToolGate` / `AgentProviderStore` | `agent/spi` 端口的 platform 侧实现：工具启停、供应方配置读取 |
 | `agent` | `AgentLoop` | 自研推理循环：思考 → 工具调用 → 观察 → 收敛，含迭代上限、取消、重复调用护栏 |
 | `agent` | `AgentKernelRuntime` | `AgentRuntime` 实现：装配 `AgentLoop` 与工具集，把内核事件写入订阅者 |
 | `agent` | `AgentEventAdapter` | 把内核 `AgentEvent` 归一化为工作台 `RunEventDTO` 并分配 `seq` |
 | `agent` | `ModelFactory` | 按供应方构建并缓存 `ModelClient`，解密密钥，三级模型名兜底 |
 | `agent` | `model/*Client` | 三协议出站：`OpenAiCompatClient` / `AnthropicClient` / `OllamaClient`，共用 SSE 解析与取消 |
-| `agent` | `ModelCaller` | 模型同步调用，供 AI 辅助写作与工作流 `llm` 节点复用，不建 Run |
+| `agent` | `ModelCaller` | 模型同步调用，供 AI 辅助写作复用，不建 Run |
 | `agent` | `WorkbenchTools` | 内置工具集：`python_exec`、`file_read`、`file_write`、`http_get`、`kb_search` |
 | `agent` | `AgentMemory` | 上下文组装与确定性压缩（不调模型）：配对修复、Token 估算、切点选择 |
 | `runtime` | `LocalPythonRuntime` | Python 解释器探测、脚本落盘、进程执行、超时与进程树终止 |
-| `mapper` | `LogSearchMapper` / `MessageIndexMapper` / `KbChunkIndexMapper` / `DocIndexMapper` | Manticore 表创建、写入、检索：日志 / 会话消息 / 知识库分块 / 创作文档 |
-| `observability` | `ManticoreLogAppender` | Logback 扩展，异步把日志送达 Manticore |
+| `mapper` | `LogSearchMapper` / `MessageIndexMapper` / `KbChunkIndexMapper` / `DocIndexMapper` | Manticore 表创建、写入、检索、聚合：日志 / 会话消息 / 知识库分块 / 创作文档 |
+| `mapper` | `HealthMapper` | 数据库连通性探测 |
+| `observability` | `ManticoreLogAppender` / `LogPublisher` / `LogRetentionJob` | Logback 扩展异步投递日志、无 MQ 时直写、按保留天数清理索引 |
 | `service` | `MonitorService` | 各中间件健康探测与仪表盘汇总统计（60s 缓存） |
 | `mq` | `LogProducer` / `LogConsumer` | 日志投递削峰，失败降级为本地文件 |
 | `mq` | `KbDocParseProducer` / `KbDocParseConsumer` | 知识库文档解析任务派发与消费：提文本 → 分块 → 写索引 |
-| `aspect` | `IdempotentAspect` | `@Idempotent` 写接口防重提交 |
-| `common` | `LoginContext` / `StpInterfaceImpl` | 请求线程的用户身份载体，权限点解析 |
+| `aspect` | `IdempotentAspect` / `RateLimitAspect` | `@Idempotent` 防重提交、`@RateLimit` 固定窗口限流 |
+| `common` | `LoginContext` | 请求线程的用户身份载体 |
+| `config` | `StpInterfaceImpl` | Sa-Token 权限点解析，读缓存未命中回源数据库 |
 
 ## 4. 认证与数据归属
 
@@ -174,10 +177,10 @@ POST /api/v1/chat/stream
 
 | 规则 | 说明 |
 |---|---|
-| 推送合帧 | 文本增量逐条推会把连接线程打满，批内连续**同类型**增量（`text.delta` / `thinking.delta`）合并为一帧后推送（`textDelta` 拼接、`seq` 取批内最后一条）；类型切换不合并；落库仍按 100 条 / 200ms 保持逐条 |
+| 推送合帧 | 文本增量逐条推会把连接线程打满，批内连续**同类型**增量（`text.delta` / `thinking.delta`）合并为一帧后推送（`textDelta` 拼接、`seq` 取批内最后一条）；类型切换不合并；落库仍保持逐条 |
 | 单帧截断 | 单条增量超 4KB 截断，完整正文以 `run.result` 为准 |
 | 中断优先 | `run.result`（completed）与中断标记同时到达时，**中断裁决优先**，终态记 `aborted` |
-| 用量单一入账 | Token 用量只从 `run.result` 一处累加，`model.call` 与 `run.end` 不重复计数 |
+| 用量单一入账 | Token 只在事件冲刷时从 `model.call`（phase=end）累加到内存用量，终态一次性落库，不每轮更新行 |
 
 ### 5.3 中断
 
@@ -254,30 +257,38 @@ POST /api/v1/doc/assist（action + selection + instruction + kbId?）
   ├─ 2 可选：kbId 存在时 kb_search 取 3 段片段拼进上下文  DocAssistService
   ├─ 3 ModelFactory 取模型同步调用，返回纯文本
   └─ 4 前端决定插入 / 替换选区
-
-POST /api/v1/flow/run（flowId + inputs）
-  ├─ 1 取画布结构并校验（唯一 start、有 end、无环、无孤立）   FlowService
-  ├─ 2 拓扑排序得执行序列                              FlowService
-  ├─ 3 逐节点执行（上下文变量沿边传递）                  FlowEngine
-  │     ├─ llm        → ModelFactory 同步调用
-  │     ├─ python     → LocalPythonRuntime 执行脚本
-  │     ├─ knowledge  → KbDocService 检索分块
-  │     └─ tool       → 已启用内置工具
-  ├─ 4 每节点结果落 wb_event（event_type=flow.node）
-  └─ 5 节点失败即中止，runId 与已产出输出一并返回
 ```
 
 创作文档是唯一"PG 与 Manticore 双写"的资产：PG 保证编辑事务，Manticore 提供全站检索，索引落后时以 PG 为准并可由文档列表页触发重建。
+
+### 5.9 日志检索链路
+
+```
+业务代码 log.info/warn/error
+  → Logback AsyncAppender
+      ├─ RollingFileAppender（按天 + 按级别，三个文件）
+      └─ ManticoreLogAppender → MQ lw.log → LogConsumer → Manticore lw_log
+
+GET /api/v1/log/search（keyword / level / logger / traceId / field / from / to）
+  → LogSearchMapper：等值过滤（level / logger / traceId）+ ts 范围 + 全文匹配
+  → 按 ts 倒序分页，返回 PageResult<LogDocVO>
+
+GET /api/v1/log/stats（from / to）
+  → 级别分布计数 + 按小时粒度的时间直方图（Manticore 分组聚合）
+  → 前端渲染日志中心顶部的概览卡与柱状图
+```
+
+检索字段分工：`message` 是唯一全文列（ICU 中文分词），`level` / `logger` / `trace_id` / `ts` 是过滤列。关键字默认匹配 `message`，可用 `field` 参数改判 `logger` 或 `trace_id`；`traceId` 精确命中用于把一次请求的全部日志串成时间线。MQ 不可用时降级为跳过索引，不阻塞主流程；Manticore 检索异常时降级为空结果并告警，日志原文仍在滚动文件里可查。
 
 ## 6. 并发与性能
 
 | 点 | 做法 |
 |---|---|
-| Agent 实例 | `ModelClient` 按 `provider + model` 缓存复用（持有连接与重试策略）；`AgentLoop` 每次运行新建，天然无跨会话状态 |
+| Agent 实例 | `ModelClient` 按 `provider + model` 做 LRU 缓存复用（持有端点与超时配置）；`AgentLoop` 每次运行新建，天然无跨会话状态 |
 | 登录态 | Sa-Token 会话与权限缓存进 Redis，权限查询一次后缓存 10 分钟 |
 | 菜单树 | 用户可见菜单树缓存 Redis（TTL 10min），菜单 / 授权 / 用户角色变更即清，路由加载不打穿库 |
 | 仪表盘 | 汇总指标全局缓存 60s，趋势统计免高频重算 |
-| 事件写入 | 攒批（100 条或 200ms）批量 insert，降低写放大 |
+| 事件写入 | 每 200ms 定时攒批一次批量 insert，降低写放大 |
 | 消息与知识块写入 | 单条 / 批量直写 Manticore 文档，免事务与倒排维护 |
 | 知识库解析 | MQ 异步消费，上传接口零等待；解析失败不重试挤压，直接置 failed 可手工重放 |
 | SSE | 独立线程池，超时 30min，心跳 15s |
@@ -300,29 +311,30 @@ POST /api/v1/flow/run（flowId + inputs）
 | 日志双写（文件 + Manticore） | 既有原文又有检索 | 写入路径变长，靠 MQ 削峰 |
 | 消息存 Manticore 不存 PG | 全文检索免费获得，写路径短，与日志同一套设施 | 消息资产依赖 Manticore 持久化，容量规划要算上它 |
 | 知识检索用关键词全文（Manticore + ICU 分词） | 零额外依赖、零 embedding 成本，中文按词典切分，短查询够用 | 无语义召回，同义改写查不到 |
-| 画布结构存整体 jsonb | 读写一次完成，前端可直接接管渲染 | 节点级查询与统计要解析 JSON |
-| 工作流串行执行不并行分支 | 语义可预测、变量传递简单、出错点明确 | 有依赖无关的分支也只能排队，靠节点超时控制总耗时 |
+| 不做可视化编排画布 | 创作主路径是"对话 + 文档"，省掉图校验与画布执行器的长期维护 | 固定多步批量流程需拆成多次对话完成 |
 | AI 辅助写作不建 Run | 短结果即时可见，不占事件表 | 无法回放辅助过程 |
 | pgvector 列预留不启用 | 语义检索留了升级位 | 当前是占位，不产生价值 |
 
-## 8. 第三方集成事实
+## 8. 对外依赖边界
 
-下表是各依赖不可绕开的客观事实，实现按此约束。
+每个外部依赖只取其长处，能力缺口由本项目自己补，边界如下：
 
-| 依赖 | 事实 | 本项目的做法 |
+| 依赖 | 取用什么 | 由本项目自己实现 |
 |---|---|---|
-| hutool-ai | `AIService` 只返回裸字符串，无 usage / tool_calls / finish_reason 模型 | 只借用其配置与出站 HTTP；请求体构造、响应解析、工具调用全部自研 |
-| hutool-ai | 流式是"逐行原样回调 + 后台线程即弃"，无 `data:` 解析、不可取消 | 自建 `ModelStreamSink`：剥 `data:` / 识别 `[DONE]` / 合 delta / 支持取消；`hutool-ai` 的流式入口不使用 |
-| hutool-ai | `Message` 无 `tool_calls` / `tool_call_id` | 内核自带消息模型 `AgentMessage`，出站时按协议转 JSON |
-| hutool-ai | ollama 无 `AIUtil.getOllamaService` | Ollama 走 `agent/model/OllamaClient` 直连 `/api/chat`（NDJSON） |
-| Hutool | `IdUtil` 无 ULID，`fastUUID` 不是有序 ID | ULID 只走 `IdGenerator`（`ulid-creator`） |
-| Hutool | `CollectionUtil` 是 `CollUtil` 别名 | 统一用 `CollUtil` |
-| Sa-Token | 登录态存 Redis | Redis 不可用时登录链路不可用，不为此做本地降级 |
-| RabbitMQ | `spring.rabbitmq.listener.simple.retry` 的 `multiplier` 默认 1.0，会触发 `ExponentialBackOffPolicy` 告警 | 显式配置 `initial-interval` / `max-interval` / `multiplier=2` |
-| Manticore | 默认 charset_table 下文本不入索引；`text stored` 只存不索引 | 建表统一 `charset_table='non_cont,cjk' morphology='icu_chinese'`，文本列一律 `text indexed stored` |
-| Manticore | 非 raw 模式下 `/sql` 把语句编译成搜索查询，`SELECT 1` / `SHOW TABLES` 会被回 501 `only SELECT queries are supported` | DDL 走 `/cli`，写入走 `/insert` `/update` `/delete` `/bulk`，检索走 `/search`；**健康探测必须带 `FROM <索引>`** |
-| Manticore | 9308 不发布宿主机 | 应用容器与中间件同网络，`manticore:9308` 服务名直连 |
-| Manticore SDK | 传递依赖 `commons-logging` 与 `spring-jcl` 冲突并打印告警 | Maven 排除 `commons-logging` |
+| hutool-ai | 供应方配置契约与同步文本补全 | 流式出站（`agent/model/*Client`）、请求体构造、响应解析、工具调用下发与增量累积、usage 汇总 |
+| Hutool | 字符串 / 集合 / 日期 / JSON / 加解密 / HTTP 工具类 | 业务 ID 生成（`IdGenerator` 走 ULID，Hutool 不提供） |
+| Sa-Token | 登录态、`@SaCheckPermission` 权限注解 | 权限点来源与缓存（`config/StpInterfaceImpl`）、菜单种子对账 |
+| MyBatis | SQL 映射与事务 | 归属隔离条件、批量写入与聚合 SQL 的取舍（注解优先、复杂 SQL 落 XML） |
+| Manticore | 全文检索与分组聚合 | 建表 DDL、文档结构、写入与检索路径（见 spec 08 与 §5） |
+| RabbitMQ | 异步削峰 | 消费失败降级（日志回退到文件直写、知识库解析置失败态） |
+| MinIO | 对象存储 | 按用户前缀隔离、预签名下载、级联删除 |
+| PostgreSQL | 关系存储与事务 | 行级归属隔离、`jsonb` 列的显式类型转换、幂等 DDL 演进 |
+
+关键技术约束：
+
+- 四张 Manticore 表建表必须显式带 `charset_table='non_cont,cjk'` 与 `morphology='icu_chinese'`，文本列一律 `text indexed stored`；DDL 走 `/cli`，写入与检索走 HTTP JSON API。
+- 应用与中间件同容器网络，服务名直连，Manticore 的 HTTP 端口不发布宿主机。
+- 登录态依赖 Redis，不可用时登录链路直接报错，不做静默降级。
 
 ## 9. 约束
 

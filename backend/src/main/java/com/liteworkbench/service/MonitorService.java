@@ -12,6 +12,7 @@ import com.liteworkbench.domain.dto.LogSearchDTO;
 import com.liteworkbench.domain.constant.RunStatusEnum;
 import com.liteworkbench.domain.vo.HealthRESP;
 import com.liteworkbench.domain.vo.LogDocVO;
+import com.liteworkbench.domain.vo.LogStatsVO;
 import com.liteworkbench.domain.vo.OverviewRESP;
 import com.liteworkbench.domain.vo.PythonStatusVO;
 import com.liteworkbench.mapper.HealthMapper;
@@ -52,6 +53,8 @@ public class MonitorService {
     private static final DateTimeFormatter DAY_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd");
     /** 汇总指标缓存时长 */
     private static final long OVERVIEW_CACHE_SECONDS = 60L;
+    /** 日志概览默认统计窗口：近 24 小时 */
+    private static final long DEFAULT_STATS_WINDOW_MS = 24 * 60 * 60 * 1000L;
 
     private final HealthMapper healthMapper;
     private final RedisConnectionFactory redisConnectionFactory;
@@ -72,13 +75,31 @@ public class MonitorService {
             .build();
 
     /** Manticore 日志检索，按时间倒序分页；索引不可用时降级为空结果 */
-    public PageResult<LogDocVO> searchLogs(String keyword, String level, long from, long to, long page, long size) {
+    public PageResult<LogDocVO> searchLogs(String keyword, String field, String level,
+                                           String logger, String traceId,
+                                           long from, long to, long page, long size) {
         try {
-            LogSearchDTO result = logSearchMapper.search(keyword, level, from, to, page, size);
+            LogSearchDTO result = logSearchMapper.search(keyword, field, level, logger, traceId, from, to, page, size);
             return PageResult.of(result.list(), result.total(), page, size);
         } catch (Exception e) {
             log.warn("[log.search] 检索失败，降级为空结果 {}", e.getMessage());
             return PageResult.empty(page, size);
+        }
+    }
+
+    /**
+     * 日志分布概览：级别计数 + 小时直方图，与检索共用时间范围。
+     * 未传时间范围时默认近 24 小时；聚合异常降级为空结构，页面概览区显示占位。
+     */
+    public LogStatsVO logStats(long from, long to) {
+        long now = System.currentTimeMillis();
+        long effectiveFrom = from > 0 ? from : now - DEFAULT_STATS_WINDOW_MS;
+        long effectiveTo = to > 0 ? to : now;
+        try {
+            return logSearchMapper.stats(effectiveFrom, effectiveTo);
+        } catch (Exception e) {
+            log.warn("[log.stats] 聚合失败，降级为空结构 {}", e.getMessage());
+            return new LogStatsVO();
         }
     }
 

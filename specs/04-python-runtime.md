@@ -12,11 +12,13 @@
 
 ```
 1 配置项指定的绝对路径 liteworkbench.runtime.python.path
-2 数据目录下的内置解释器 {liteworkbench.runtime.data-dir}/runtime/python/bin/python3（容器内可挂载）
+2 数据目录下的内置解释器 {liteworkbench.runtime.data-dir}/runtime/python/bin/{python3 | python.exe}
 3 系统 PATH 中的 python3 / python
 ```
 
-探测结果缓存到内存，页面可触发重新探测（`POST /api/v1/runtime/python/reprobe`，权限 `monitor:python:reprobe`）。执行工作目录限制在 `{liteworkbench.runtime.data-dir}/python` 内。
+探测结果缓存到内存，页面可触发重新探测（`POST /api/v1/runtime/python/reprobe`，权限 `monitor:python:reprobe`）。
+
+**执行工作目录**：由调用方传入，工具层传的是按用户隔离的 `{data-dir}/workspace/{userId}`；运行时把路径 normalize 后校验前缀必须落在数据目录内，`workDir` 为空时才落到 `{data-dir}/python`。因此文件读写与 Python 执行共享同一个用户工作区。
 
 | 状态 | 含义 |
 |---|---|
@@ -50,16 +52,18 @@ public record ExecResult(int exitCode, String stdout, String stderr, boolean tim
 ```
 execute(request)
   ├─ 1 探测解释器，未就绪抛 PYTHON_NOT_READY
-  ├─ 2 工作目录经 normalize 后必须在数据目录内（越界抛 PYTHON_UNSAFE_PATH）；
+  ├─ 2 工作目录经 normalize 后必须落在数据目录内（越界抛 PYTHON_UNSAFE_PATH）；
   │    脚本内容出现 `../` 或 `..\` 直接拒绝
-  ├─ 3 脚本落盘到临时目录 lwb-python-{ulid}.py
-  ├─ 4 ProcessBuilder 启动，工作目录设为 workDir，注入 PYTHONIOENCODING=utf-8 与
-  │    PYTHONDONTWRITEBYTECODE=1
-  ├─ 5 超时后按进程树终止（ProcessHandle.descendants() 全部 destroyForcibly）
-  ├─ 6 双通道按 UTF-8 收集输出，清 ANSI 与控制字符
-  ├─ 7 超长时保尾截断 8000 字符
-  └─ 8 finally 删除临时脚本
+  ├─ 3 超时归一：取调用值与配置默认值的较小者，封顶 300 秒
+  ├─ 4 脚本落盘到临时文件 lwb-python-{ulid}.py
+  ├─ 5 ProcessBuilder 启动，工作目录设为 workDir，注入 PYTHONIOENCODING=utf-8 与
+  │    PYTHONDONTWRITEBYTECODE=1；stdout / stderr 重定向到临时文件
+  ├─ 6 超时后按进程树终止（ProcessHandle.descendants() 全部 destroyForcibly）
+  ├─ 7 读回双通道输出，清 ANSI 与控制字符，超长保尾截断 8000 字符
+  └─ 8 finally 删除脚本与两个输出临时文件
 ```
+
+**为什么重定向到文件而不是管道**：管道缓冲写满会阻塞子进程，而 `waitFor` 之后才读流会造成死锁；重定向到临时文件后 `waitFor` 与读取互不干扰。
 
 工作目录安全用「normalize 后前缀校验」：路径规范化之后必须仍以数据目录为前缀，单纯比对原始字符串挡不住 `..` 与重复分隔符。
 
