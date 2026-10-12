@@ -1,118 +1,102 @@
 package com.liteworkbench.mapper;
 
-import cn.hutool.core.util.NumberUtil;
 import cn.hutool.core.util.StrUtil;
 import com.liteworkbench.domain.vo.DocVO;
+import com.manticoresearch.client.api.IndexApi;
+import com.manticoresearch.client.api.SearchApi;
+import com.manticoresearch.client.api.UtilsApi;
+import com.manticoresearch.client.model.BoolFilter;
+import com.manticoresearch.client.model.DeleteDocumentRequest;
+import com.manticoresearch.client.model.HitsHits;
+import com.manticoresearch.client.model.InsertDocumentRequest;
+import com.manticoresearch.client.model.QueryFilter;
+import com.manticoresearch.client.model.SearchQuery;
+import com.manticoresearch.client.model.SearchRequest;
+import com.manticoresearch.client.model.SearchResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.connection.RedisConnection;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/**
- * 创作文档 Redisearch 索引访问，索引是 PG 的检索副本，落后时以 PG 为准
- */
+/** 创作文档 Manticore 检索表访问：PG 为准的索引副本，保存即先删同键再插入 */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class DocIndexMapper {
 
-    private static final String INDEX = "idx:lw:doc";
-    private static final String KEY_PREFIX = "lw:doc:";
-    /** FT.SEARCH 查询语法特殊字符 */
-    private static final String SPECIAL_CHARS = ",.<>{}[]\"':;!@#$%^&*()-+=~| ";
+    private static final String TABLE = "lw_doc";
 
-    private final StringRedisTemplate redisTemplate;
+    private static final String DDL = """
+            CREATE TABLE IF NOT EXISTS lw_doc (
+                doc_id     string,
+                user_id    string,
+                doc_title  text indexed stored,
+                category   string,
+                content    text indexed stored,
+                word_count int,
+                updated_at bigint
+            ) charset_table='non_cont,cjk' morphology='icu_chinese'
+            """;
 
-    /** 幂等创建索引，已存在则跳过；Redis 不可用时返回 false，不阻断启动 */
-    public boolean ensureIndex() {
+    private final IndexApi indexApi;
+    private final SearchApi searchApi;
+    private final UtilsApi utilsApi;
+    private final ManticoreCliExecutor cliExecutor;
+
+    /** 幂等建表：/cli 执行后必须用属性过滤 SELECT 校验（/cli 对失败语句也回显成功，且 /insert 会建出错结构表） */
+    public boolean ensureTable() {
         try {
-            return Boolean.TRUE.equals(redisTemplate.execute((RedisConnection connection) -> {
-                try {
-                    if (Objects.nonNull(connection.execute("FT.INFO", args(INDEX)))) {
-                        log.info("[doc.index] 索引已存在 {}", INDEX);
-                        return true;
-                    }
-                } catch (Exception ignored) {
-                    // 索引不存在，走创建
-                }
-                try {
-                    connection.execute("FT.CREATE", args(INDEX,
-                            "ON", "HASH",
-                            "PREFIX", "1", KEY_PREFIX,
-                            "SCHEMA",
-                            "doc_id", "TAG",
-                            "user_id", "TAG",
-                            "category", "TAG",
-                            "doc_title", "TEXT",
-                            "content", "TEXT",
-                            "word_count", "NUMERIC",
-                            "updated_at", "NUMERIC", "SORTABLE"));
-                    log.info("[doc.index] 索引创建成功 {}", INDEX);
-                    return true;
-                } catch (Exception e) {
-                    log.warn("[doc.index] 索引创建失败 {} {}", INDEX, e.getMessage());
-                    return false;
-                }
-            }));
+            cliExecutor.execute(DDL);
+            utilsApi.sql(StrUtil.format("SELECT doc_id FROM {} WHERE category = '__probe__' LIMIT 1", TABLE), false);
+            log.info("[doc.table] 表就绪 {}", TABLE);
+            return true;
         } catch (Exception e) {
-            log.warn("[doc.index] Redis 不可用，索引跳过 {} {}", INDEX, e.getMessage());
+            log.warn("[doc.table] 建表失败 {} {}", TABLE, e.getMessage());
             return false;
         }
     }
 
-    /** 覆盖写单条文档索引 */
+    /** 覆盖写单条文档索引：先删同 doc_id 文档再插入 */
     public void upsert(String docId, String userId, String docTitle, String category,
                        String contentText, int wordCount, long updatedAt) {
-        Map<String, String> doc = new LinkedHashMap<>();
-        doc.put("doc_id", StrUtil.nullToEmpty(docId));
-        doc.put("user_id", StrUtil.nullToEmpty(userId));
-        doc.put("category", StrUtil.nullToEmpty(category));
-        doc.put("doc_title", StrUtil.nullToEmpty(docTitle));
-        doc.put("content", StrUtil.nullToEmpty(contentText));
-        doc.put("word_count", String.valueOf(wordCount));
-        doc.put("updated_at", String.valueOf(updatedAt));
         try {
-            redisTemplate.opsForHash().putAll(KEY_PREFIX + docId, doc);
+            indexApi.delete(new DeleteDocumentRequest()
+                    .table(TABLE)
+                    .query(new QueryFilter().equalsDef(Map.of("doc_id", docId))));
+            indexApi.insert(new InsertDocumentRequest()
+                    .table(TABLE)
+                    .doc(docOf(docId, userId, docTitle, category, contentText, wordCount, updatedAt)));
         } catch (Exception e) {
-            log.warn("[doc.index] 写入失败 docId={} {}", docId, e.getMessage());
+            log.warn("[doc.upsert] 写入失败 docId={} {}", docId, e.getMessage());
         }
     }
 
     /** 删除文档索引 */
     public void delete(String docId) {
         try {
-            redisTemplate.delete(KEY_PREFIX + docId);
+            indexApi.delete(new DeleteDocumentRequest()
+                    .table(TABLE)
+                    .query(new QueryFilter().equalsDef(Map.of("doc_id", docId))));
         } catch (Exception e) {
-            log.warn("[doc.index] 删除失败 docId={} {}", docId, e.getMessage());
+            log.warn("[doc.delete] 删除失败 docId={} {}", docId, e.getMessage());
         }
     }
 
-    /** 全文检索：@user_id 必带，标题与正文任一命中，按更新时间倒序 */
+    /** 全文检索：user_id 必带，分类可选，标题与正文任一命中，按更新时间倒序 */
     public List<DocVO> search(String userId, String category, String keyword, long offset, long size) {
-        StringBuilder query = new StringBuilder();
-        query.append(" @user_id:{").append(escapeTag(userId)).append('}');
-        if (StrUtil.isNotBlank(category)) {
-            query.append(" @category:{").append(escapeTag(category)).append('}');
-        }
-        if (StrUtil.isNotBlank(keyword)) {
-            query.append(" (@doc_title:(").append(escape(keyword)).append(')')
-                    .append(" | @content:(").append(escape(keyword)).append("))");
-        }
         try {
-            Object reply = redisTemplate.execute((RedisConnection connection) ->
-                    connection.execute("FT.SEARCH", args(INDEX, query.toString(),
-                            "SORTBY", "updated_at", "DESC", "LIMIT",
-                            String.valueOf(Math.max(offset, 0)), String.valueOf(Math.max(size, 1)))));
-            return parseReply(reply);
+            SearchResponse response = searchApi.search(new SearchRequest()
+                    .table(TABLE)
+                    .query(docQuery(userId, category, keyword))
+                    .sort(List.of(Map.of("updated_at", "desc")))
+                    .limit((int) Math.max(1, Math.min(size, 500)))
+                    .offset((int) Math.max(0, offset)));
+            return parseDocs(response);
         } catch (Exception e) {
             log.warn("[doc.search] 检索失败 {}", e.getMessage());
             return List.of();
@@ -121,85 +105,77 @@ public class DocIndexMapper {
 
     /** 检索总数，分页计数用 */
     public long count(String userId, String category, String keyword) {
-        StringBuilder query = new StringBuilder();
-        query.append(" @user_id:{").append(escapeTag(userId)).append('}');
-        if (StrUtil.isNotBlank(category)) {
-            query.append(" @category:{").append(escapeTag(category)).append('}');
-        }
-        if (StrUtil.isNotBlank(keyword)) {
-            query.append(" (@doc_title:(").append(escape(keyword)).append(')')
-                    .append(" | @content:(").append(escape(keyword)).append("))");
-        }
         try {
-            Object reply = redisTemplate.execute((RedisConnection connection) ->
-                    connection.execute("FT.SEARCH", args(INDEX, query.toString(), "NOCONTENT")));
-            if (reply instanceof List<?> rows && !rows.isEmpty()
-                    && rows.get(0) instanceof Number number) {
-                return number.longValue();
-            }
-            return 0L;
+            SearchResponse response = searchApi.search(new SearchRequest()
+                    .table(TABLE)
+                    .query(docQuery(userId, category, keyword))
+                    .limit(1));
+            return totalOf(response);
         } catch (Exception e) {
             log.warn("[doc.count] 计数失败 {}", e.getMessage());
-            return 0L;
+            return 0;
         }
     }
 
-    /** 解析 FT.SEARCH 回复：[total, key, [field, value, ...], ...] */
-    private List<DocVO> parseReply(Object reply) {
-        if (!(reply instanceof List<?> rows) || rows.size() < 3) {
+    /** 文档过滤查询：user_id 必带，category 可选，关键字全文走 标题 | 正文 */
+    private static SearchQuery docQuery(String userId, String category, String keyword) {
+        BoolFilter bool = new BoolFilter()
+                .addMustItem(new QueryFilter().equalsDef(Map.of("user_id", userId)));
+        if (StrUtil.isNotBlank(category)) {
+            bool.addMustItem(new QueryFilter().equalsDef(Map.of("category", category)));
+        }
+        String titleExpr = ManticoreSupport.fieldExpression("doc_title", keyword);
+        String contentExpr = ManticoreSupport.fieldExpression("content", keyword);
+        if (Objects.nonNull(titleExpr) && Objects.nonNull(contentExpr)) {
+            bool.addMustItem(new QueryFilter().queryString(titleExpr + " | " + contentExpr));
+        } else if (Objects.nonNull(titleExpr)) {
+            bool.addMustItem(new QueryFilter().queryString(titleExpr));
+        }
+        return new SearchQuery().bool(bool);
+    }
+
+    /** 文档字段装配 */
+    private static Map<String, Object> docOf(String docId, String userId, String docTitle, String category,
+                                             String contentText, int wordCount, long updatedAt) {
+        Map<String, Object> doc = new LinkedHashMap<>();
+        doc.put("doc_id", StrUtil.nullToEmpty(docId));
+        doc.put("user_id", StrUtil.nullToEmpty(userId));
+        doc.put("doc_title", StrUtil.nullToEmpty(docTitle));
+        doc.put("category", StrUtil.nullToEmpty(category));
+        doc.put("content", StrUtil.nullToEmpty(contentText));
+        doc.put("word_count", wordCount);
+        doc.put("updated_at", updatedAt);
+        return doc;
+    }
+
+    /** 命中列表转文档 VO */
+    private static List<DocVO> parseDocs(SearchResponse response) {
+        if (Objects.isNull(response) || Objects.isNull(response.getHits())) {
             return List.of();
         }
-        List<DocVO> result = new ArrayList<>();
-        for (int i = 1; i + 1 < rows.size(); i += 2) {
-            if (!(rows.get(i + 1) instanceof List<?> fields)) {
-                continue;
-            }
-            Map<String, String> doc = new LinkedHashMap<>();
-            for (int f = 0; f + 1 < fields.size(); f += 2) {
-                doc.put(text(fields.get(f)), text(fields.get(f + 1)));
-            }
+        List<HitsHits> hits = Objects.requireNonNullElse(response.getHits().getHits(), List.of());
+        List<DocVO> result = new ArrayList<>(hits.size());
+        for (HitsHits hit : hits) {
+            Map<String, String> doc = ManticoreSupport.sourceMap(hit.getSource());
             DocVO vo = new DocVO();
-            vo.setDocId(doc.get("doc_id"));
-            vo.setUserId(doc.get("user_id"));
-            vo.setDocTitle(doc.get("doc_title"));
-            vo.setCategory(doc.get("category"));
-            vo.setWordCount(NumberUtil.parseInt(doc.get("word_count"), 0));
-            vo.setUpdatedAt(NumberUtil.parseLong(doc.get("updated_at"), 0L));
-            vo.setSummary(StrUtil.sub(doc.get("content"), 0, 120));
+            vo.setDocId(ManticoreSupport.text(doc, "doc_id"));
+            vo.setUserId(ManticoreSupport.text(doc, "user_id"));
+            vo.setDocTitle(ManticoreSupport.text(doc, "doc_title"));
+            vo.setCategory(ManticoreSupport.text(doc, "category"));
+            vo.setWordCount(ManticoreSupport.intValue(doc, "word_count"));
+            vo.setUpdatedAt(ManticoreSupport.longValue(doc, "updated_at"));
+            vo.setSummary(StrUtil.sub(ManticoreSupport.text(doc, "content"), 0, 120));
             result.add(vo);
         }
         return result;
     }
 
-    /** 查询串转义：RediSearch 语法特殊字符全部加反斜杠 */
-    private String escape(String raw) {
-        StringBuilder escaped = new StringBuilder(raw.length() + 8);
-        for (char ch : StrUtil.blankToDefault(raw, "").toCharArray()) {
-            if (SPECIAL_CHARS.indexOf(ch) >= 0) {
-                escaped.append('\\');
-            }
-            escaped.append(ch);
+    /** 命中总数，total_relation 非 eq 时按上限截断 */
+    private static long totalOf(SearchResponse response) {
+        if (Objects.isNull(response) || Objects.isNull(response.getHits())
+                || Objects.isNull(response.getHits().getTotal())) {
+            return 0;
         }
-        return escaped.toString();
-    }
-
-    /** TAG 值转义：TAG 集合语法内特殊字符加反斜杠 */
-    private String escapeTag(String raw) {
-        return StrUtil.blankToDefault(raw, "").replace("-", "\\-").replace(".", "\\.");
-    }
-
-    /** 回复字段统一转文本，字节数组按 UTF-8 解码 */
-    private String text(Object value) {
-        if (value instanceof byte[] raw) {
-            return StrUtil.str(raw, StandardCharsets.UTF_8);
-        }
-        return Objects.isNull(value) ? StrUtil.EMPTY : value.toString();
-    }
-
-    /** Redisearch 原始命令只收字节数组参数，字符串参数统一转码 */
-    private byte[][] args(String... values) {
-        return Arrays.stream(values)
-                .map(value -> StrUtil.bytes(value, StandardCharsets.UTF_8))
-                .toArray(byte[][]::new);
+        return response.getHits().getTotal();
     }
 }

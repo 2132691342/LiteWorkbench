@@ -10,7 +10,7 @@
 
 整体职责划分：**Agent 负责执行，工作台负责观测与控制**。Agent 每次执行产生一条 Run，Run 由有序事件流构成，事件流是唯一事实来源。
 
-存储分工：PG 存关系与主数据，Redisearch 存一切要检索的文本（消息、知识块、日志、创作文档），MinIO 存原件（上传文件、知识库文档），Redis 存缓存与状态，MQ 做削峰管道（日志索引、知识库文档解析）。PostgreSQL 采用 pgvector 镜像，向量列与语义检索为预留扩展位，当前检索一律走 Redisearch 关键词全文。
+存储分工：PG 存关系与主数据，Manticore 存一切要检索的文本（消息、知识块、日志、创作文档，ICU 中文分词 + 关键词全文），MinIO 存原件（上传文件、知识库文档），Redis 存缓存、登录态与运行锁，MQ 做削峰管道（日志索引、知识库文档解析）。PostgreSQL 采用 pgvector 镜像，向量列与语义检索为预留扩展位，当前检索一律走 Manticore 关键词全文。
 
 认证与数据归属：登录态由 Sa-Token 管理（存 Redis），用户身份进入请求上下文后，用户拥有的数据访问显式携带 `user_id`。
 
@@ -24,7 +24,7 @@
 │ service    XxxService：编排、事务、日志、编排 Agent   │
 │            用户身份取 LoginContext，归属见 4.3        │
 ├─────────────────────────────────────────────────────┤
-│ mapper     XxxMapper：Postgres / Redisearch /        │
+│ mapper     XxxMapper：Postgres / Manticore /         │
 │                       Redis / MinIO                  │
 ├─────────────────────────────────────────────────────┤
 │ domain     entity / dto / vo / constant                  │
@@ -47,7 +47,7 @@
 | `service` | `AuthService` | 登录、登出、当前用户信息组装 |
 | `service` | `UserService` / `RoleService` / `MenuService` | RBAC 主数据维护与授权关系 |
 | `service` | `RunService` | 会话 → 运行 → 事件流主链路编排：SSE、攒批落库、中断、回放 |
-| `service` | `SessionService` / `ProviderService` / `SkillService` / `FileService` / `ToolService` / `SettingService` / `MonitorService` | 会话、供应方、技能、文件、工具、设置与监控的业务编排 |
+| `service` | `SessionService` / `ProviderService` / `SkillService` / `FileService` / `ToolService` | 会话、供应方、技能、文件与工具的业务编排 |
 | `service` | `KbService` | 知识库 CRUD、归属校验、级联清理（文档原件 + 分块索引） |
 | `service` | `DocService` | 创作文档 CRUD、版本快照、全文索引同步、版本回滚 |
 | `service` | `DocAssistService` | AI 辅助写作：动作模板 + 选区 + 可选知识库片段 → 同步调用模型返回文本 |
@@ -62,8 +62,8 @@
 | `agent` | `ModelCaller` | 模型同步调用，供 AI 辅助写作与工作流 `llm` 节点复用，不建 Run |
 | `agent` | `WorkbenchTools` | 内置工具集：`python_exec`、`file_read`、`file_write`、`http_get`、`kb_search` |
 | `runtime` | `LocalPythonRuntime` | Python 解释器探测、脚本落盘、进程执行、超时与进程树终止 |
-| `mapper` | `LogSearchMapper` / `MessageIndexMapper` / `KbChunkIndexMapper` / `DocIndexMapper` | Redisearch 索引创建、写入、检索：日志 / 会话消息 / 知识库分块 / 创作文档 |
-| `observability` | `RedisearchLogAppender` | Logback 扩展，异步把日志送达 Redisearch |
+| `mapper` | `LogSearchMapper` / `MessageIndexMapper` / `KbChunkIndexMapper` / `DocIndexMapper` | Manticore 表创建、写入、检索：日志 / 会话消息 / 知识库分块 / 创作文档 |
+| `observability` | `ManticoreLogAppender` | Logback 扩展，异步把日志送达 Manticore |
 | `service` | `MonitorService` | 各中间件健康探测与仪表盘汇总统计（60s 缓存） |
 | `mq` | `LogProducer` / `LogConsumer` | 日志投递削峰，失败降级为本地文件 |
 | `mq` | `KbDocParseProducer` / `KbDocParseConsumer` | 知识库文档解析任务派发与消费：提文本 → 分块 → 写索引 |
@@ -118,7 +118,7 @@ POST /api/v1/auth/login  { username, password }
 POST /api/v1/chat/stream
   │
   ├─ 1 校验会话归属（user_id），获取会话级运行锁   SessionService
-  ├─ 2 创建 Run（queued）+ 用户消息写入消息索引 idx:lw:msg     RunService
+  ├─ 2 创建 Run（queued）+ 用户消息写入 Manticore lw_msg     RunService
   ├─ 3 建立 SseEmitter                      RunController
   ├─ 4 构建 ReActAgent（Model 实例按 provider+model 缓存复用）   AgentScopeAgentRuntime
   ├─ 5 组装历史消息（消息索引最近 20 条）→ 订阅 agent.streamEvents
@@ -190,7 +190,7 @@ POST 写接口（带 @Idempotent）
 业务代码 log.info
   → Logback AsyncAppender
       ├─ RollingFileAppender（按天 + 按级别）
-      └─ RedisearchLogAppender → MQ → LogConsumer → Redisearch
+      └─ ManticoreLogAppender → MQ → LogConsumer → Manticore
 ```
 
 MQ 不可用时降级为跳过索引，不阻塞主流程。
@@ -206,7 +206,7 @@ POST /api/v1/kb/doc/upload/{kbId}（multipart）
         → KbDocParseConsumer
             ├─ 5 MinIO 拉原件，DocTextExtractor 提取纯文本
             ├─ 6 按段落贪心合并分块（≈600 字，相邻重叠 120 字）
-            ├─ 7 分块批量写 idx:lw:kbchunk
+            ├─ 7 分块批量写 Manticore lw_kbchunk
             └─ 8 更新 wb_kb_doc(ready) 与 wb_kb 计数；失败置 failed + 原因
 ```
 
@@ -226,7 +226,7 @@ POST /api/v1/doc/update（正文 + 标题）
   ├─ 1 校验归属，正文长度与字数核算                DocService
   ├─ 2 version_no + 1，写 wb_doc_version 快照
   ├─ 3 更新 wb_doc 正文与纯文本
-  └─ 4 覆盖写 idx:lw:doc（失败只告警，PG 为准）
+  └─ 4 覆盖写 Manticore lw_doc（失败只告警，PG 为准）
 
 POST /api/v1/doc/assist（action + selection + instruction + kbId?）
   ├─ 1 按 action 选内置动作模板（续写/润色/摘要/扩写/翻译）
@@ -246,7 +246,7 @@ POST /api/v1/flow/run（flowId + inputs）
   └─ 5 节点失败即中止，runId 与已产出输出一并返回
 ```
 
-创作文档是唯一"PG 与 Redisearch 双写"的资产：PG 保证编辑事务，Redisearch 提供全站检索，索引落后时以 PG 为准并可由文档列表页触发重建。
+创作文档是唯一"PG 与 Manticore 双写"的资产：PG 保证编辑事务，Manticore 提供全站检索，索引落后时以 PG 为准并可由文档列表页触发重建。
 
 ## 6. 并发与性能
 
@@ -257,12 +257,12 @@ POST /api/v1/flow/run（flowId + inputs）
 | 菜单树 | 用户可见菜单树缓存 Redis（TTL 10min），菜单 / 授权 / 用户角色变更即清，路由加载不打穿库 |
 | 仪表盘 | 汇总指标全局缓存 60s，趋势统计免高频重算 |
 | 事件写入 | 攒批（100 条或 200ms）批量 insert，降低写放大 |
-| 消息与知识块写入 | 单条 / 批量直写 Redisearch 哈希，免事务与倒排维护 |
+| 消息与知识块写入 | 单条 / 批量直写 Manticore 文档，免事务与倒排维护 |
 | 知识库解析 | MQ 异步消费，上传接口零等待；解析失败不重试挤压，直接置 failed 可手工重放 |
 | SSE | 独立线程池，超时 30min，心跳 15s |
 | 工具执行 | 独立线程池，Python 执行带进程级超时 |
 | 数据库 | HikariCP，池大小 10，连接超时 30s |
-| 文档索引 | 保存即覆盖写单条 Redisearch 哈希，成本与文档大小无关，不做批量攒批 |
+| 文档索引 | 保存即覆盖写单条 Manticore 文档，成本与文档大小无关，不做批量攒批 |
 | 日志 | 异步 Appender，丢弃阈值以下日志不回压业务线程 |
 
 ## 7. 取舍
@@ -275,9 +275,9 @@ POST /api/v1/flow/run（flowId + inputs）
 | 行级用户隔离（不建 MyBatis 自动拦截） | SQL 可读、可控，避免隐式条件 | 每个查询都要记得带 `user_id` |
 | Sa-Token 而非自研 JWT | 注解鉴权、会话管理、踢人下线开箱即用 | 登录态强依赖 Redis |
 | 归一一次事件 | 前端与 SDK 解耦 | 新增 SDK 事件需同步适配表 |
-| 日志双写（文件 + Redisearch） | 既有原文又有检索 | 写入路径变长，靠 MQ 削峰 |
-| 消息存 Redisearch 不存 PG | 全文检索免费获得，写路径短，与日志同一套设施 | 消息资产依赖 Redis 持久化，容量规划要算上它 |
-| 知识检索用关键词全文（Redisearch） | 零额外依赖、零 embedding 成本，中文分词对短查询够用 | 无语义召回，同义改写查不到 |
+| 日志双写（文件 + Manticore） | 既有原文又有检索 | 写入路径变长，靠 MQ 削峰 |
+| 消息存 Manticore 不存 PG | 全文检索免费获得，写路径短，与日志同一套设施 | 消息资产依赖 Manticore 持久化，容量规划要算上它 |
+| 知识检索用关键词全文（Manticore + ICU 分词） | 零额外依赖、零 embedding 成本，中文按词典切分，短查询够用 | 无语义召回，同义改写查不到 |
 | 画布结构存整体 jsonb | 读写一次完成，前端可直接接管渲染 | 节点级查询与统计要解析 JSON |
 | 工作流串行执行不并行分支 | 语义可预测、变量传递简单、出错点明确 | 有依赖无关的分支也只能排队，靠节点超时控制总耗时 |
 | AI 辅助写作不建 Run | 短结果即时可见，不占事件表 | 无法回放辅助过程 |
@@ -285,7 +285,7 @@ POST /api/v1/flow/run（flowId + inputs）
 
 ## 8. 第三方集成事实
 
-改动依赖或升级版本前先核对。
+下表是各依赖不可绕开的客观事实，实现按此约束。
 
 | 依赖 | 事实 | 本项目的做法 |
 |---|---|---|
@@ -297,6 +297,9 @@ POST /api/v1/flow/run（flowId + inputs）
 | Hutool | `IdUtil` 无 ULID，`fastUUID` 不是有序 ID | ULID 只走 `IdGenerator`（`ulid-creator`） |
 | Hutool | `CollectionUtil` 是 `CollUtil` 别名 | 统一用 `CollUtil` |
 | Sa-Token | 登录态存 Redis | Redis 不可用时登录链路不可用，不为此做本地降级 |
+| Manticore | 默认 charset_table 下文本不入索引；`text stored` 只存不索引 | 建表统一 `charset_table='non_cont,cjk' morphology='icu_chinese'`，文本列一律 `text indexed stored` |
+| Manticore | HTTP `/sql` 只支持 SELECT | DDL 走 `/cli`，写入走 `/insert` `/update` `/delete` `/bulk`，检索走 `/search` |
+| Manticore | 9308 不发布宿主机 | 应用容器与中间件同网络，`manticore:9308` 服务名直连 |
 
 ## 9. 约束
 

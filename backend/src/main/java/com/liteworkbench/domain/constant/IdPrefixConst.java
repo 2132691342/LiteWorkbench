@@ -34,7 +34,7 @@ public enum IdPrefixConst {
     KB("KB"),
     /** 知识库文档 */
     KB_DOC("KBDOC"),
-    /** 知识库分块（Redisearch 文档键） */
+    /** 知识库分块（Manticore 文档） */
     KB_CHUNK("KBCHUNK"),
     /** 创作文档 */
     DOC("DOC"),

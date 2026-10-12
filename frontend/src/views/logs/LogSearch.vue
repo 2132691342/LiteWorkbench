@@ -10,7 +10,7 @@ import { logApi } from '@/api'
 import type { LogDocVO } from '@/types/api'
 import { formatTime } from '@/utils/const'
 
-/** 日志中心：Redisearch 全文检索，按时间倒序分页 */
+/** 日志中心：Manticore 全文检索，按时间倒序分页 */
 const { t } = useI18n()
 
 const loading = ref(false)

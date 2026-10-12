@@ -12,10 +12,11 @@
 
 | 工具 | Label | 类别 | 风险 |
 |---|---|---|---|
-| `python_exec` | 执行 Python | runtime | confirm |
+| `python_exec` | Python 执行 | runtime | confirm |
 | `file_read` | 读取文件 | file | safe |
 | `file_write` | 写入文件 | file | confirm |
-| `http_get` | 发起请求 | network | safe |
+| `http_get` | HTTP 请求 | network | safe |
+| `kb_search` | 知识库检索 | knowledge | safe |
 
 风险等级：
 
@@ -23,7 +24,7 @@
 |---|---|---|
 | `safe` | 只读，无副作用 | 直接执行 |
 | `confirm` | 有副作用 | Agent 内直接执行；页面手工调用（`/tool/invoke`）必须显式 `confirmed: true` |
-| `danger` | 可能造成不可逆破坏 | 页面确认流程实现前一律拒绝 |
+| `danger` | 可能造成不可逆破坏 | 页面调用与 `confirm` 同等对待；当前内置工具无此等级 |
 
 ## 契约
 
@@ -43,7 +44,7 @@ public class WorkbenchTools {
 ```
 模型产出 ToolUseBlock
   → Toolkit 路由到实现
-  → 前置检查：工具是否启用、参数是否合法
+  → 前置检查：工具是否启用（ToolGate）
   → 执行（带超时）
   → 输出裁剪：控制字符清理 + 结尾保留
   → 返回 ToolResultBlock
@@ -59,7 +60,7 @@ public class WorkbenchTools {
 | POST | `/api/v1/tool/toggle/{toolId}` | 启停，权限 `wb:tool:toggle`；工具启用状态在每次执行前读取，即时生效 |
 | POST | `/api/v1/tool/invoke/{toolName}` | 页面手工执行，权限 `wb:tool:invoke`，加 `@Idempotent` |
 
-`/tool/invoke/{toolName}` 请求体 `{ "args": {...}, "confirmed": false }`。`safe` 直接执行；`confirm` 必须带 `"confirmed": true`；`danger` 在页面确认流程实现前一律返回 `FORBIDDEN`。参数校验失败抛 `TOOL_PARAM_INVALID`（5004），与 Agent 内执行共用同一套前置检查。
+`/tool/invoke/{toolName}` 请求体 `{ "args": {...}, "confirmed": false }`。`safe` 直接执行；`confirm` / `danger` 必须带 `"confirmed": true`，否则抛 `TOOL_CONFIRM_REQUIRED`（5005）。参数按名取用，缺失时以 `null` 传入并由工具实现自行兜底；页面调用与 Agent 内执行共用同一实现、同一超时与同一输出裁剪。
 
 **超时取值优先级**：调用参数 `timeoutSeconds` > 工具默认 60 秒；`python_exec` 另受运行时 300 秒硬上限约束（见 spec 04），`http_get` 固定 60 秒。
 

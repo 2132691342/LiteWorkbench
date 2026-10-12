@@ -25,7 +25,7 @@ anno ──► 无依赖；aspect ──► common + domain/constant
 |---|---|---|
 | `api` | 参数校验、调用 service、封装响应 | 写业务逻辑、直接调 mapper |
 | `service` | 业务编排、事务边界、日志 | 引用 HTTP 类型、直接写 SQL |
-| `mapper` | 数据库 / Redisearch / Redis / MinIO 访问 | 写业务判断 |
+| `mapper` | 数据库 / Manticore / Redis / MinIO 访问 | 写业务判断 |
 | `domain` | 实体、传输对象、枚举常量 | 依赖任何上层 |
 | `config` | 配置类与属性绑定 | 写业务逻辑 |
 | `anno` / `aspect` | 自定义注解与切面（幂等、限流、审计） | 持有业务状态 |
@@ -40,7 +40,7 @@ anno ──► 无依赖；aspect ──► common + domain/constant
 
 | 子包 | 内容 | 命名 |
 |---|---|---|
-| `entity` | 实体映射（库表 / Redis / Redisearch） | `XxxDO.java` |
+| `entity` | 实体映射（库表 / Redis / Manticore） | `XxxDO.java` |
 | `dto` | 请求与内部传输 | `XxxREQ.java`、`XxxDTO.java` |
 | `vo` | 响应与视图对象 | `XxxRESP.java`、`XxxVO.java` |
 | `constant` | 枚举与静态常量 | `XxxEnum.java`、`XxxConst.java` |
@@ -58,7 +58,7 @@ public interface SessionConst {
 
 枚举用 `@Getter` + `@AllArgsConstructor`，带 `code` 与 `description`；只有确实需要按码反查的地方（如状态机判定）才提供 `ofCode`，没人调用的不写。
 
-**实体只用 `@Data` 不够**，按需要叠加构造与链式能力，`entity` 下的库表 / Redis / Redisearch 映射默认组合如下：
+**实体只用 `@Data` 不够**，按需要叠加构造与链式能力，`entity` 下的库表 / Redis / Manticore 映射默认组合如下：
 
 ```java
 @Data
@@ -106,9 +106,9 @@ public class SysUserDO implements Serializable { ... }
 
 同一个 Mapper 允许注解与 XML 共存：XML 里只留上述复杂语句，且不得与注解方法重名。
 
-**写入 `jsonb` 列必须显式 `CAST(#{x} AS jsonb)`**：PG 不会把 varchar 参数隐式转 jsonb，漏了就报 `column ... is of type jsonb but expression is of type character varying`。现有列：`wb_event.payload`、`wb_prompt.variables`、`wb_flow.graph_json`、`wb_tool.schema_json`、`wb_task.payload`。
+**写入 `jsonb` 列必须显式 `CAST(#{x} AS jsonb)`**：PG 不做 varchar 参数到 jsonb 的隐式转换。现有列：`wb_event.payload`、`wb_prompt.variables`、`wb_flow.graph_json`、`wb_tool.schema_json`、`wb_task.payload`。
 
-原本靠 `<if>` 做的可空判断，迁注解时改用 SQL 空值兜底，保持语句静态：
+可空判断用 SQL 空值兜底，保持语句静态：
 
 ```java
 @Select("""
@@ -133,7 +133,7 @@ public class RunService {
 }
 ```
 
-需要 JDK 能力或 Hutool 已有能力时**直接调用**，不为其写单行私有包装方法；只有真正被多处复用的转换才抽方法（如 Redisearch 参数批量转码）。
+需要 JDK 能力或 Hutool 已有能力时**直接调用**，不为其写单行私有包装方法；只有真正被多处复用的转换才抽方法（如 Manticore 文档字段批量转码）。
 
 ## 3. 角色与权限
 
@@ -141,7 +141,7 @@ public class RunService {
 
 ### 3.1 数据归属模型
 
-- 用户拥有的业务表（会话、运行、事件、技能、文件、任务、知识库、知识库文档）带 `user_id varchar(40)`（`USER_` 前缀），行级隔离；会话消息与知识库分块不落库表，分别存 Redisearch 索引（`idx:lw:msg`、`idx:lw:kbchunk`），同样带 `user_id` 过滤。
+- 用户拥有的业务表（会话、运行、事件、技能、文件、知识库、知识库文档、创作文档、文档版本、提示词、工作流画布、任务）带 `user_id varchar(40)`，行级隔离；会话消息与知识库分块不落库表，分别存 Manticore 表（`lw_msg`、`lw_kbchunk`），同样带 `user_id` 过滤。
 - 平台级表不带 `user_id`，仅管理角色可写：`sys_menu`、`sys_user_role`、`sys_role_menu`、`wb_tool`、`wb_provider`。
 - 用户身份由 `common.LoginContext` 提供，禁止从请求体采信 `userId`；Service 在请求线程内一律 `LoginContext.userId()` 取当前用户。请求上下文之外（异步线程、MQ 消费）必须把 `userId` 作为第一个业务参数显式传递。
 - 用户拥有的资源，Mapper 查询条件必须显式携带 `user_id`（平台级表除外）。
@@ -216,9 +216,13 @@ public R<String> create(@RequestBody @Valid UserREQ req) { ... }
 | `PROV_` | 模型供应方 |
 | `KB_` | 知识库 |
 | `KBDOC_` | 知识库文档 |
-| `KBCHUNK_` | 知识库分块（Redisearch） |
+| `KBCHUNK_` | 知识库分块（Manticore） |
+| `DOC_` | 创作文档 |
+| `DOCV_` | 创作文档版本 |
+| `PRPT_` | 提示词 |
+| `FLOW_` | 工作流画布 |
 | `TASK_` | 异步任务（预留） |
-| `LOGD_` | 日志文档（Redisearch） |
+| `LOGD_` | 日志文档（Manticore） |
 
 ## 7. 字段规范
 
@@ -263,7 +267,7 @@ public R<String> create(@RequestBody @Valid UserREQ req) { ... }
 - **级别只允许 `info` / `warn` / `error`**，禁止 `debug` / `trace`；排查需要的细节靠 `info` 打全字段，不靠调级别。
 - 使用 `slf4j` + `lombok.@Slf4j`（或 `@Log4j2`），禁止 `System.out` 与 `printStackTrace`。
 - 日志按天 + 按级别滚动，共三个文件：`liteworkbench.log`（全量 INFO+）、`liteworkbench-error.log`（WARN/ERROR 单独）、`liteworkbench-agent.log`（Agent 链路专用），保留 30 天；目录开发期默认 `logs/`，容器内用 `LITEWORKBENCH_LOG_DIR` 覆盖。
-- 业务日志同时异步投递到 Redisearch，供页面检索。
+- 业务日志同时异步投递到 Manticore，供页面检索。
 - 禁止打印密钥、Token、完整请求体中的敏感字段。
 
 ```java
@@ -329,16 +333,14 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 
 ## 14. 测试约定
 
-只保留覆盖复杂流程与长链路的测试，简单断言（ID 格式、字符串清洗、空参校验）不写。
+只保留覆盖长链路、复杂场景与跨模块契约的测试；简单断言（ID 格式、字符串清洗、空参校验）、纯算法与薄 mock 单元测试一律不写。
 
 | 文件 | 覆盖 |
 |---|---|
 | `service/RunEventPipelineTest` | 事件长链路：SDK 事件归一 → 批内合帧，增量合并、类型切换保序、工具输出捕获、超长裁剪 |
+| `service/FlowGraphTest` | 画布校验与拓扑执行序：合法链、有环、孤立节点、非法节点与悬空连线 |
 | `api/SseFrameContractTest` | SSE 帧契约：`id` 为 seq、事件名 `run.event`、心跳只发注释行 |
 | `config/PermissionContractTest` | 控制器注解与 `PermConst` 的权限点全部存在于菜单种子 |
-| `service/FlowGraphTest` | 画布校验与拓扑执行序：合法链、有环、孤立节点、非法节点与悬空连线 |
-| `service/KbTextChunkerTest` | 分块算法：段落贪心合并、相邻块重叠、超长段落硬切 |
-| `service/SkillServiceTest` | 技能装配：命中才展开正文、摘要常驻、单轮上限 3 条、总开关旁路 |
 
 前端不写快照测试与纯渲染测试。
 
@@ -353,7 +355,7 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 | Spring Boot starter | 其编译基线是 Spring Boot 4.x，与本项目 3.5.12 不匹配，**禁止引入**，在 `agent` 包自建装配（`AgentScopeAgentRuntime` / `ModelFactory`） |
 | 流式入口 | `ReActAgent.streamEvents(...)` 返回 `Flux<AgentEvent>`，事件类在 `io.agentscope.core.event.*` |
 | 工具定义 | `@Tool` + `@ToolParam` 标注，`Toolkit.registerTool(Object)` 注册 |
-| 废弃 API | `Memory`、`UserAgent`、旧 `io.agentscope.core.agent.Event` 均标注 `forRemoval`，禁用；上下文由消息索引 `idx:lw:msg` 显式组装，不依赖 SDK 状态存储 |
+| 废弃 API | `Memory`、`UserAgent`、旧 `io.agentscope.core.agent.Event` 均标注 `forRemoval`，禁用；上下文由消息表 `lw_msg` 显式组装，不依赖 SDK 状态存储 |
 | 协议转换扩展点 | `io.agentscope.core.formatter.Formatter`，用于 OpenAI / Anthropic / Ollama 三协议归一 |
 
 ### 15.2 Hutool
@@ -363,6 +365,27 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 ### 15.3 Sa-Token
 
 登录态存 Redis，令牌放 `Authorization` 头，令牌风格 `ulid`。权限码由 `StpInterfaceImpl` 从 `LoginUser` 解析，不从请求体采信。
+
+### 15.4 Manticore
+
+全文检索引擎，MySQL 协议 `9306` + HTTP JSON API `9308`；应用走 HTTP API（`manticoresearch` Java SDK，Jersey + Jackson）。下表是服务端 Manticore 25.0.0 的既定事实，实现按此约束：
+
+| 事实 | 结论 |
+|---|---|
+| 坐标 | `com.manticoresearch:manticoresearch`，当前钉 **10.2.0**，服务端为 `manticoresearch/manticore:25.0.0`；SDK 与服务端各自独立版本轨，四张表的读写检索以服务端版本为准 |
+| 默认 charset_table | 该版本默认 charset_table 下文本**不入索引**，建表必须显式 `charset_table='non_cont,cjk'` |
+| 文本列声明 | `text stored` 只存不索引，**必须写 `text indexed stored`** 才有全文检索 |
+| 中文分词 | `morphology='icu_chinese'`（ICU 词典分词，内置），中英混排按词切分；不引语言包、不用 ngram（该版本 ngram 索引侧不工作） |
+| SDK 端点映射 | `IndexApi` → `/insert` `/replace` `/update` `/delete` `/bulk`；`SearchApi` → `/search`；`UtilsApi.sql` → `/sql` |
+| `/sql` 限制 | 该版本 HTTP `/sql` **只支持 SELECT**，DDL 与 DML 走 JSON 端点或 `/cli` |
+| DDL | 建表（`CREATE TABLE IF NOT EXISTS`）走 HTTP `/cli`，**必须 text/plain 裸 body**：表单编码把单引号编成 `%27`、换行编成 `%0A`，该端点的表单解码不接受这两种编码，语句静默失败且仍回显 `Query OK` |
+| `/cli` 无错误回显 | 失败语句也回 `Query OK`，建表后必须用属性过滤 SELECT（如 `WHERE level='__probe__'`）校验表与列类型 |
+| `/insert` 隐式建表 | 表不存在时 `/insert` 按文档字段自动建表，字段全部建成 text/int 而非属性列；DDL 静默失败会被这个行为掩盖，靠上面的 SELECT 校验兜底 |
+| 范围过滤 | `QueryFilter.range(Range)` 序列化缺字段名包裹，报 `empty filter` / `only one element`；必须传 `Map.of("ts", Map.of("gte", x))` |
+| 删除计数 | `IndexApi.delete` 返回 `DeleteResponse.deleted`，幂等清理按此对账 |
+| 网络 | `9308` 不发布到宿主机，应用容器与中间件同网络，用服务名 `manticore:9308` 直连 |
+| 文档 ID | 业务主键是 string 列（`message_id` 等），文档数字 ID 由引擎自动分配；幂等写用"先删同键再插入" |
+| 保留策略 | Manticore 无文档级 TTL，日志 30 天保留由应用定时删除（`IndexApi.delete` + range 过滤）执行 |
 
 ## 16. 运行参数约定
 

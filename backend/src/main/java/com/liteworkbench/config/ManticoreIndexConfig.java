@@ -2,6 +2,7 @@ package com.liteworkbench.config;
 
 import com.liteworkbench.mapper.DocIndexMapper;
 import com.liteworkbench.mapper.KbChunkIndexMapper;
+import com.liteworkbench.mapper.LogSearchMapper;
 import com.liteworkbench.mapper.MessageIndexMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -10,23 +11,25 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/** Redisearch 索引接线：消息、知识块与创作文档索引启动时幂等创建，失败不阻断启动 */
+/** Manticore 检索表接线：消息、知识块、创作文档与日志表启动时幂等创建，失败不阻断启动 */
 @Slf4j
 @Configuration
 @RequiredArgsConstructor
-public class RedisearchIndexConfig {
+public class ManticoreIndexConfig {
 
     private final MessageIndexMapper messageIndexMapper;
     private final KbChunkIndexMapper kbChunkIndexMapper;
     private final DocIndexMapper docIndexMapper;
+    private final LogSearchMapper logSearchMapper;
 
     @Bean
     public ApplicationRunner searchIndexInitializer() {
         return args -> {
-            boolean msg = messageIndexMapper.ensureIndex();
-            boolean kb = kbChunkIndexMapper.ensureIndex();
-            boolean doc = docIndexMapper.ensureIndex();
-            log.info("[index.init] msg={} kbchunk={} doc={}", msg, kb, doc);
+            boolean msg = messageIndexMapper.ensureTable();
+            boolean kb = kbChunkIndexMapper.ensureTable();
+            boolean doc = docIndexMapper.ensureTable();
+            boolean logTable = logSearchMapper.ensureTable();
+            log.info("[index.init] msg={} kbchunk={} doc={} log={}", msg, kb, doc, logTable);
         };
     }
 }

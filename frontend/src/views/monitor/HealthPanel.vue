@@ -23,7 +23,8 @@ const reprobing = ref(false)
 
 const componentNames: Record<string, string> = {
   postgres: 'PostgreSQL',
-  redis: 'Redisearch',
+  redis: 'Redis',
+  manticore: 'Manticore',
   minio: 'MinIO',
   rabbitmq: 'RabbitMQ',
   python: 'Python Runtime',

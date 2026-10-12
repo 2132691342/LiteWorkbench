@@ -78,10 +78,12 @@ GET /api/v1/run/events/{runId}?afterSeq=0
 ### 中断
 
 ```
-POST /api/v1/run/abort/{runId} → Redis 写标记（跨实例与孤儿运行的中断凭据）
+POST /api/v1/run/abort/{runId}
   → 有活动实例：释放订阅（dispose → doOnCancel）→ run.end(status=aborted)
   → 无活动实例（进程重启后的孤儿运行）：直接结算为 aborted
 ```
+
+中断凭据是进程内的活动运行表，因此只对当前实例生效；单实例部署下等价于全局生效。已进入终态的运行抛 `RUN_NOT_ABORTABLE`。
 
 `run.result`（completed）与中断同时到达时，**中断裁决优先**，终态记 `aborted`，不写助手消息。
 

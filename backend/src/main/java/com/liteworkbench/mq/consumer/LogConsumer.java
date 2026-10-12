@@ -7,7 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
 
-/** 日志索引消费者：批量写 Redisearch，失败仅告警不重回队列 */
+/** 日志索引消费者：写 Manticore，失败仅告警不重回队列 */
 @Slf4j
 @Component
 @RequiredArgsConstructor

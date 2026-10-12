@@ -1,5 +1,6 @@
-# LiteWorkbench 中间件编排：PostgreSQL(pgvector) / Redisearch / MinIO / RabbitMQ
-# 镜像取自华为云 SWR，国内网络友好；端口与凭据与 docs/DEPLOYMENT.md 对齐
+# LiteWorkbench 中间件编排：PostgreSQL(pgvector) / Manticore / Redis / MinIO / RabbitMQ
+# 与云服务器（47.108.73.153，Podman）运行中的共享中间件栈保持一致，镜像取自华为云 SWR，国内网络友好
+# 端口与凭据与 docs/DEPLOYMENT.md 对齐
 services:
   postgres:
     image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/pgvector/pgvector:pg16
@@ -20,13 +21,10 @@ services:
       retries: 5
 
   redis:
-    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/redislabs/redisearch:2.4.14
-    container_name: redisearch
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/redis:8
+    container_name: redis
     restart: always
-    command: >
-      redis-server --requirepass admin_public
-      --maxmemory 256mb --maxmemory-policy allkeys-lru
-      --loadmodule /usr/lib/redis/modules/redisearch.so
+    command: redis-server --requirepass admin_public --maxmemory 256mb --maxmemory-policy allkeys-lru
     ports:
       - "6379:6379"
     healthcheck:
@@ -34,6 +32,25 @@ services:
       interval: 10s
       timeout: 3s
       retries: 3
+
+  manticore:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/manticoresearch/manticore:25.0.0
+    container_name: manticore
+    restart: always
+    environment:
+      EXTRA: ""
+    ports:
+      # 9306 MySQL 协议面向运维排障；9308 HTTP JSON API 只对同网络容器开放，不发布宿主机
+      - "9306:9306"
+    ulimits:
+      nofile:
+        hard: 65536
+        soft: 65535
+    healthcheck:
+      test: [ "CMD-SHELL", "mysql -h0 -P9306 -e 'SELECT 1'" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   minio:
     image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/pgsty/minio:RELEASE.2026-04-17T00-00-00Z

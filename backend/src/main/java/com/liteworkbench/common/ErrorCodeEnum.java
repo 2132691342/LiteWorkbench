@@ -61,7 +61,6 @@ public enum ErrorCodeEnum {
     TOOL_NOT_FOUND("5001", 404, "工具不存在"),
     TOOL_DISABLED("5002", 409, "工具已禁用"),
     TOOL_EXEC_TIMEOUT("5003", 504, "工具执行超时"),
-    TOOL_PARAM_INVALID("5004", 400, "工具参数不合法"),
     TOOL_CONFIRM_REQUIRED("5005", 409, "该工具有副作用，需确认后执行"),
 
     // 文件 6000
@@ -79,7 +78,6 @@ public enum ErrorCodeEnum {
     // 技能 8000
     SKILL_NOT_FOUND("8001", 404, "技能不存在"),
     SKILL_CODE_CONFLICT("8002", 409, "技能标识已存在"),
-    SKILL_CONTENT_TOO_LONG("8003", 400, "技能内容超过 8000 字上限"),
 
     // 知识库 8600
     KB_NOT_FOUND("8601", 404, "知识库不存在"),
@@ -105,7 +103,6 @@ public enum ErrorCodeEnum {
     FLOW_NOT_FOUND("8901", 404, "工作流不存在"),
     FLOW_NAME_CONFLICT("8902", 409, "同名工作流已存在"),
     FLOW_GRAPH_INVALID("8903", 400, "画布结构不合法"),
-    FLOW_NODE_FAILED("8904", 500, "节点执行失败"),
 
     // 系统 9000
     DB_UNAVAILABLE("9001", 503, "数据库不可用"),

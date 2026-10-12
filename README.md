@@ -4,7 +4,7 @@
 
 - 后端：JDK 17 + Spring Boot 3.5.12 + MyBatis 3.0.4 + Hutool 5.8.36 + AgentScope 2.0.3 + Sa-Token 1.42.0 + ULID
 - 前端：Vue 3.4.34 + TypeScript 5.4.5 + Vite 5.2.12 + Element Plus 2.9.0 + UnoCSS 0.58.6 + Pinia 2.1.7 + ECharts 5.5.0
-- 存储：PostgreSQL 16（镜像内置 pgvector 扩展，预留）+ Redisearch 2.4.14 + MinIO + RabbitMQ
+- 存储：PostgreSQL 16（镜像内置 pgvector 扩展，预留）+ Manticore 25.0.0（全文检索）+ Redis 8 + MinIO + RabbitMQ
 - 运行形态：容器，内置 Python 运行时，对外端口 `24399`
 - 设计语言：紫色序列四色 `#F2F0F7 / #CBC9E2 / #9E9AC8 / #6A51A3`，极简风格，全站五态交互
 
@@ -25,11 +25,11 @@ LiteWorkbench 解决的是"Agent 跑起来之后我看不见它在干什么"的�
 | 创作台 | 文档创作（Markdown / 富文本 / 代码）、版本快照与回滚、AI 续写润色摘要、全站全文检索 |
 | 提示词库 | 内置模板 + 自定义模板，`{{变量}}` 渲染，一键应用到会话 |
 | 工作流编排 | X6 画布编排 `llm` / `python` / `knowledge` / `tool` 节点，串行执行并逐步落事件 |
-| 知识库 | 原件存 MinIO，切片分块存 Redisearch，页面检索与 Agent 工具共用同一份索引 |
+| 知识库 | 原件存 MinIO，切片分块存 Manticore，页面检索与 Agent 工具共用同一份索引 |
 | 工具系统 | Python 运行时、文件读写、HTTP 请求、知识库检索，均带超时与输出裁剪 |
 | 技能 | 存 `wb_skill` 表，两段式：摘要常驻提示词，命中触发词才展开正文，节省上下文 |
 | 文件空间 | MinIO 对象存储，按用户隔离前缀，支持在线预览与预签名下载 |
-| 日志中心 | 应用日志汇聚到 Redisearch，页面支持按级别/关键字/时间检索 |
+| 日志中心 | 应用日志汇聚到 Manticore，页面支持按级别/关键字/时间检索 |
 | 健康监控 | 数据库、Redis、MinIO、RabbitMQ、Python 运行时逐项探测 |
 | 仪表盘 | 运行量、Token 消耗、工具调用分布的可视化统计 |
 
@@ -39,11 +39,11 @@ LiteWorkbench 解决的是"Agent 跑起来之后我看不见它在干什么"的�
 |---|---|---|
 | 共享库 + `user_id` 行级隔离 | 单实例 Postgres 即可支撑多用户，运维零增量 | 查询必须带用户条件，靠规范与代码审查兜底 |
 | 事件流作为唯一事实来源 | 运行可回放、可审计、前端只需一个 reducer | 事件量大，需要裁剪与批量写 |
-| Agent 无状态，上下文由消息索引 `idx:lw:msg` 显式组装 | 模型实例可跨会话复用，会话状态只有一份（索引） | 每轮要读一次历史消息 |
+| Agent 无状态，上下文由 Manticore 消息表 `lw_msg` 显式组装 | 模型实例可跨会话复用，会话状态只有一份（索引） | 每轮要读一次历史消息 |
 | 阻塞式 MVC + SseEmitter，不用 WebFlux | MyBatis/JDBC/进程执行都是阻塞的，不用来回切调度器 | 单实例并发受线程池限制 |
-| 日志同时落文件与 Redisearch | 排查有完整原文，检索有索引 | 写入路径变长，用异步队列兜底 |
-| 知识库原件 MinIO + 分块 Redisearch | 原件可重解析，检索零 embedding 成本 | 双处清理，靠级联删除保证一致 |
-| 文档正文 PG + 索引 Redisearch | 编辑强一致，全站检索复用同一套设施 | 双写，索引以 PG 为准可重建 |
+| 日志同时落文件与 Manticore | 排查有完整原文，检索有索引 | 写入路径变长，用异步队列兜底 |
+| 知识库原件 MinIO + 分块 Manticore | 原件可重解析，检索零 embedding 成本 | 双处清理，靠级联删除保证一致 |
+| 文档正文 PG + 索引 Manticore | 编辑强一致，全站检索复用同一套设施 | 双写，索引以 PG 为准可重建 |
 | 用 X6 而不是 BPMN-JS | 画布结构即 JSON，与自有执行器直接对齐 | 不支持导入外部 BPMN 2.0 文件 |
 | 不引 Qiankun 微前端 | 单仓单实例，路由由后端菜单驱动已足够 | 未来多团队并行交付时需再拆分 |
 | 按业务前缀 + ULID 做主键 | ID 自带类型信息，分布式可生成，字典序近似时间序 | 比雪花 ID 长，索引体积略大 |
@@ -62,7 +62,7 @@ LiteWorkbench 解决的是"Agent 跑起来之后我看不见它在干什么"的�
 | 认证 | Sa-Token | 1.42.0 | 登录、权限注解、会话管理 |
 | ID | ulid-creator | 5.1.0 | ULID 生成 |
 | 数据库 | PostgreSQL + pgvector | 16 | 业务数据；pgvector 扩展预留，本期不建向量列 |
-| 检索 | Redisearch | 2.4.14 | 日志全文检索 |
+| 检索 | Manticore | 25.0.0 | 消息 / 知识块 / 日志 / 创作文档全文检索 |
 | 对象存储 | MinIO | 8.5.17（SDK） | 文件空间 |
 | 消息 | RabbitMQ | 4 | 异步任务与日志投递 |
 | 前端 | Vue / Vite / TS | 3.4.34 / 5.2.12 / 5.4.5 | — |
@@ -71,7 +71,7 @@ LiteWorkbench 解决的是"Agent 跑起来之后我看不见它在干什么"的�
 | 图表 | ECharts | 5.5.0 | 仪表盘可视化 |
 | 画布 | AntV X6 | 2.18.1 | 工作流编排画布 |
 | 富文本 | WangEditor | 5.1.23 | 创作台富文本模式 |
-| 预览 | vue-pdf-embed / docx-preview / XLSX | 2.1.7 / 7.x / 0.18.5 | 文件空间在线预览 |
+| 预览 | vue-pdf-embed / docx-preview / XLSX | 2.1.7 / 0.4.1 / 0.18.5 | 文件空间在线预览 |
 | 国际化 | Vue I18n | 9.10.2 | 中英双语 |
 
 ## 4. 目录结构
@@ -82,9 +82,9 @@ LiteWorkbench/
 │   └── src/main/java/com/liteworkbench/
 │       ├── api/                 控制器，只做参数校验与响应封装
 │       ├── service/             业务流程编排
-│       ├── mapper/              MyBatis / Redisearch / Redis / MinIO 数据访问
+│       ├── mapper/              MyBatis / Manticore / Redis / MinIO 数据访问
 │       ├── domain/
-│       │   ├── entity/              实体（库表、Redis、Redisearch 映射）
+│       │   ├── entity/              实体（库表、Redis、Manticore 映射）
 │       │   ├── dto/             XxxREQ / XxxDTO
 │       │   ├── vo/              XxxRESP / XxxVO
 │       │   └── constant/        XxxEnum / XxxConst（静态常量用接口）
@@ -116,7 +116,7 @@ LiteWorkbench/
 docker compose -f deploy/docker-compose.yaml up -d
 ```
 
-包含 PostgreSQL、Redisearch、MinIO、RabbitMQ（镜像取自华为云 SWR，国内网络友好）。
+包含 PostgreSQL、Manticore、Redis、MinIO、RabbitMQ（镜像取自华为云 SWR，国内网络友好）。
 
 ### 5.2 后端
 
@@ -153,7 +153,7 @@ npm run build    # 产物在 frontend/dist
 | [AGENTS.md](AGENTS.md) | 工程规范，唯一权威：分层、命名、API 约定、错误码 |
 | [DESIGN.md](DESIGN.md) | 视觉语言、设计令牌、交互状态机 |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 分层设计、模块职责、关键流程 |
-| [docs/DATA-MODEL.md](docs/DATA-MODEL.md) | 库表、Redisearch 索引、ID 规范、审计字段 |
+| [docs/DATA-MODEL.md](docs/DATA-MODEL.md) | 库表、Manticore 检索表、ID 规范、审计字段 |
 | [docs/API-CONTRACT.md](docs/API-CONTRACT.md) | REST 与 SSE 接口契约 |
 | [docs/ERROR-CODES.md](docs/ERROR-CODES.md) | 错误码分段与处理约定 |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | 本地开发、构建、测试 |

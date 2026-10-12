@@ -142,7 +142,7 @@ CREATE TABLE IF NOT EXISTS wb_event (
 CREATE UNIQUE INDEX IF NOT EXISTS uk_wb_event_seq ON wb_event (run_id, seq);
 CREATE INDEX IF NOT EXISTS idx_wb_event_session ON wb_event (session_id, occurred_at);
 
--- 会话消息不建表：消息只存 Redisearch 索引 idx:lw:msg（见 docs/DATA-MODEL.md §6.2）
+-- 会话消息不建表：消息只存 Manticore 表 lw_msg（见 docs/DATA-MODEL.md §6.2）
 
 -- 工具定义（平台级）
 CREATE TABLE IF NOT EXISTS wb_tool (
@@ -244,7 +244,7 @@ CREATE TABLE IF NOT EXISTS wb_kb (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uk_wb_kb_name ON wb_kb (user_id, kb_name) WHERE deleted = false;
 
--- 知识库文档（原件在 MinIO，分块在 Redisearch）
+-- 知识库文档（原件在 MinIO，分块在 Manticore）
 CREATE TABLE IF NOT EXISTS wb_kb_doc (
     doc_id        varchar(40)  PRIMARY KEY,
     user_id       varchar(40)  NOT NULL,

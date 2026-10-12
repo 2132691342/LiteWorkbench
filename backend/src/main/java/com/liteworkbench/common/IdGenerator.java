@@ -19,7 +19,7 @@ public final class IdGenerator {
         return prefix.getPrefix() + "_" + UlidCreator.getUlid().toString();
     }
 
-    /** 生成不带前缀的裸 ULID，用于 Redisearch 文档与临时对象 */
+    /** 生成不带前缀的裸 ULID，用于 Manticore 文档与临时对象 */
     public static String raw() {
         return UlidCreator.getUlid().toString();
     }

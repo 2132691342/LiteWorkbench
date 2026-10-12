@@ -10,7 +10,7 @@ import java.io.Serial;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 
-/** 知识库文档实体，映射 wb_kb_doc；分块正文存 Redisearch，这里只留元数据与解析状态 */
+/** 知识库文档实体，映射 wb_kb_doc；分块正文存 Manticore，这里只留元数据与解析状态 */
 @Data
 @Builder
 @NoArgsConstructor

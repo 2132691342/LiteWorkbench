@@ -196,7 +196,7 @@ Content-Type: application/json
 
 ## 12. 知识库
 
-知识库为用户私有资源（`user_id` 归属），原件进 MinIO，分块进 Redisearch。权限点前缀 `wb:kb:`。
+知识库为用户私有资源（`user_id` 归属），原件进 MinIO，分块进 Manticore。权限点前缀 `wb:kb:`。
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -236,7 +236,7 @@ Content-Type: application/json
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/v1/log/search` | Redisearch 检索，参数 `keyword` `level` `from` `to` `page` `size`，返回 `PageResult<LogDocVO>`，权限 `monitor:log:list` |
+| GET | `/api/v1/log/search` | Manticore 检索，参数 `keyword` `level` `from` `to` `page` `size`，返回 `PageResult<LogDocVO>`，权限 `monitor:log:list` |
 | GET | `/api/v1/monitor/health` | 各组件健康状态，权限 `monitor:health:list` |
 | GET | `/api/v1/monitor/overview` | 仪表盘汇总指标，权限 `monitor:health:list` |
 | GET | `/api/v1/runtime/python` | Python 运行时探测结果，权限 `monitor:health:list` |
@@ -255,7 +255,7 @@ Content-Type: application/json
 | POST | `/api/v1/doc/create` | 新建，权限 `wb:doc:create`，`@Idempotent` |
 | POST | `/api/v1/doc/update` | 保存正文（写版本 + 同步索引），权限 `wb:doc:update`，`@Idempotent` |
 | POST | `/api/v1/doc/delete/{docId}` | 删除（删版本 + 索引文档），权限 `wb:doc:delete`，`@Idempotent` |
-| GET | `/api/v1/doc/search` | 全文检索，参数 `keyword` `category` `page` `size`，走 `idx:lw:doc` |
+| GET | `/api/v1/doc/search` | 全文检索，参数 `keyword` `category` `page` `size`，走 Manticore `lw_doc`，权限 `wb:doc:search` |
 | GET | `/api/v1/doc/version/page` | 版本列表，参数 `docId`，权限 `wb:doc:list` |
 | GET | `/api/v1/doc/version/detail/{versionId}` | 版本快照，权限 `wb:doc:list` |
 | POST | `/api/v1/doc/version/restore/{versionId}` | 回滚到指定版本，权限 `wb:doc:update`，`@Idempotent` |
@@ -263,8 +263,8 @@ Content-Type: application/json
 
 约定：
 
-- `doc/update` 每次调用：`version_no + 1`、写一条 `wb_doc_version` 快照、覆盖 `idx:lw:doc` 文档键，三者在同一事务内，索引写失败只告警不回滚。
-- `doc/assist` 入参：`docId`(可选) `action` `selection`(选中的正文) `instruction`(补充要求) `kbId`(可选引用知识库)；返回 `{ text }`。内部复用 `ModelFactory` 同步调用模型，不建 Run（不产生事件流），结果由前端决定插入或替换选区。
+- `doc/update` 每次调用：`version_no + 1`、写一条 `wb_doc_version` 快照、覆盖 `lw_doc` 文档，三者在同一事务内，索引写失败只告警不回滚。
+- `doc/assist` 入参：`docId`(可选) `action` `selection`(选中的正文) `instruction`(补充要求) `kbId`(可选引用知识库)；返回 `{ text }`。内部经 `ModelCaller` 同步调用模型，不建 Run（不产生事件流），结果由前端决定插入或替换选区。
 - 正文上限 200000 字，超出抛 `DOC_CONTENT_TOO_LONG`。
 
 ## 16. 提示词
@@ -277,7 +277,7 @@ Content-Type: application/json
 | POST | `/api/v1/prompt/update` | 更新（内置只读），权限 `wb:prompt:update`，`@Idempotent` |
 | POST | `/api/v1/prompt/delete/{promptId}` | 删除（内置不可删），权限 `wb:prompt:delete`，`@Idempotent` |
 | POST | `/api/v1/prompt/copy/{promptId}` | 复制为自有模板，权限 `wb:prompt:create`，`@Idempotent` |
-| POST | `/api/v1/prompt/render` | 变量渲染：`{promptId, variables}` → 返回渲染后文本 |
+| POST | `/api/v1/prompt/render` | 变量渲染：`{promptId, variables}` → 返回渲染后文本，权限 `wb:prompt:list` |
 
 约定：
 
@@ -301,7 +301,7 @@ Content-Type: application/json
 
 - `graphJson` 结构：`{nodes:[{id,type,label,config}], edges:[{source,target}]}`，节点类型 `start` `llm` `tool` `python` `knowledge` `end`。
 - 保存即校验：必须有且仅有一个 `start` 与至少一个 `end`、无环、无孤立节点；不合法抛 `FLOW_GRAPH_INVALID` 并带回具体原因。
-- `flow/run` 按拓扑序串行执行，逐节点落 `wb_event`（复用运行事件流），节点失败即中止并置 `FLOW_NODE_FAILED`，已产生的输出保留在事件里可供回看。
+- `flow/run` 按拓扑序串行执行，逐节点落 `wb_event`（复用运行事件流），节点失败即中止并把运行置为 failed，已产生的输出保留在事件里可供回看。
 - 执行入口同步返回，节点耗时上限由各执行器自带超时控制（`llm` 用供应方超时，`python` 用运行时超时）。
 
 ## 18. 预留结构

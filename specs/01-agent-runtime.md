@@ -8,7 +8,7 @@
 
 ## 设计
 
-Agent **无状态**：上下文不存放在 Agent 里，每轮运行由工作台从消息索引 `idx:lw:msg` 取最近 20 条历史显式组装成消息列表。Model 实例（持有 HTTP 客户端，构建成本高）按 `provider + model` 缓存复用；ReActAgent 每次运行构建、运行结束关闭。
+Agent **无状态**：上下文不存放在 Agent 里，每轮运行由工作台从 Manticore 消息表 `lw_msg` 取最近 20 条历史显式组装成消息列表。Model 实例（持有 HTTP 客户端，构建成本高）按 `provider + model` 缓存复用；ReActAgent 每次运行构建、运行结束关闭。
 
 | 组件 | 职责 |
 |---|---|
@@ -45,7 +45,7 @@ public interface AgentRuntime {
 stream(context)
   ├─ 1 取缓存 Model（ModelFactory，按 provider+model）
   ├─ 2 构建 ReActAgent：name / sysPrompt / model / toolkit / maxIters / 模型超时 180s
-  ├─ 3 组装消息：history（idx:lw:msg 最近 20 条）+ new UserMessage(prompt)
+  ├─ 3 组装消息：history（lw_msg 最近 20 条）+ new UserMessage(prompt)
   ├─ 4 agent.streamEvents(messages)
   ├─ 5 AgentEventAdapter 归一化 + 分配 seq
   └─ 6 终态事件 run.end 由 RunService 合成
@@ -80,4 +80,4 @@ stream(context)
 
 - 禁止在本模块引用 `api` 层任何类型。
 - 禁止使用 `@Deprecated(forRemoval)` 的 `Hook`、`Memory`、`UserAgent` 与旧 `agent.Event`。
-- 每个模型调用必须带超时，超时归为 `MODEL_CALL_TIMEOUT`。
+- 每个模型调用必须带超时：流式 180 秒（SDK 侧），同步 120 秒（`AgentConst.SYNC_CALL_TIMEOUT_SECONDS`）。同步路径超时抛 `MODEL_CALL_TIMEOUT`；流式路径超时由事件流以 error 收尾，运行落 failed。

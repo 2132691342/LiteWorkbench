@@ -11,10 +11,8 @@ PORT=24399
 # 每步都打点：失败时能直接看出死在哪一步
 step() { echo "[deploy] $*"; }
 
-# podman-compose 1.0.6 的 up -d 只比对配置哈希不比对镜像 ID，先删容器才能保证新镜像生效
-# podman 3.x rootless 反复重建同名容器会在 CNI-HOSTPORT-DNAT 留下指向已删容器 IP 的历史规则，
-# 导致新容器端口被转发到不存在的地址，重建前先清理同端口残留
-# 注意：grep 无匹配返回 1，必须 || true 兜住，否则命令替换的非 0 状态会让脚本提前退出
+# 重建前先删同名容器：podman-compose 1.0.6 的 up -d 只比对配置哈希，不感知镜像 ID 变化
+# 同时清理同端口的 CNI-HOSTPORT-DNAT 残留规则：rootless podman 重建后会留下指向已删容器的转发
 drop_stale_dnat() {
   local dropped=0 ln
   while true; do

@@ -67,4 +67,4 @@ ModelFactory.build(providerCode, modelName)
 - 密钥不得写入日志；对外脱敏展示为保留前 3 后 4 位（如 `sk-***abcd`），密钥原文长度不足 8 位时仅显示前 3 位加 `***`。
 - `openai` / `anthropic` 未配置密钥时构建即抛 `PROVIDER_NOT_CONFIGURED`，不做静默兜底。
 - 未配置供应方时，所有对话请求直接抛 `PROVIDER_NOT_CONFIGURED`。
-- 模型调用超时统一 180 秒。
+- 模型调用超时：流式 180 秒，同步（`ModelCaller`）120 秒。

@@ -23,6 +23,7 @@
 | `READY` | 找到可用解释器 |
 | `NOT_FOUND` | 三种方式都没找到 |
 | `BAD_VERSION` | 找到但版本低于 3.8 |
+| `DISABLED` | `liteworkbench.runtime.python.enabled = false`，不探测直接判不可用 |
 
 首次探测用双检锁闸门串行化，避免并发请求同时触发探测；页面可显式清缓存重探。探测只做 `--version` 一次进程调用，成本低，因此探测结果缓存整个进程生命周期。
 
@@ -34,6 +35,8 @@
 public interface PythonRuntime {
     /** 探测结果，带版本与来源 */
     RuntimeStatus detect();
+    /** 清探测缓存，下次 detect 重新探测 */
+    void resetProbe();
     /** 执行脚本，返回标准输出与错误输出 */
     ExecResult execute(ExecRequest request);
 }
@@ -48,7 +51,7 @@ public record ExecResult(int exitCode, String stdout, String stderr, boolean tim
 execute(request)
   ├─ 1 探测解释器，未就绪抛 PYTHON_NOT_READY
   ├─ 2 工作目录经 normalize 后必须在数据目录内（越界抛 PYTHON_UNSAFE_PATH）；
-  │    脚本内容含连续路径穿越片段（≥2 段 `../` / `..\`）直接拒绝
+  │    脚本内容出现 `../` 或 `..\` 直接拒绝
   ├─ 3 脚本落盘到临时目录 lwb-python-{ulid}.py
   ├─ 4 ProcessBuilder 启动，工作目录设为 workDir，注入 PYTHONIOENCODING=utf-8 与
   │    PYTHONDONTWRITEBYTECODE=1

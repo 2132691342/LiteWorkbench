@@ -11,14 +11,14 @@
 ### 数据归属
 
 - 不做多租户。共享库共享表 + 行级 `user_id`，不做分库，不做 MyBatis 全局拦截器。
-- 用户拥有的资源（会话、运行、事件、消息、技能、文件、设置）只允许归属用户读写；管理页面对象（用户、角色、菜单、工具、供应方）由权限点控制。
+- 用户拥有的资源（会话、运行、事件、消息、技能、文件、知识库与知识库文档、创作文档与版本、提示词、工作流）只允许归属用户读写；管理页面对象（用户、角色、菜单、工具、供应方）由权限点控制。
 
 ### 账号
 
 | 项 | 规则 |
 |---|---|
 | 归属 | 用户全局唯一，`UNIQUE(username)`（`deleted = false` 范围内） |
-| 口令 | `SHA-256(密码 + 随机盐)`，盐 16 位；Hutool `SecureUtil` / `DigestUtil` |
+| 口令 | `PBKDF2-HMAC-SHA256`，十万次迭代 + 16 位随机盐，存储格式 `pbkdf2$迭代次数$盐$Base64`；校验兼容旧 `SHA-256(密码 + 盐)` 记录 |
 | 状态 | `normal` / `disabled` / `locked`，停用后登录直接拒绝 |
 | 自操作 | 不允许停用、删除自己，不允许修改自己的角色 |
 
@@ -28,7 +28,7 @@
 |---|---|---|
 | `super_admin` | 超级管理员 | 全部菜单与权限点，内置不可删 |
 | `admin` | 平台管理员 | 系统管理与工作台全部功能 |
-| `user` | 普通用户 | 工作台功能：仪表盘、会话、文件、技能、设置 |
+| `user` | 普通用户 | 用户级功能：仪表盘、会话、文件、技能、知识库、创作台、提示词、工作流 |
 
 - 内置角色码不可改不可删；支持新建自定义角色，按角色分配菜单与权限点。
 - 角色与菜单多对多（`sys_role_menu`），授权变更后立即清除相关用户权限缓存。
@@ -50,14 +50,12 @@
 ```java
 /** 请求线程内的登录上下文 */
 public final class LoginContext {
-    /** 当前登录用户，未登录返回 null */
+    /** 当前登录用户：先读 ThreadLocal，回退 Sa-Token 会话，未登录返回 null */
     public static LoginUser get();
     /** 当前用户 ID，未登录抛 UNAUTHORIZED */
     public static String userId();
-    /** 当前用户显示名，未登录返回空串 */
-    public static String nickname();
-    /** 超级管理员判定 */
-    public static boolean isSuperAdmin();
+    /** 请求结束时清理 ThreadLocal */
+    public static void clear();
 }
 ```
 
@@ -75,7 +73,7 @@ public class StpInterfaceImpl implements StpInterface {
 |---|---|
 | `AuthService.login(LoginREQ)` | 登录是鉴权前唯一入口，返回 token、用户、角色码、权限标识、菜单树 |
 | `AuthService.current()` | 当前用户完整信息，登录后前端首个请求 |
-| `RoleService.grant(String roleId, List<String> menuIds)` | 授权并清缓存 |
+| `RoleService.grant(RoleGrantREQ, userId)` | 按角色重挂菜单并清缓存 |
 | `MenuService.userTree()` | 当前用户可见菜单树，身份取 `LoginContext` |
 
 除 `login` 外，Service 在请求线程内一律经 `LoginContext.userId()` 取当前用户（见 AGENTS.md §3.1）。
@@ -89,8 +87,12 @@ public class StpInterfaceImpl implements StpInterface {
 | 菜单 | `system:menu:list` / `create` / `update` / `delete` |
 | 工具 | `wb:tool:list` / `wb:tool:toggle` / `wb:tool:invoke` |
 | 技能 | `wb:skill:list` / `create` / `update` / `delete` |
-| 文件 | `wb:file:delete`（其余登录即可用） |
-| 供应方 | `wb:provider:create` / `update` / `delete`（`list` 登录即可用） |
+| 文件 | `wb:file:delete`（其余动作登录即可用） |
+| 知识库 | `wb:kb:list` / `create` / `update` / `delete` / `upload` / `search` |
+| 创作文档 | `wb:doc:list` / `create` / `update` / `delete` / `search` |
+| 提示词 | `wb:prompt:list` / `create` / `update` / `delete`（`list` 同时用于变量渲染） |
+| 工作流 | `wb:flow:list` / `create` / `update` / `delete` / `run` |
+| 供应方 | `wb:provider:list` / `create` / `update` / `delete`（`update` 同时用于连通性测试） |
 | 监控 | `monitor:health:list` / `monitor:log:list` / `monitor:python:reprobe` |
 
 ## 关键流程

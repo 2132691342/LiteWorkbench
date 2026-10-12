@@ -28,6 +28,7 @@
         <ulid.version>5.1.0</ulid.version>
         <minio.version>8.5.17</minio.version>
         <pdfbox.version>2.0.31</pdfbox.version>
+        <manticore.version>10.2.0</manticore.version>
     </properties>
 
     <dependencies>
@@ -135,6 +136,22 @@
             <groupId>io.agentscope</groupId>
             <artifactId>agentscope-extensions-model-ollama</artifactId>
             <version>${agentscope.version}</version>
+        </dependency>
+
+        <!-- 全文检索：Manticore 官方 Java SDK（Jersey + Jackson），走 HTTP JSON API。
+             SDK 的 UtilsApi.sql 对应 /sql 端点只支持 SELECT，DDL 与运维 SQL 改走 /cli（Hutool HTTP），
+             读写检索全部走 IndexApi / SearchApi -->
+        <dependency>
+            <groupId>com.manticoresearch</groupId>
+            <artifactId>manticoresearch</artifactId>
+            <version>${manticore.version}</version>
+            <exclusions>
+                <!-- 连接器用 JDK HttpURLConnection，不引 Apache HttpClient 5 -->
+                <exclusion>
+                    <groupId>org.glassfish.jersey.connectors</groupId>
+                    <artifactId>jersey-apache-connector</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <!-- 测试 -->

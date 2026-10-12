@@ -9,10 +9,10 @@ services:
     image: ${LITEWORKBENCH_IMAGE:-ghcr.io/2132691342/liteworkbench:latest}
     container_name: liteworkbench
     restart: always
-    # 与中间件编排同一网络，postgres / redis / minio / rabbitmq 主机名可直接解析
+    # 与中间件编排同一网络，postgres / redis / manticore / minio / rabbitmq 主机名可直接解析
     # 网络名若不同，先 podman network ls 确认后修改
     networks:
-      - workbaby-infra_default
+      - infra_default
     # 2GB 小主机：容器限内存，JVM MaxRAMPercentage=70 据此收敛堆上限
     mem_limit: 1152m
     environment:
@@ -23,6 +23,8 @@ services:
       LITEWORKBENCH_DATASOURCE_PASSWORD: ${LITEWORKBENCH_DATASOURCE_PASSWORD:-admin_public}
       LITEWORKBENCH_REDIS_HOST: redis
       LITEWORKBENCH_REDIS_PASSWORD: ${LITEWORKBENCH_REDIS_PASSWORD:-admin_public}
+      # Manticore HTTP JSON API 只对同网络容器开放，走服务名直连，不发布宿主机端口
+      LITEWORKBENCH_MANTICORE_URL: http://manticore:9308
       LITEWORKBENCH_STORAGE_ENDPOINT: http://minio:9000
       LITEWORKBENCH_STORAGE_ACCESS_KEY: ${LITEWORKBENCH_STORAGE_ACCESS_KEY:-minioadmin}
       LITEWORKBENCH_STORAGE_SECRET_KEY: ${LITEWORKBENCH_STORAGE_SECRET_KEY:-minioadminpublic}
@@ -39,7 +41,7 @@ services:
       - app_data:/var/lib/liteworkbench
 
 networks:
-  workbaby-infra_default:
+  infra_default:
     external: true
 
 volumes:

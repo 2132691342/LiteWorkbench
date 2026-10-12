@@ -11,7 +11,7 @@
 | 项 | 规则 |
 |---|---|
 | 正文存储 | `wb_doc.content`，PG 为唯一权威 |
-| 检索副本 | `idx:lw:doc`，存去标签纯文本，覆盖写 |
+| 检索副本 | Manticore `lw_doc`，存去标签纯文本，覆盖写 |
 | 版本 | 每次保存写 `wb_doc_version` 快照，保留最近 30 条 |
 | 文档类型 | `markdown`（源码编辑）/ `rich`（富文本 HTML）/ `code`（纯文本代码） |
 | 状态 | `draft` `published` `archived`，只影响列表筛选，不影响编辑 |
@@ -30,7 +30,7 @@
 | `outline` | 按主题产出大纲 |
 | `translate` | 翻译选区（`instruction` 写目标语言） |
 
-调用链：动作模板 + 选区 + 补充要求 + 可选知识库片段 → `ModelFactory` 同步调用 → 返回纯文本。不建 Run，不落事件表。
+调用链：动作模板 + 选区 + 补充要求 + 可选知识库片段 → `ModelCaller` 同步调用 → 返回纯文本。不建 Run，不落事件表。
 
 ## 契约
 
@@ -41,7 +41,7 @@
 | POST | `/api/v1/doc/create` | 新建 |
 | POST | `/api/v1/doc/update` | 保存正文，写版本 + 同步索引 |
 | POST | `/api/v1/doc/delete/{docId}` | 删文档、版本与索引 |
-| GET | `/api/v1/doc/search` | 全文检索，走 `idx:lw:doc` |
+| GET | `/api/v1/doc/search` | 全文检索，走 Manticore `lw_doc` |
 | GET | `/api/v1/doc/version/page` | 版本列表，参数 `docId` |
 | GET | `/api/v1/doc/version/detail/{versionId}` | 版本快照 |
 | POST | `/api/v1/doc/version/restore/{versionId}` | 回滚 |
@@ -55,7 +55,7 @@
   ├─ 2 由正文算纯文本副本与字数
   ├─ 3 更新 wb_doc：content / content_text / word_count / version_no+1
   ├─ 4 写 wb_doc_version 快照（同事务）
-  ├─ 5 覆盖写 idx:lw:doc（失败只 warn，PG 为准）
+  ├─ 5 覆盖写 lw_doc（失败只 warn，PG 为准）
   └─ 6 裁剪超出 30 条的历史版本
 
 AI 辅助

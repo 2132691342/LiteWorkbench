@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- 日志：liteworkbench.log 全量 / -error.log 告警以上 / -agent.log Agent 链路，按天滚动保留 30 天；
-     LW_REDISEARCH 经 MQ 异步入检索索引，失败静默丢弃 -->
+     LW_MANTICORE 经 MQ 异步入检索表，失败静默丢弃 -->
 <configuration scan="false">
 
     <springProperty scope="context" name="LOG_DIR" source="liteworkbench.log-dir" defaultValue="logs"/>
@@ -71,8 +71,8 @@
         </encoder>
     </appender>
 
-    <!-- 日志检索：经 MQ 异步入 Redisearch，队列满丢弃，不回压业务线程 -->
-    <appender name="LW_REDISEARCH" class="com.liteworkbench.observability.RedisearchLogAppender"/>
+    <!-- 日志检索：经 MQ 异步入 Manticore，队列满丢弃，不回压业务线程 -->
+    <appender name="LW_MANTICORE" class="com.liteworkbench.observability.ManticoreLogAppender"/>
 
     <!-- 异步落盘，队列满时丢弃以避免回压业务线程 -->
     <appender name="ASYNC_ALL" class="ch.qos.logback.classic.AsyncAppender">
@@ -88,8 +88,8 @@
         <neverBlock>true</neverBlock>
     </appender>
 
-    <appender name="ASYNC_REDISEARCH" class="ch.qos.logback.classic.AsyncAppender">
-        <appender-ref ref="LW_REDISEARCH"/>
+    <appender name="ASYNC_MANTICORE" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="LW_MANTICORE"/>
         <queueSize>2048</queueSize>
         <discardingThreshold>512</discardingThreshold>
         <neverBlock>true</neverBlock>
@@ -100,19 +100,19 @@
         <appender-ref ref="FILE_AGENT"/>
         <appender-ref ref="ASYNC_ALL"/>
         <appender-ref ref="ASYNC_ERROR"/>
-        <appender-ref ref="ASYNC_REDISEARCH"/>
+        <appender-ref ref="ASYNC_MANTICORE"/>
     </logger>
     <logger name="com.liteworkbench.runtime" level="INFO" additivity="false">
         <appender-ref ref="FILE_AGENT"/>
         <appender-ref ref="ASYNC_ALL"/>
         <appender-ref ref="ASYNC_ERROR"/>
-        <appender-ref ref="ASYNC_REDISEARCH"/>
+        <appender-ref ref="ASYNC_MANTICORE"/>
     </logger>
     <logger name="com.liteworkbench.service.RunService" level="INFO" additivity="false">
         <appender-ref ref="FILE_AGENT"/>
         <appender-ref ref="ASYNC_ALL"/>
         <appender-ref ref="ASYNC_ERROR"/>
-        <appender-ref ref="ASYNC_REDISEARCH"/>
+        <appender-ref ref="ASYNC_MANTICORE"/>
     </logger>
 
     <logger name="org.springframework" level="WARN"/>
@@ -122,6 +122,6 @@
         <appender-ref ref="CONSOLE"/>
         <appender-ref ref="ASYNC_ALL"/>
         <appender-ref ref="ASYNC_ERROR"/>
-        <appender-ref ref="ASYNC_REDISEARCH"/>
+        <appender-ref ref="ASYNC_MANTICORE"/>
     </root>
 </configuration>

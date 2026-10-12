@@ -5,7 +5,7 @@ import lombok.Data;
 import java.io.Serial;
 import java.io.Serializable;
 
-/** 日志文档视图，对应 Redisearch idx:lw:log 命中结果 */
+/** 日志文档视图，对应 Manticore lw_log 命中结果 */
 @Data
 public class LogDocVO implements Serializable {
 

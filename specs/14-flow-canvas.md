@@ -58,7 +58,7 @@
   │     ├─ 调执行器（带超时）
   │     ├─ 输出写入上下文 outputVar
   │     └─ 落一条 flow.node 事件（含耗时与输出摘要）
-  ├─ 4 节点抛错即中止，置 run failed，抛 FLOW_NODE_FAILED（8904）
+  ├─ 4 节点抛错即中止，运行置 failed，已产生输出保留在事件里
   └─ 5 成功则 end 节点产出最终文本，置 run success
 ```
 
@@ -77,4 +77,4 @@
 - 画布节点数上限 50，超出抛 `FLOW_GRAPH_INVALID`（8903）。
 - 校验不通过的画布一律拒绝保存，不允许存半成品图。
 - 所有画布查询必须带 `user_id`，跨用户访问抛 `FLOW_NOT_FOUND`（8901）。
-- `python` 节点脚本路径引用含 `..` 或绝对路径抛 `PYTHON_UNSAFE_PATH`（7004）。
+- `python` 节点脚本内容出现 `..` 抛 `PYTHON_UNSAFE_PATH`（7004）；`file_read` / `file_write` 的入参路径另做绝对路径与越界校验。

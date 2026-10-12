@@ -34,7 +34,7 @@
 |---|---|
 | `skill_code` | 用户内唯一（`UNIQUE(user_id, skill_code)`），小写字母数字加下划线 |
 | `summary` | 不超过 200 字 |
-| `content` | 不超过 8000 字符，超出拒绝保存（`SKILL_CONTENT_TOO_LONG`，8003） |
+| `content` | 不超过 8000 字符，由 `@Size` 校验，超出抛 `PARAM_INVALID` |
 | `trigger_words` | 逗号分隔，最多 20 个，匹配为忽略大小写的包含判断 |
 | `enabled` | 关闭则不参与匹配 |
 

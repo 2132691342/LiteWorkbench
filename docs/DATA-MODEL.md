@@ -1,14 +1,14 @@
 # DATA-MODEL
 
-库表结构、Redisearch 索引、ID 规范、审计字段。DDL 实现在 `backend/src/main/resources/db/schema.sql`。
+库表结构、Manticore 检索表、ID 规范、审计字段。PG DDL 实现在 `backend/src/main/resources/db/schema.sql`，Manticore DDL 由应用启动时幂等执行（`config/ManticoreIndexConfig`）。
 
 ---
 
 ## 1. 定位
 
-数据分五类存放，各取所长：业务关系型数据与权限主数据进 PostgreSQL；**会话消息、知识库分块、平台日志**这类需要全文检索的文本进 Redisearch；文件与知识库文档原件进 MinIO；缓存、登录态、幂等占位、限流计数与运行锁进 Redis；MQ 只做削峰管道（日志索引、知识库解析任务）。
+数据分五类存放，各取所长：业务关系型数据与权限主数据进 PostgreSQL；**会话消息、知识库分块、平台日志、创作文档检索副本**这类需要全文检索的文本进 Manticore；文件与知识库文档原件进 MinIO；缓存、登录态、幂等占位、限流计数与运行锁进 Redis；MQ 只做削峰管道（日志索引、知识库解析任务）。
 
-不做多租户。数据归属以用户为单位：用户拥有的业务数据带 `user_id`（库表与 Redisearch 文档皆然），平台级主数据（菜单定义、角色授权关系、工具与供应方定义）例外。
+不做多租户。数据归属以用户为单位：用户拥有的业务数据带 `user_id`（库表与 Manticore 文档皆然），平台级主数据（菜单定义、角色授权关系、工具与供应方定义）例外。
 
 ## 2. ID 规范
 
@@ -24,20 +24,20 @@
 | `SESS_` | 会话 | `wb_session` |
 | `RUN_` | 运行 | `wb_run` |
 | `EVNT_` | 事件 | `wb_event` |
-| `MESG_` | 消息 | Redisearch `idx:lw:msg` |
+| `MESG_` | 消息 | Manticore `lw_msg` |
 | `TOOL_` | 工具 | `wb_tool` |
 | `SKIL_` | 技能 | `wb_skill` |
 | `FILE_` | 文件 | `wb_file` |
 | `PROV_` | 模型供应方 | `wb_provider` |
 | `KB_` | 知识库 | `wb_kb` |
 | `KBDOC_` | 知识库文档 | `wb_kb_doc` |
-| `KBCHUNK_` | 知识库分块 | Redisearch `idx:lw:kbchunk` |
-| `DOC_` | 创作文档 | `wb_doc` / Redisearch `idx:lw:doc` |
+| `KBCHUNK_` | 知识库分块 | Manticore `lw_kbchunk` |
+| `DOC_` | 创作文档 | `wb_doc` / Manticore `lw_doc` |
 | `DOCV_` | 文档版本 | `wb_doc_version` |
 | `PRPT_` | 提示词 | `wb_prompt` |
 | `FLOW_` | 工作流画布 | `wb_flow` |
 | `TASK_` | 异步任务（预留） | `wb_task` |
-| `LOGD_` | 日志文档 | Redisearch `idx:lw:log` |
+| `LOGD_` | 日志文档 | Manticore `lw_log` |
 
 ## 3. 审计字段
 
@@ -165,22 +165,22 @@
 
 索引：`(run_id, seq)` 唯一，`(session_id, occurred_at)`。
 
-### 5.4 会话消息（Redisearch，无库表）
+### 5.4 会话消息（Manticore `lw_msg`，无库表）
 
-消息是典型的"写完读、按会话整页读、偶尔全文找"的数据，落 Redisearch 索引 `idx:lw:msg`（哈希文档，键前缀 `lw:msg:`，键即 `lw:msg:{MESG_ULID}`），不建库表。字段：
+消息是典型的"写完读、按会话整页读、偶尔全文找"的数据，落 Manticore 表 `lw_msg`，不建 PG 库表。字段：
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
-| `message_id` | TAG | `MESG_` |
-| `user_id` | TAG | 归属用户 |
-| `session_id` | TAG | 归属会话 |
-| `run_id` | TAG | 产生消息的运行，可空 |
-| `role` | TAG | `user` `assistant` `tool` `system` |
-| `content` | TEXT | 正文，全文可检索 |
-| `token_count` | NUMERIC | 估算用量 |
-| `ts` | NUMERIC SORTABLE | 毫秒时间戳，会话内排序依据 |
+| `message_id` | string | `MESG_`，业务主键 |
+| `user_id` | string | 归属用户，过滤属性 |
+| `session_id` | string | 归属会话，过滤属性 |
+| `run_id` | string | 产生消息的运行，可空 |
+| `role` | string | `user` `assistant` `tool` `system` |
+| `content` | text indexed stored | 正文，全文检索主体 |
+| `token_count` | int | 估算用量 |
+| `ts` | bigint | 毫秒时间戳，会话内排序依据 |
 
-无 TTL：对话是用户资产，不随时间蒸发；同毫秒写入的次序由 ULID 单调性兜底，读侧按 `(ts, message_id)` 内存稳定排序。会话删除时按 `session_id` 清除对应文档。
+文档数字 ID 由引擎自动分配，业务主键走 `message_id` 列。无 TTL：对话是用户资产，不随时间蒸发；同毫秒写入的次序由 ULID 单调性兜底，读侧按 `(ts, message_id)` 内存稳定排序。会话删除时按 `session_id` 删除对应文档。
 
 ### 5.5 wb_tool（平台级）
 
@@ -274,7 +274,7 @@
 | `error_message` | text | 解析失败原因 |
 | 审计字段 | | |
 
-分块正文不落 PG：解析完成后按块写入 Redisearch `idx:lw:kbchunk`，原件在 MinIO，可随时重解析。解析走 MQ（`lw.kb.parse`）异步执行，上传接口只做 MinIO 落盘 + 置 `pending`。
+分块正文不落 PG：解析完成后按块写入 Manticore `lw_kbchunk`，原件在 MinIO，可随时重解析。解析走 MQ（`lw.kb.parse`）异步执行，上传接口只做 MinIO 落盘 + 置 `pending`。
 
 ### 5.12 wb_doc（创作文档）
 
@@ -292,10 +292,10 @@
 | `word_count` | int | 字数 |
 | `version_no` | int | 当前版本号，每次保存 +1 |
 | `source_kb_id` | varchar(40) | 引用知识库（可选，AI 辅助写作时检索范围） |
-| `state` | varchar(16) | `draft` `published` `archived` |
+| `state` | varchar(24) | `draft` `published` `archived` |
 | 审计字段 | | |
 
-正文存 PG 保证强一致与事务；同时把 `content_text` 写 `idx:lw:doc` 供全站检索，两份数据以 PG 为准，索引可重建。
+正文存 PG 保证强一致与事务；同时把 `content_text` 写 Manticore `lw_doc` 供全站检索，两份数据以 PG 为准，索引可重建。
 
 ### 5.13 wb_doc_version（文档版本）
 
@@ -337,62 +337,77 @@
 | `graph_json` | jsonb | X6 画布结构：`{nodes:[], edges:[]}` |
 | `node_count` | int | 节点数，冗余 |
 | `last_run_id` | varchar(40) | 最近一次运行的 Run |
-| `state` | varchar(16) | `draft` `enabled` `disabled` |
+| `state` | varchar(24) | `draft` `enabled` `disabled` |
 | 审计字段 | | |
 
 节点类型：`start` `llm` `tool` `python` `knowledge` `end`。画布结构只存 JSON，不建节点表：节点是画布的内部结构，没有独立查询需求。
 
-## 6. Redisearch 索引
+## 6. Manticore 检索表
 
-四个索引，全部哈希文档，启动时幂等创建：
+四张表，应用启动时幂等创建（`CREATE TABLE IF NOT EXISTS`）。所有表统一带两个建表选项（缺一不可）：
 
-### 6.1 idx:lw:log（键前缀 `lw:log:`）
-
-| 字段 | 类型 | 说明 |
+| 选项 | 值 | 作用 |
 |---|---|---|
-| `log_id` | TAG | `LOGD_` |
-| `ts` | NUMERIC SORTABLE | 毫秒时间戳 |
-| `level` | TAG | `ERROR` `WARN` `INFO` |
-| `logger` | TAG | 记录器名 |
-| `thread` | TAG | 线程名 |
-| `trace_id` | TAG | 链路标识 |
-| `message` | TEXT | 正文 |
-| `exception` | TEXT | 异常堆栈 |
+| `charset_table` | `'non_cont,cjk'` | 拉丁字母数字 + CJK 表意文字入词典；不写该选项默认表在此版本不建索引 |
+| `morphology` | `'icu_chinese'` | ICU 中文词典分词，中英混排按词切分；不引语言包、不用 ngram |
 
-检索语法：`@level:{ERROR} @message:timeout`，按 `ts` 倒序。文档 TTL 30 天。
+文本列一律声明 `text indexed stored`：只写 `stored` 不建全文索引，只写默认 `text` 则检索命中后取不回原文。
 
-### 6.2 idx:lw:msg（键前缀 `lw:msg:`）
+文档数字 ID 由引擎自动分配，业务主键走 string 列；过滤、排序全部走属性列（string / int / bigint）。
 
-见 5.4。检索：`@session_id:{SESS_..}` 按 `ts` 升序取会话消息；`@user_id:{USER_..} @content:(关键字)` 做跨会话全文查找。无 TTL。
+### 6.1 lw_log（平台日志）
 
-### 6.3 idx:lw:kbchunk（键前缀 `lw:kbchunk:`）
+```sql
+CREATE TABLE IF NOT EXISTS lw_log (
+    log_id    string,
+    ts        bigint,
+    level     string,
+    logger    string,
+    thread    string,
+    trace_id  string,
+    message   text indexed stored,
+    exception text indexed stored
+) charset_table='non_cont,cjk' morphology='icu_chinese'
+```
 
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `chunk_id` | TAG | `KBCHUNK_` |
-| `user_id` | TAG | 归属用户 |
-| `kb_id` | TAG | 归属知识库 |
-| `doc_id` | TAG | 归属文档 |
-| `doc_name` | TEXT | 文档名，可被关键字命中 |
-| `seq` | NUMERIC | 文档内块序号，从 1 递增 |
-| `content` | TEXT | 块正文，全文检索主体 |
-| `ts` | NUMERIC SORTABLE | 入库毫秒时间戳 |
+检索：`level` 等值 + `ts` 范围过滤，关键字全文走 `message`，按 `ts` 倒序分页。保留 30 天：应用定时任务每日执行 `DELETE FROM lw_log WHERE ts < 截止毫秒`（Manticore 无文档级 TTL）。
 
-检索：`@user_id:{..} @kb_id:{..} @content:(关键字)`，按相关度排序返回；高亮由前端按关键字分段渲染，后端只回原文。无 TTL。
+### 6.2 lw_msg（会话消息）
 
-### 6.4 idx:lw:doc（键前缀 `lw:doc:`）
+见 5.4。会话消息按 `session_id` 过滤 + `ts` 升序读取；跨会话全文查找按 `user_id` 过滤 + `content` 全文。无 TTL。
 
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `doc_id` | TAG | `DOC_` |
-| `user_id` | TAG | 归属用户 |
-| `doc_title` | TEXT | 标题 |
-| `category` | TAG | 分类 |
-| `content` | TEXT | 去标签纯文本正文 |
-| `word_count` | NUMERIC | 字数 |
-| `updated_at` | NUMERIC SORTABLE | 更新时间戳 |
+### 6.3 lw_kbchunk（知识库分块）
 
-检索：`@user_id:{..} (@doc_title:(关键字) | @content:(关键字))`，默认按 `updated_at` 倒序。文档保存即同步覆盖写入，删除即删文档键。无 TTL。
+```sql
+CREATE TABLE IF NOT EXISTS lw_kbchunk (
+    chunk_id string,
+    user_id  string,
+    kb_id    string,
+    doc_id   string,
+    doc_name text indexed stored,
+    seq      int,
+    content  text indexed stored,
+    ts       bigint
+) charset_table='non_cont,cjk' morphology='icu_chinese'
+```
+
+检索：`user_id` / `kb_id` 等值过滤 + `content` 全文，按相关度排序返回；高亮由前端按关键字分段渲染，后端只回原文。无 TTL。文档重解析或删除时按 `doc_id` 删除旧分块后整批重写。
+
+### 6.4 lw_doc（创作文档检索副本）
+
+```sql
+CREATE TABLE IF NOT EXISTS lw_doc (
+    doc_id     string,
+    user_id    string,
+    doc_title  text indexed stored,
+    category   string,
+    content    text indexed stored,
+    word_count int,
+    updated_at bigint
+) charset_table='non_cont,cjk' morphology='icu_chinese'
+```
+
+检索：`user_id` 必带 + 可选 `category` 等值 +（`doc_title` 或 `content`）全文，默认按 `updated_at` 倒序。文档保存即覆盖写（先删同 `doc_id` 文档再插入），删除即删。无 TTL。
 
 ## 7. Redis 键
 
@@ -421,10 +436,10 @@
 | 日志只保留 30 天 | 存储可控 | 长周期审计需外部归档 |
 | 密钥加密存库 | 配置可在页面修改 | 需要管理加密密钥 |
 | `wb_task` 保留表结构但本期不暴露接口 | 异步任务入口已预留 | 短期无消费者，表为空 |
-| 文档正文存 PG、索引存 Redisearch | 编辑强一致，检索低成本 | 双写，索引落后时以 PG 为准，可重建 |
+| 文档正文存 PG、索引存 Manticore | 编辑强一致，检索低成本 | 双写，索引落后时以 PG 为准，可重建 |
 | 每次保存即写版本行 | 回溯简单，无需 diff 算法 | 长文档版本行占空间，按 30 条裁剪 |
 | 画布结构存单个 jsonb | 节点无独立查询需求，一次读写整个图 | 不能按节点做条件统计，图过大时更新成本高 |
 | 提示词内置行归 `builtin` 用户 | 内置模板与用户模板同表同查询，免分表 | 内置行不可编辑，用户只能复制后用 |
-| 消息与知识块进 Redisearch、不落 PG | 全文检索免建倒排、写路径短、与日志同一套检索设施 | 依赖 Redis 持久化与容量，备份策略要覆盖消息资产 |
+| 消息与知识块进 Manticore、不落 PG | 全文检索免建倒排、写路径短、与日志同一套检索设施 | 检索表与 PG 分居两处，清理与备份策略要分别覆盖 |
 | 知识块不落库表，原件进 MinIO | 可整篇重解析，块结构随分块策略升级 | 分块变更需重建索引 |
 | 概览与菜单树走短 TTL 缓存 | 仪表盘与路由加载不打穿数据库 | 授权与统计数据有最长 1–10 分钟延迟 |

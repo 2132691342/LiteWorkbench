@@ -109,6 +109,11 @@ liteworkbench:
     access-key: ${LITEWORKBENCH_STORAGE_ACCESS_KEY:minioadmin}
     secret-key: ${LITEWORKBENCH_STORAGE_SECRET_KEY:minioadminpublic}
     bucket-name: liteworkbench
+  manticore:
+    # HTTP JSON API；容器网络内为 http://manticore:9308（9308 不发布宿主机）
+    url: ${LITEWORKBENCH_MANTICORE_URL:http://localhost:9308}
+    # 日志表保留天数，每日定时任务清理
+    log-retention-days: 30
   security:
     # 供应方密钥加密因子，生产必须覆盖
     secret: ${LITEWORKBENCH_SECURITY_SECRET:liteworkbench-default-secret}

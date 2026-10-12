@@ -75,7 +75,7 @@ public class DocController {
         return R.ok();
     }
 
-    /** 全文检索，走 Redisearch */
+    /** 全文检索，走 Manticore */
     @SaCheckPermission(PermConst.WB_DOC_SEARCH)
     @GetMapping("/search")
     public R<PageResult<DocVO>> search(PageREQ req,

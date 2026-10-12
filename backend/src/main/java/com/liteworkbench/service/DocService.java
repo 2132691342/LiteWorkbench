@@ -143,7 +143,7 @@ public class DocService {
         log.info("[doc.delete] userId={} docId={}", userId, docId);
     }
 
-    /** 全文检索，走 Redisearch 索引 */
+    /** 全文检索，走 Manticore lw_doc */
     public PageResult<DocVO> search(PageREQ req, String category) {
         String userId = LoginContext.userId();
         long total = docIndexMapper.count(userId, category, req.getKeyword());

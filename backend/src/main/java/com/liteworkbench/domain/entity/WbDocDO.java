@@ -10,7 +10,7 @@ import java.io.Serial;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 
-/** 创作文档实体，映射 wb_doc；正文以 PG 为准，纯文本副本同步到 Redisearch */
+/** 创作文档实体，映射 wb_doc；正文以 PG 为准，纯文本副本同步到 Manticore */
 @Data
 @Builder
 @NoArgsConstructor

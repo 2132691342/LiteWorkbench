@@ -52,28 +52,31 @@ mvn spring-boot:run                # 直接运行
 mvn test                           # 跑测试
 ```
 
-启动依赖：PostgreSQL、Redisearch、MinIO、RabbitMQ 已就绪，或 `liteworkbench.degradation.*` 允许降级启动。
+启动依赖：PostgreSQL、Manticore、Redis、MinIO、RabbitMQ 已就绪，或 `liteworkbench.degradation.*` 允许降级启动。
 
-关键配置项（前缀 `liteworkbench.`，环境变量规则 `LITEWORKBENCH_<段>_<键>`）：
+关键配置项（业务配置前缀 `liteworkbench.`，环境变量规则 `LITEWORKBENCH_<段>_<键>`；Spring 与 Sa-Token 原生键保留自身前缀）：
 
 | 配置 | 默认 | 说明 |
 |---|---|---|
 | `server.port` | 8080 | 服务端口 |
-| `liteworkbench.datasource.url` | `jdbc:postgresql://localhost:5432/postgres` | 数据库 |
+| `spring.datasource.url` | `jdbc:postgresql://localhost:5432/postgres` | 数据库，环境变量 `LITEWORKBENCH_DATASOURCE_URL` |
 | `liteworkbench.storage.endpoint` | `http://localhost:9000` | MinIO |
+| `liteworkbench.manticore.url` | `http://localhost:9308` | Manticore HTTP JSON API |
+| `liteworkbench.manticore.log-retention-days` | 30 | 日志表保留天数，每日定时清理 |
 | `liteworkbench.agent.provider` | `openai` | 默认供应方 |
 | `liteworkbench.agent.loop.max-iters` | 20 | 单轮最大迭代 |
 | `liteworkbench.agent.model.default-name` | `qwen-plus` | 兜底模型名 |
 | `liteworkbench.agent.skill.enabled` | true | 是否注入技能 |
-| `liteworkbench.kb.chunk-size` | 600 | 知识库分块目标字符数 |
-| `liteworkbench.kb.chunk-overlap` | 120 | 相邻分块重叠字符数 |
-| `liteworkbench.kb.max-doc-chars` | 500000 | 单文档提取正文上限，超出截断 |
+| `liteworkbench.kb.chunk.target-size` | 600 | 知识库分块目标字符数 |
+| `liteworkbench.kb.chunk.overlap` | 120 | 相邻分块重叠字符数 |
 | `liteworkbench.runtime.python.path` | 空 | 指定解释器路径，空则走探测 |
 | `liteworkbench.runtime.data-dir` | `./data` | Python 工作目录与运行时数据的根 |
-| `liteworkbench.auth.token-timeout` | 7200 | 登录态有效期（秒） |
+| `sa-token.timeout` | 7200 | 登录态有效期（秒），环境变量 `LITEWORKBENCH_AUTH_TOKEN_TIMEOUT` |
 | `liteworkbench.auth.default-password` | `admin123` | 种子账号初始密码 |
 | `liteworkbench.security.secret` | 开发默认值 | 供应方密钥加密因子，生产必改 |
 | `liteworkbench.degradation.allow-start` | true | 中间件不可用时是否允许降级启动 |
+
+固定阈值不外部化，固化在 `domain/constant/*Const`（如 `KbConst.MAX_DOC_CHARS` 单文档提取正文上限、`KbConst.TOOL_OUTPUT_MAX` 工具输出保留长度、`AgentEventAdapter.TEXT_DELTA_MAX` 单帧增量截断长度）。
 
 ## 5. 前端
 
@@ -109,16 +112,14 @@ npm run typecheck  # vue-tsc --noEmit
 
 ## 6. 测试策略
 
-只保留覆盖复杂流程与长链路的测试，简单断言不写；共 6 个文件，随 `mvn test` 一次跑完。
+只保留覆盖长链路、复杂场景与跨模块契约的测试，简单断言与薄单元测试不写；共 4 个文件，随 `mvn test` 一次跑完（约 1 秒）。
 
 | 文件 | 覆盖 |
 |---|---|
 | `service/RunEventPipelineTest` | 事件长链路：SDK 事件归一 → 批内合帧，增量合并、类型切换保序、工具输出捕获、超长裁剪 |
+| `service/FlowGraphTest` | 画布校验与拓扑执行序：合法链、有环、孤立节点、非法节点与悬空连线 |
 | `api/SseFrameContractTest` | SSE 帧契约：`id` 为 seq、事件名 `run.event`、心跳只发注释行 |
 | `config/PermissionContractTest` | 控制器注解与 `PermConst` 的权限点全部存在于菜单种子 |
-| `service/FlowGraphTest` | 画布校验与拓扑执行序：合法链、有环、孤立节点、非法节点与悬空连线 |
-| `service/KbTextChunkerTest` | 分块算法：段落贪心合并、相邻块重叠、超长段落硬切 |
-| `service/SkillServiceTest` | 技能装配：命中才展开正文、摘要常驻、单轮上限 3 条、总开关旁路 |
 
 前端不写快照测试与纯渲染测试。
 
@@ -137,7 +138,7 @@ npm run typecheck  # vue-tsc --noEmit
 | 加一个模型供应方协议 | `agent/ModelFactory.java` + `wb_provider` 记录 |
 | 加一个权限点 | `config/DataInitializer.java` 的 `MENU_SEEDS`（`menu_type=button`）+ 控制器注解 |
 | 加一个内置角色 | `domain/constant/RoleCodeConst.java` + `DataInitializer` 角色与授权 |
-| 加一类日志检索字段 | `observability/RedisearchLogAppender.java` + `mapper/LogSearchMapper.java` 索引定义 |
+| 加一类日志检索字段 | `observability/ManticoreLogAppender.java` + `mapper/LogSearchMapper.java` 表定义 |
 | 加一种知识库文档格式 | `service/DocTextExtractor.java` + `domain/constant/KbConst.java` 扩展名清单 |
 | 加一个 AI 辅助动作 | `domain/constant/DocConst.java` 的 `ASSIST_TEMPLATES` + 前端动作下拉与文案 |
 | 加一类工作流节点 | `domain/constant/FlowNodeTypeEnum.java` + `service/FlowEngine.java` 的 `executeNode` 分派 |

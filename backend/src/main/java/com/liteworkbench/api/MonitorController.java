@@ -55,7 +55,7 @@ public class MonitorController {
         return R.ok(monitorService.pythonStatus());
     }
 
-    /** 日志检索，Redisearch 全文，按时间倒序分页 */
+    /** 日志检索，Manticore 全文，按时间倒序分页 */
     @SaCheckPermission(PermConst.MONITOR_LOG_LIST)
     @GetMapping("/log/search")
     public R<PageResult<LogDocVO>> logSearch(@RequestParam(required = false) String keyword,

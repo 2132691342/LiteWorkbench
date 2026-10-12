@@ -20,6 +20,7 @@ import com.liteworkbench.mapper.WbEventMapper;
 import com.liteworkbench.mapper.WbRunMapper;
 import com.liteworkbench.mapper.WbSessionMapper;
 import com.liteworkbench.runtime.PythonRuntime;
+import com.manticoresearch.client.api.UtilsApi;
 import io.minio.BucketExistsArgs;
 import io.minio.MinioClient;
 import lombok.RequiredArgsConstructor;
@@ -62,6 +63,7 @@ public class MonitorService {
     private final WbEventMapper eventMapper;
     private final LogSearchMapper logSearchMapper;
     private final StringRedisTemplate redisTemplate;
+    private final UtilsApi manticoreUtilsApi;
 
     /** 探测专用线程池，探测互不阻塞 */
     private final ExecutorService probeExecutor = ExecutorBuilder.create()
@@ -69,7 +71,7 @@ public class MonitorService {
             .setThreadFactory(ThreadUtil.newNamedThreadFactory("lw-probe", true))
             .build();
 
-    /** Redisearch 日志检索，按时间倒序分页；索引不可用时降级为空结果 */
+    /** Manticore 日志检索，按时间倒序分页；索引不可用时降级为空结果 */
     public PageResult<LogDocVO> searchLogs(String keyword, String level, long from, long to, long page, long size) {
         try {
             LogSearchDTO result = logSearchMapper.search(keyword, level, from, to, page, size);
@@ -90,6 +92,10 @@ public class MonitorService {
         components.add(probe("redis", 2, () -> {
             Objects.requireNonNull(redisConnectionFactory.getConnection()).close();
             return "pong";
+        }));
+        components.add(probe("manticore", 3, () -> {
+            manticoreUtilsApi.sql("SHOW TABLES", false);
+            return "tables listed";
         }));
         components.add(probe("minio", 5, () -> minioClient.bucketExists(BucketExistsArgs.builder()
                 .bucket("liteworkbench").build()) ? "bucket ready" : "bucket missing"));

@@ -1,6 +1,5 @@
 package com.liteworkbench.observability;
 
-import cn.hutool.json.JSONUtil;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.classic.spi.IThrowableProxy;
 import ch.qos.logback.classic.spi.ThrowableProxyUtil;
@@ -11,8 +10,8 @@ import org.slf4j.MDC;
 
 import java.util.Objects;
 
-/** Redisearch 日志 Appender：组装文档后交 LogPublisher 异步入索引，失败不阻塞业务线程 */
-public class RedisearchLogAppender extends AppenderBase<ILoggingEvent> {
+/** Manticore 日志 Appender：组装文档后交 LogPublisher 异步入索引，失败不阻塞业务线程 */
+public class ManticoreLogAppender extends AppenderBase<ILoggingEvent> {
 
     /** 由 Spring 配置在启动时注入 */
     private static volatile LogPublisher publisher;
@@ -31,8 +30,8 @@ public class RedisearchLogAppender extends AppenderBase<ILoggingEvent> {
         publisher = target;
     }
 
-    public RedisearchLogAppender() {
-        setName("LW_REDISEARCH");
+    public ManticoreLogAppender() {
+        setName("LW_MANTICORE");
     }
 
     @Override
