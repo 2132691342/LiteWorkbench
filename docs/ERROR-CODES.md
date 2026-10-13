@@ -41,6 +41,8 @@
 | 1002 | `RESOURCE_NOT_FOUND` | 404 | 资源不存在 |
 | 1003 | `STATE_CONFLICT` | 409 | 当前状态不允许该操作 |
 | 1004 | `RATE_LIMITED` | 429 | 操作过于频繁，请稍后再试 |
+| 1005 | `METHOD_NOT_ALLOWED` | 405 | 请求方法不支持 |
+| 1006 | `UNSUPPORTED_MEDIA_TYPE` | 415 | 不支持的请求类型 |
 | 1099 | `INTERNAL_ERROR` | 500 | 服务内部错误 |
 
 ## 4. 认证 2000

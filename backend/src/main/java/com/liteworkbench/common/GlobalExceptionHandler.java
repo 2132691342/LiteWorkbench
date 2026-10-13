@@ -9,11 +9,16 @@ import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.Objects;
 
@@ -75,6 +80,37 @@ public class GlobalExceptionHandler {
     public ResponseEntity<R<Void>> handleMissingParam(MissingServletRequestParameterException e) {
         log.warn("[param.missing] name={}", e.getParameterName());
         return badRequest("缺少参数：" + e.getParameterName());
+    }
+
+    /** 请求体不可解析：畸形 JSON 属参数问题，不能报内部错误 */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<R<Void>> handleUnreadable(HttpMessageNotReadableException e) {
+        log.warn("[param.unreadable] message={}", e.getMessage());
+        return badRequest(ErrorCodeEnum.PARAM_INVALID.getMessage());
+    }
+
+    /** 只允许 GET / POST：方法不符按 405 回，避免被兜底成 500 */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<R<Void>> handleMethodNotSupported(HttpRequestMethodNotSupportedException e) {
+        log.warn("[api.method] method={} message={}", e.getMethod(), e.getMessage());
+        ErrorCodeEnum code = ErrorCodeEnum.METHOD_NOT_ALLOWED;
+        return ResponseEntity.status(code.getHttpStatus()).body(R.fail(code));
+    }
+
+    /** 请求体类型不符：统一按 415 回 */
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<R<Void>> handleMediaType(HttpMediaTypeNotSupportedException e) {
+        log.warn("[api.media] message={}", e.getMessage());
+        ErrorCodeEnum code = ErrorCodeEnum.UNSUPPORTED_MEDIA_TYPE;
+        return ResponseEntity.status(code.getHttpStatus()).body(R.fail(code));
+    }
+
+    /** 路由不存在：静态资源兜底与接口路径都要给 404 信封，不能漏成 500 */
+    @ExceptionHandler({NoResourceFoundException.class, NoHandlerFoundException.class})
+    public ResponseEntity<R<Void>> handleNotFound(Exception e) {
+        log.warn("[api.notfound] message={}", e.getMessage());
+        ErrorCodeEnum code = ErrorCodeEnum.RESOURCE_NOT_FOUND;
+        return ResponseEntity.status(code.getHttpStatus()).body(R.fail(code));
     }
 
     /** 兜底：未知异常记 error 含堆栈，对外只给通用提示 */

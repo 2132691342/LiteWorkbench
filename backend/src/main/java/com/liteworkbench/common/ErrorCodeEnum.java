@@ -14,6 +14,8 @@ public enum ErrorCodeEnum {
     RESOURCE_NOT_FOUND("1002", 404, "资源不存在"),
     STATE_CONFLICT("1003", 409, "当前状态不允许该操作"),
     RATE_LIMITED("1004", 429, "操作过于频繁，请稍后再试"),
+    METHOD_NOT_ALLOWED("1005", 405, "请求方法不支持"),
+    UNSUPPORTED_MEDIA_TYPE("1006", 415, "不支持的请求类型"),
     INTERNAL_ERROR("1099", 500, "服务内部错误"),
 
     // 认证 2000
