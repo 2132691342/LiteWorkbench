@@ -46,11 +46,11 @@ public interface WbPromptMapper {
             """)
     WbPromptDO selectById(@Param("promptId") String promptId);
 
-    /** 用户内重名校验 */
+    /** 用户内重名校验；excludeId 为 null 时 PG 无法推断参数类型，必须显式 CAST */
     @Select("""
             SELECT COUNT(1) FROM wb_prompt
             WHERE user_id = #{userId} AND prompt_title = #{promptTitle} AND deleted = false
-              AND (#{excludeId} IS NULL OR #{excludeId} = '' OR prompt_id != #{excludeId})
+              AND (CAST(#{excludeId} AS varchar) IS NULL OR #{excludeId} = '' OR prompt_id != #{excludeId})
             """)
     long countByTitle(@Param("userId") String userId,
                       @Param("promptTitle") String promptTitle,

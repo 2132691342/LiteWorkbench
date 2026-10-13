@@ -51,11 +51,11 @@ public interface WbDocMapper {
             """)
     WbDocDO selectByIdAndUser(@Param("userId") String userId, @Param("docId") String docId);
 
-    /** 用户内重名校验 */
+    /** 用户内重名校验；excludeId 为 null 时 PG 无法推断参数类型，必须显式 CAST */
     @Select("""
             SELECT COUNT(1) FROM wb_doc
             WHERE user_id = #{userId} AND doc_title = #{docTitle} AND deleted = false
-              AND (#{excludeId} IS NULL OR #{excludeId} = '' OR doc_id <> #{excludeId})
+              AND (CAST(#{excludeId} AS varchar) IS NULL OR #{excludeId} = '' OR doc_id <> #{excludeId})
             """)
     long countByTitle(@Param("userId") String userId,
                       @Param("docTitle") String docTitle,

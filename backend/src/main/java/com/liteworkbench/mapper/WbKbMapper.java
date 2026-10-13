@@ -46,11 +46,11 @@ public interface WbKbMapper {
             """)
     WbKbDO selectByIdAndUser(@Param("userId") String userId, @Param("kbId") String kbId);
 
-    /** 用户内重名校验 */
+    /** 用户内重名校验；excludeId 为 null 时 PG 无法推断参数类型，必须显式 CAST */
     @Select("""
             SELECT COUNT(1) FROM wb_kb
             WHERE user_id = #{userId} AND kb_name = #{kbName} AND deleted = false
-              AND (#{excludeId} IS NULL OR #{excludeId} = '' OR kb_id <> #{excludeId})
+              AND (CAST(#{excludeId} AS varchar) IS NULL OR #{excludeId} = '' OR kb_id <> #{excludeId})
             """)
     long countByName(@Param("userId") String userId,
                      @Param("kbName") String kbName,

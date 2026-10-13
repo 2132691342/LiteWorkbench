@@ -50,6 +50,12 @@ public interface SysMenuMapper {
     /** 用户权限标识集合 */
     List<String> selectPermCodesByUserId(@Param("userId") String userId);
 
+    /** 角色已授权的权限标识集合，赋权守门用 */
+    List<String> selectPermCodesByRoleId(@Param("roleId") String roleId);
+
+    /** 菜单集合携带的权限标识，授权守门用 */
+    List<String> selectPermCodesByMenuIds(@Param("menuIds") List<String> menuIds);
+
     /** 权限标识是否被占用 */
     long countByPermCode(@Param("permCode") String permCode, @Param("excludeId") String excludeId);
 

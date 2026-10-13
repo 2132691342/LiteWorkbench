@@ -30,12 +30,37 @@
         FROM sys_menu m
         INNER JOIN sys_role_menu rm ON rm.menu_id = m.menu_id
         INNER JOIN sys_user_role ur ON ur.role_id = rm.role_id
+        INNER JOIN sys_role r ON r.role_id = ur.role_id AND r.deleted = false AND r.state = 'normal'
         WHERE ur.user_id = #{userId}
           AND m.deleted = false
           AND m.state = 'normal'
           AND m.menu_type &lt;&gt; 'button'
           AND m.visible = true
         ORDER BY m.sort_no ASC
+    </select>
+
+    <select id="selectPermCodesByRoleId" resultType="string">
+        SELECT DISTINCT m.perm_code
+        FROM sys_menu m
+        INNER JOIN sys_role_menu rm ON rm.menu_id = m.menu_id
+        WHERE rm.role_id = #{roleId}
+          AND m.deleted = false
+          AND m.state = 'normal'
+          AND m.perm_code IS NOT NULL
+          AND m.perm_code &lt;&gt; ''
+    </select>
+
+    <select id="selectPermCodesByMenuIds" resultType="string">
+        SELECT DISTINCT perm_code
+        FROM sys_menu
+        WHERE deleted = false
+          AND state = 'normal'
+          AND perm_code IS NOT NULL
+          AND perm_code &lt;&gt; ''
+          AND menu_id IN
+        <foreach collection="menuIds" item="menuId" open="(" separator="," close=")">
+            #{menuId}
+        </foreach>
     </select>
 
     <select id="selectPermCodesByUserId" resultType="string">

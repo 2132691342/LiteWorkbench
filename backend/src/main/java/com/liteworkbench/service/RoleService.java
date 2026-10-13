@@ -1,11 +1,13 @@
 package com.liteworkbench.service;
 
+import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import com.liteworkbench.common.BizException;
 import com.liteworkbench.common.ErrorCodeEnum;
 import com.liteworkbench.common.IdGenerator;
+import com.liteworkbench.common.LoginContext;
 import com.liteworkbench.common.PageResult;
 import com.liteworkbench.common.TimeUtil;
 import com.liteworkbench.config.StpInterfaceImpl;
@@ -17,6 +19,7 @@ import com.liteworkbench.domain.dto.PageREQ;
 import com.liteworkbench.domain.dto.RoleGrantREQ;
 import com.liteworkbench.domain.dto.RoleREQ;
 import com.liteworkbench.domain.vo.RoleVO;
+import com.liteworkbench.mapper.SysMenuMapper;
 import com.liteworkbench.mapper.SysRoleMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +36,7 @@ import java.util.Objects;
 public class RoleService {
 
     private final SysRoleMapper sysRoleMapper;
+    private final SysMenuMapper sysMenuMapper;
     private final StpInterfaceImpl stpInterface;
     private final MenuService menuService;
     private final LoginUserAssembler loginUserAssembler;
@@ -112,16 +116,35 @@ public class RoleService {
         evictPermCache(roleId);
     }
 
-    /** 全量授权菜单，先清后写并失效相关用户权限缓存 */
+    /** 全量授权菜单，先清后写并失效相关用户权限缓存；授权守门：菜单权限必须是操作人权限的子集 */
     @Transactional(rollbackFor = Exception.class)
     public void grant(RoleGrantREQ req, String operatorId) {
-        require(req.getRoleId());
+        SysRoleDO role = require(req.getRoleId());
+        guardGrantablePerms(req.getMenuIds());
         sysRoleMapper.deleteRoleMenus(req.getRoleId());
         if (CollUtil.isNotEmpty(req.getMenuIds())) {
             sysRoleMapper.insertRoleMenus(req.getRoleId(), req.getMenuIds(), operatorId);
         }
         evictPermCache(req.getRoleId());
         log.info("[role.grant] roleId={} menuCount={}", req.getRoleId(), CollUtil.size(req.getMenuIds()));
+    }
+
+    /** 授权守门：被授出的权限点必须已持有，防止给角色授出高于自身权限的权限 */
+    private void guardGrantablePerms(List<String> menuIds) {
+        if (CollUtil.isEmpty(menuIds)) {
+            return;
+        }
+        List<String> operatorPerms = stpInterface.getPermissionList(LoginContext.userId(), StpUtil.getLoginType());
+        if (CollUtil.isEmpty(operatorPerms)) {
+            throw new BizException(ErrorCodeEnum.FORBIDDEN, "操作人没有任何权限，不能执行授权");
+        }
+        List<String> exceeded = sysMenuMapper.selectPermCodesByMenuIds(menuIds).stream()
+                .filter(perm -> !operatorPerms.contains(perm))
+                .toList();
+        if (CollUtil.isNotEmpty(exceeded)) {
+            log.warn("[role.grant.guard] exceededPerms={}", exceeded);
+            throw new BizException(ErrorCodeEnum.FORBIDDEN, "不能授出自身未持有的权限");
+        }
     }
 
     /** 清除角色下所有用户的权限与菜单缓存，并刷新登录会话快照，授权变更即时生效 */

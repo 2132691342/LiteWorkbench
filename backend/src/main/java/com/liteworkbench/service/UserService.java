@@ -1,11 +1,13 @@
 package com.liteworkbench.service;
 
+import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import com.liteworkbench.common.BizException;
 import com.liteworkbench.common.ErrorCodeEnum;
 import com.liteworkbench.common.IdGenerator;
+import com.liteworkbench.common.LoginContext;
 import com.liteworkbench.common.PageResult;
 import com.liteworkbench.common.PasswordUtil;
 import com.liteworkbench.common.SecretCodec;
@@ -19,6 +21,7 @@ import com.liteworkbench.domain.dto.ResetPasswordREQ;
 import com.liteworkbench.domain.dto.UserPageREQ;
 import com.liteworkbench.domain.dto.UserREQ;
 import com.liteworkbench.domain.vo.UserVO;
+import com.liteworkbench.mapper.SysMenuMapper;
 import com.liteworkbench.mapper.SysRoleMapper;
 import com.liteworkbench.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +40,7 @@ public class UserService {
 
     private final SysUserMapper sysUserMapper;
     private final SysRoleMapper sysRoleMapper;
+    private final SysMenuMapper sysMenuMapper;
     private final StpInterfaceImpl stpInterface;
     private final MenuService menuService;
     private final SecretCodec secretCodec;
@@ -119,7 +123,7 @@ public class UserService {
         log.info("[user.update] userId={} operatorId={}", exists.getUserId(), operatorId);
     }
 
-    /** 启用 / 停用，不允许操作自己 */
+    /** 启用 / 停用，不允许操作自己；停用即踢下线并刷新快照，拦截器按快照状态拒绝 */
     @Transactional(rollbackFor = Exception.class)
     public void toggle(String userId, String operatorId) {
         SysUserDO user = require(userId);
@@ -129,20 +133,25 @@ public class UserService {
         String next = UserStateEnum.NORMAL.getCode().equals(user.getState())
                 ? UserStateEnum.DISABLED.getCode() : UserStateEnum.NORMAL.getCode();
         sysUserMapper.updateState(userId, next, operatorId);
+        loginUserAssembler.refreshSession(userId);
+        if (UserStateEnum.DISABLED.getCode().equals(next)) {
+            kickout(userId);
+        }
         log.info("[user.toggle] userId={} state={}", userId, next);
     }
 
-    /** 重置密码：管理员重设后该用户首登仍需改密 */
+    /** 重置密码：管理员重设后该用户首登仍需改密；在线用户刷新快照立即进入强制改密态 */
     @Transactional(rollbackFor = Exception.class)
     public void resetPassword(ResetPasswordREQ req, String operatorId) {
         require(req.getUserId());
         String newPassword = requireStrong(decryptSecret(req.getNewPassword(), req.getKeyId()), "新密码不能为空");
         String salt = PasswordUtil.randomSalt();
         sysUserMapper.updatePassword(req.getUserId(), PasswordUtil.hash(newPassword, salt), salt, true, operatorId);
+        loginUserAssembler.refreshSession(req.getUserId());
         log.info("[user.reset] userId={} operatorId={}", req.getUserId(), operatorId);
     }
 
-    /** 逻辑删除，不允许删除自己 */
+    /** 逻辑删除，不允许删除自己；删除即踢下线，防止令牌在过期前继续可用 */
     @Transactional(rollbackFor = Exception.class)
     public void delete(String userId, String operatorId) {
         require(userId);
@@ -151,6 +160,7 @@ public class UserService {
         }
         sysUserMapper.deleteById(userId, operatorId);
         sysUserMapper.deleteUserRoles(userId);
+        kickout(userId);
         stpInterface.clearPermCache(userId);
         menuService.clearMenuCache(userId);
         log.info("[user.delete] userId={} operatorId={}", userId, operatorId);
@@ -198,15 +208,39 @@ public class UserService {
         return rawPassword;
     }
 
-    /** 校验角色存在 */
+    /** 校验角色存在，且角色权限必须是操作人权限的子集，防止越权提拔 */
     private void validateRoles(List<String> roleIds) {
         if (CollUtil.isEmpty(roleIds)) {
             return;
         }
+        List<String> operatorPerms = operatorPerms();
         for (String roleId : roleIds) {
-            if (Objects.isNull(sysRoleMapper.selectById(roleId))) {
+            SysRoleDO role = sysRoleMapper.selectById(roleId);
+            if (Objects.isNull(role)) {
                 throw new BizException(ErrorCodeEnum.ROLE_NOT_FOUND, roleId);
             }
+            List<String> exceeded = sysMenuMapper.selectPermCodesByRoleId(roleId).stream()
+                    .filter(perm -> !operatorPerms.contains(perm))
+                    .toList();
+            if (CollUtil.isNotEmpty(exceeded)) {
+                log.warn("[user.role.guard] roleCode={} exceededPerms={}", role.getRoleCode(), exceeded);
+                throw new BizException(ErrorCodeEnum.FORBIDDEN, "不能分配权限高于自身的角色: " + role.getRoleCode());
+            }
+        }
+    }
+
+    /** 操作人权限标识：走权限缓存回源数据库，与鉴权判定同源 */
+    private List<String> operatorPerms() {
+        List<String> perms = stpInterface.getPermissionList(LoginContext.userId(), StpUtil.getLoginType());
+        return Objects.isNull(perms) ? List.of() : perms;
+    }
+
+    /** 踢人下线：目标账号的全部会话立即失效，用户不在线时为空操作 */
+    private void kickout(String userId) {
+        try {
+            StpUtil.kickout(userId);
+        } catch (Exception e) {
+            log.warn("[user.kickout] userId={} {}", userId, e.getMessage());
         }
     }
 

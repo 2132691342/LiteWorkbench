@@ -80,7 +80,9 @@
 | `state` | varchar(24) | `normal` `disabled` |
 | 审计字段 | | |
 
-内置角色码：`super_admin`（超级管理员，内置不可删）、`admin`（平台管理员）、`user`（普通用户）。
+内置角色码：`super_admin`（超级管理员，内置不可删，持全部菜单与权限点）、`admin`（平台管理员，持系统管理与工作台全部功能，**不含角色管理权限**）、`user`（普通用户，持工作台功能）。
+
+特权划分：角色管理权限（`system:role:*`）仅 `super_admin` 持有——角色是特权来源，平台管理员可管理用户、菜单、工具、供应方与内容，但不能改角色授权。赋值与授权守门在 `UserService.validateRoles` 与 `RoleService.guardGrantablePerms`：被授出的权限点必须是操作人已持有权限的子集，否则 `FORBIDDEN`。启动对账会把平台管理员历史上多持有的角色管理授权摘除。
 
 ### 4.3 sys_menu（平台级）
 

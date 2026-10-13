@@ -94,12 +94,12 @@ public interface SysUserMapper {
     /** 分页计数 */
     long countPage(@Param("req") UserPageREQ req);
 
-    /** 登录名是否被占用 */
+    /** 登录名是否被占用；excludeId 为 null 时 PG 无法推断参数类型，必须显式 CAST（同 jsonb 列约定） */
     @Select("""
             SELECT COUNT(1)
             FROM sys_user
             WHERE username = #{username} AND deleted = false
-              AND (#{excludeId} IS NULL OR #{excludeId} = '' OR user_id <> #{excludeId})
+              AND (CAST(#{excludeId} AS varchar) IS NULL OR #{excludeId} = '' OR user_id <> #{excludeId})
             """)
     long countByUsername(@Param("username") String username,
                          @Param("excludeId") String excludeId);

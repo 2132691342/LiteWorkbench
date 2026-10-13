@@ -24,6 +24,7 @@ import com.liteworkbench.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -78,7 +79,7 @@ public class AuthService {
             throw new BizException(ErrorCodeEnum.ACCOUNT_DISABLED);
         }
         clearFail(failKey);
-        LoginUser loginUser = buildLoginUser(user);
+        LoginUser loginUser = loginUserAssembler.assemble(user);
         StpUtil.login(user.getUserId());
         StpUtil.getSession().set(AuthConst.SESSION_LOGIN_USER, loginUser);
         sysUserMapper.updateLastLogin(user.getUserId());
@@ -100,19 +101,17 @@ public class AuthService {
         }
     }
 
-    /** 当前用户：以会话快照为准，附带可见菜单树 */
+    /** 当前用户：角色与权限实时装配，授权变更后无需重新登录即反映 */
     public LoginRESP current() {
-        LoginUser loginUser = LoginContext.get();
-        if (Objects.isNull(loginUser)) {
+        LoginUser snapshot = LoginContext.get();
+        if (Objects.isNull(snapshot)) {
             throw new BizException(ErrorCodeEnum.UNAUTHORIZED);
         }
-        SysUserDO user = sysUserMapper.selectById(loginUser.getUserId());
-        return buildResp(loginUser, user);
-    }
-
-    /** 授权变更后刷新目标用户的登录快照，/auth/current 与登录响应即时反映新角色与权限 */
-    public void refreshLoginUser(String userId) {
-        loginUserAssembler.refreshSession(userId);
+        SysUserDO user = sysUserMapper.selectById(snapshot.getUserId());
+        if (Objects.isNull(user)) {
+            throw new BizException(ErrorCodeEnum.UNAUTHORIZED);
+        }
+        return buildResp(loginUserAssembler.assemble(user), user);
     }
 
     /** 修改自己的密码：两段密文解密 → 强度校验 → 落库清标记 → 强制重登 */
@@ -146,11 +145,12 @@ public class AuthService {
 
     private void markFail(String key) {
         try {
-            Long count = redisTemplate.opsForValue().increment(key);
-            // 固定窗口：仅首次失败置 TTL，窗口内累加，避免持续试错无限续期锁定
-            if (Objects.nonNull(count) && count == 1L) {
-                redisTemplate.expire(key, Duration.ofSeconds(AuthConst.LOGIN_LOCK_SECONDS));
-            }
+            // 计数与首次过期在同一 Lua 脚本内原子完成：既保住固定窗口语义，也避免 expire 丢失把用户永久锁死
+            DefaultRedisScript<Long> script = new DefaultRedisScript<>();
+            script.setScriptText("local count = redis.call('INCR', KEYS[1]) "
+                    + "if count == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end return count");
+            script.setResultType(Long.class);
+            redisTemplate.execute(script, List.of(key), String.valueOf(AuthConst.LOGIN_LOCK_SECONDS));
         } catch (Exception e) {
             log.warn("[auth.fail] 计数失败 {}", e.getMessage());
         }
@@ -162,10 +162,6 @@ public class AuthService {
         } catch (Exception e) {
             log.warn("[auth.fail] 清理失败 {}", e.getMessage());
         }
-    }
-
-    private LoginUser buildLoginUser(SysUserDO user) {
-        return loginUserAssembler.assemble(user);
     }
 
     private LoginRESP buildResp(LoginUser loginUser, SysUserDO user) {

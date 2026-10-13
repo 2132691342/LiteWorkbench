@@ -60,12 +60,12 @@ public interface SysRoleMapper {
     /** 分页计数 */
     long countPage(@Param("keyword") String keyword);
 
-    /** 角色码是否被占用 */
+    /** 角色码是否被占用；excludeId 为 null 时 PG 无法推断参数类型，必须显式 CAST */
     @Select("""
             SELECT COUNT(1)
             FROM sys_role
             WHERE role_code = #{roleCode} AND deleted = false
-              AND (#{excludeId} IS NULL OR #{excludeId} = '' OR role_id <> #{excludeId})
+              AND (CAST(#{excludeId} AS varchar) IS NULL OR #{excludeId} = '' OR role_id <> #{excludeId})
             """)
     long countByCode(@Param("roleCode") String roleCode,
                      @Param("excludeId") String excludeId);
@@ -100,6 +100,10 @@ public interface SysRoleMapper {
     /** 按菜单清理所有角色的授权关系，菜单下线时用 */
     @Delete("DELETE FROM sys_role_menu WHERE menu_id = #{menuId}")
     int deleteRoleMenusByMenuId(@Param("menuId") String menuId);
+
+    /** 摘除单个角色的单条授权，特权划分调整时用 */
+    @Delete("DELETE FROM sys_role_menu WHERE role_id = #{roleId} AND menu_id = #{menuId}")
+    int deleteRoleMenusByMenuIdForRole(@Param("roleId") String roleId, @Param("menuId") String menuId);
 
     /** 角色下的用户 ID 列表，用于清理权限缓存 */
     List<String> selectUserIdsByRoleId(@Param("roleId") String roleId);

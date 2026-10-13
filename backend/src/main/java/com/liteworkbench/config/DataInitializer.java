@@ -99,8 +99,9 @@ public class DataInitializer implements ApplicationRunner {
             if (StrUtil.isNotBlank(seed.perm())) {
                 seedPerms.add(seed.perm());
             }
-            SysMenuDO menu = buildMenu(seed, menuId);
-            if (Objects.isNull(sysMenuMapper.selectById(menuId))) {
+            SysMenuDO exists = sysMenuMapper.selectById(menuId);
+            SysMenuDO menu = buildMenu(seed, menuId, exists);
+            if (Objects.isNull(exists)) {
                 sysMenuMapper.insert(menu);
                 created++;
             } else {
@@ -125,8 +126,8 @@ public class DataInitializer implements ApplicationRunner {
                 created, updated, pruned, MENU_SEEDS.size());
     }
 
-    /** 种子转实体：字段全量赋值，update 时按需覆盖 */
-    private SysMenuDO buildMenu(MenuSeed seed, String menuId) {
+    /** 种子转实体：结构字段全量回写；显隐与状态是运营字段，新建取种子值、已存在则留空不覆盖（动态 SQL 跳过 null） */
+    private SysMenuDO buildMenu(MenuSeed seed, String menuId, SysMenuDO exists) {
         SysMenuDO menu = new SysMenuDO();
         menu.setMenuId(menuId);
         menu.setParentId(seed.parentSeq() == 0 ? "0" : menuId(seed.parentSeq()));
@@ -137,8 +138,10 @@ public class DataInitializer implements ApplicationRunner {
         menu.setIcon(seed.icon());
         menu.setPermCode(seed.perm());
         menu.setSortNo(seed.sort());
-        menu.setVisible(true);
-        menu.setState(StateEnum.NORMAL.getCode());
+        if (Objects.isNull(exists)) {
+            menu.setVisible(true);
+            menu.setState(StateEnum.NORMAL.getCode());
+        }
         menu.setCreatedBy(SYSTEM);
         menu.setUpdatedBy(SYSTEM);
         return menu;
@@ -153,6 +156,11 @@ public class DataInitializer implements ApplicationRunner {
         }
         List<SysMenuDO> menus = sysMenuMapper.selectAll();
         List<String> allMenuIds = menus.stream().map(SysMenuDO::getMenuId).toList();
+        // 平台管理员不持角色管理权限：角色是特权来源，仅超级管理员可授，杜绝横向提拔
+        List<String> adminMenuIds = menus.stream()
+                .filter(menu -> !isRoleManagementMenu(menu))
+                .map(SysMenuDO::getMenuId)
+                .toList();
         String initPassword = resolveInitPassword();
 
         String superRoleId = ensureRole(RoleCodeConst.SUPER_ADMIN, "超级管理员", 0, allMenuIds);
@@ -160,7 +168,7 @@ public class DataInitializer implements ApplicationRunner {
             createUser(ADMIN_USERNAME, "超级管理员", superRoleId, initPassword);
         }
 
-        String adminRoleId = ensureRole(RoleCodeConst.ADMIN, "平台管理员", 1, allMenuIds);
+        String adminRoleId = ensureRole(RoleCodeConst.ADMIN, "平台管理员", 1, adminMenuIds);
 
         String userRoleId = ensureRole(RoleCodeConst.USER, "普通用户", 2, null);
         List<String> userMenuIds = menus.stream()
@@ -172,6 +180,11 @@ public class DataInitializer implements ApplicationRunner {
             createUser(DEMO_USERNAME, "演示用户", userRoleId, initPassword);
         }
         log.info("[data.init.roles] super={} admin={} user={}", superRoleId, adminRoleId, userRoleId);
+    }
+
+    /** 角色管理菜单：权限码以 system:role: 开头的菜单与权限点，仅超级管理员持有 */
+    private static boolean isRoleManagementMenu(SysMenuDO menu) {
+        return StrUtil.startWith(menu.getPermCode(), RoleCodeConst.ROLE_MANAGEMENT_PERM_PREFIX);
     }
 
     /** 角色按码幂等：已存在则复用，不存在则新建并授权 */
@@ -273,10 +286,14 @@ public class DataInitializer implements ApplicationRunner {
         sysUserMapper.insertUserRoles(user.getUserId(), List.of(roleId), SYSTEM);
     }
 
-    /** 升级补齐：管理角色始终持有全部菜单，新增菜单无需手工重新授权 */
+    /** 升级补齐：超管始终持有全部菜单；平台管理员补齐除角色管理外的菜单；普通用户仅工作台子集 */
     private void grantNewMenusToAdminRoles() {
         List<SysMenuDO> menus = sysMenuMapper.selectAll();
         List<String> allMenuIds = menus.stream().map(SysMenuDO::getMenuId).toList();
+        List<String> adminMenuIds = menus.stream()
+                .filter(menu -> !isRoleManagementMenu(menu))
+                .map(SysMenuDO::getMenuId)
+                .toList();
         if (CollUtil.isEmpty(allMenuIds)) {
             return;
         }
@@ -285,20 +302,38 @@ public class DataInitializer implements ApplicationRunner {
                 .map(SysMenuDO::getMenuId)
                 .toList();
         for (SysRoleDO role : sysRoleMapper.selectList()) {
-            boolean admin = RoleCodeConst.SUPER_ADMIN.equals(role.getRoleCode())
-                    || RoleCodeConst.ADMIN.equals(role.getRoleCode());
+            boolean superAdmin = RoleCodeConst.SUPER_ADMIN.equals(role.getRoleCode());
+            boolean admin = RoleCodeConst.ADMIN.equals(role.getRoleCode());
             boolean normalUser = RoleCodeConst.USER.equals(role.getRoleCode());
-            if (!admin && !normalUser) {
+            if (!superAdmin && !admin && !normalUser) {
                 continue;
             }
-            List<String> target = admin ? allMenuIds : userMenuIds;
+            List<String> target = superAdmin ? allMenuIds : admin ? adminMenuIds : userMenuIds;
             List<String> owned = sysRoleMapper.selectMenuIdsByRoleId(role.getRoleId());
             List<String> missing = target.stream().filter(id -> !owned.contains(id)).toList();
             if (CollUtil.isNotEmpty(missing)) {
                 sysRoleMapper.insertRoleMenus(role.getRoleId(), missing, SYSTEM);
                 log.info("[data.init.grant] role={} 补齐菜单 {}", role.getRoleCode(), missing.size());
             }
+            if (admin) {
+                // 历史库回收：平台管理员若曾持有角色管理授权，按新的特权划分摘除
+                List<String> roleMenus = sysRoleMapper.selectMenuIdsByRoleId(role.getRoleId()).stream()
+                        .filter(id -> isRoleManagementMenu(menuOf(menus, id)))
+                        .toList();
+                if (CollUtil.isNotEmpty(roleMenus)) {
+                    roleMenus.forEach(menuId -> sysRoleMapper.deleteRoleMenusByMenuIdForRole(role.getRoleId(), menuId));
+                    log.info("[data.init.grant] role=admin 回收角色管理授权 {} 项", roleMenus.size());
+                }
+            }
         }
+    }
+
+    /** 按 ID 取菜单定义，找不到返回空定义（不命中角色管理判定） */
+    private static SysMenuDO menuOf(List<SysMenuDO> menus, String menuId) {
+        return menus.stream()
+                .filter(menu -> Objects.equals(menu.getMenuId(), menuId))
+                .findFirst()
+                .orElseGet(() -> new SysMenuDO().setMenuId(menuId));
     }
 
     /** 内置提示词模板：固定 ID 幂等写入；这是可降级数据，失败只记 error，不阻断启动 */
