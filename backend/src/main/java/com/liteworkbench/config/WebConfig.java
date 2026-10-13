@@ -20,10 +20,10 @@ public class WebConfig implements WebMvcConfigurer {
                 .maxAge(3600);
     }
 
-    /** 深链兜底：不含点的路径（前端路由）回落到 index.html；接口与静态资源由各自处理器优先接管 */
+    /** 深链兜底：不含点的前端路由回落到 index.html；/api 段显式排除，接口不存在时必须给 404 信封而不是页面 */
     @Override
     public void addViewControllers(ViewControllerRegistry registry) {
-        registry.addViewController("/{path:[^\\.]*}").setViewName("forward:/index.html");
-        registry.addViewController("/**/{path:[^\\.]*}").setViewName("forward:/index.html");
+        registry.addViewController("/{path:(?!api$)[^\\.]*}").setViewName("forward:/index.html");
+        registry.addViewController("/{first:(?!api$)[^\\.]*}/**/{path:[^\\.]*}").setViewName("forward:/index.html");
     }
 }
