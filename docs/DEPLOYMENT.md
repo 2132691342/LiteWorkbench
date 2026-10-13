@@ -42,6 +42,8 @@ podman-compose -f docker-compose.yaml up -d
 
 Manticore 的 9308（HTTP JSON API）只对同网络容器暴露，不发布宿主机端口；应用以 `manticore:9308` 直连，运维排障可经 9306 MySQL 协议（容器内 `mysql -h0 -P9306`）执行 SQL。共享中间件所有权与禁改清单见 3.1。
 
+RabbitMQ 拓扑由应用声明：`lw.log.exchange` / `lw.log.index.queue`（死信到 `lw.log.dlx` → `lw.log.dead.queue`）与 `lw.kb.exchange` / `lw.kb.parse.queue`。启动期 `RabbitTopologyGuard` 会先于监听容器做一次对账——历史队列参数与代码不一致时（升级前建的日志队列缺 `x-dead-letter-exchange`，声明会被 406 拒绝并导致索引链路静默断掉）按代码声明重建并补齐绑定。对账只动应用自身命名空间的队列，不需要也不应人工去 broker 上删队列。
+
 ### 3.1 共享中间件的所有权与禁改清单
 
 中间件是**跨项目共享基础设施**，云主机上编排原件在 `/root/infra/docker-compose.yaml`（只读参照），数据卷为 `infra_pgdata` / `infra_minio_data`；**Manticore 的数据目录 `/var/lib/manticore` 挂在编排生成的匿名卷上**（该编排未给它声明命名卷），因此**禁止执行 `podman volume prune`**——那会一次性抹掉全部会话消息、知识块与日志索引。任何部署与运维操作必须遵守：
