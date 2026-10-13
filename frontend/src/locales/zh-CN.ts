@@ -36,6 +36,8 @@ export default {
     keyword: '关键字',
     all: '全部',
     status: '状态',
+    copy: '复制',
+    copied: '已复制到剪贴板',
     confirmDelete: '确认删除「{name}」？该操作不可撤销。',
     confirmToggle: '确认{action}「{name}」？',
     saveSuccess: '保存成功',
@@ -67,6 +69,7 @@ export default {
   },
   /* 菜单 key 一律「menu. + 驼峰」，禁止再出现 menu.a.b 这种同段既是叶子又是分组的写法 */
   menu: {
+    groupNav: '导航',
     dashboard: '仪表盘',
     console: '工作台',
     runs: '运行记录',

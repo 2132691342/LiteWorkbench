@@ -36,6 +36,8 @@ export default {
     keyword: 'Keyword',
     all: 'All',
     status: 'Status',
+    copy: 'Copy',
+    copied: 'Copied to clipboard',
     confirmDelete: 'Delete "{name}"? This cannot be undone.',
     confirmToggle: '{action} "{name}"?',
     saveSuccess: 'Saved',
@@ -67,6 +69,7 @@ export default {
   },
   /* Menu keys are always "menu." + camelCase; never reuse a segment as both leaf and group */
   menu: {
+    groupNav: 'Navigation',
     dashboard: 'Dashboard',
     console: 'Console',
     runs: 'Runs',

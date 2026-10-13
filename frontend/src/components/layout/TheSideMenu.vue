@@ -54,7 +54,7 @@ function handleClick(menu: MenuVO): void {
   <div class="flex flex-col h-full min-h-0">
     <div class="flex-1 overflow-auto p-4 flex flex-col gap-1 min-h-0">
       <div class="text-[10px] font-bold uppercase tracking-wider mb-2 px-3 mt-1" style="color: var(--lw-ink-muted)">
-        {{ t('common.all') }}
+        {{ t('menu.groupNav') }}
       </div>
 
       <template v-for="menu in primaryMenus" :key="menu.menuId">
@@ -66,7 +66,12 @@ function handleClick(menu: MenuVO): void {
               ? 'color: var(--lw-primary); font-weight: 600; background: var(--lw-secondary-selected)'
               : 'color: var(--lw-ink)'
           "
+          role="button"
+          tabindex="0"
+          :aria-expanded="isExpanded(menu)"
           @click="handleClick(menu)"
+          @keydown.enter="handleClick(menu)"
+          @keydown.space.prevent="handleClick(menu)"
         >
           <el-icon :size="16"><component :is="menuIcon(menu.icon)" /></el-icon>
           <span class="text-sm">{{ menuLabel(menu.menuName) }}</span>
@@ -110,10 +115,10 @@ function handleClick(menu: MenuVO): void {
 
     <div class="p-4 shrink-0">
       <div
-        class="rounded-xl relative overflow-hidden p-4 lw-shadow-sm transition-transform duration-200 hover:scale-[1.02]"
+        class="rounded-card relative overflow-hidden p-4 lw-shadow-sm transition-transform duration-200 hover:scale-[1.02]"
         style="background-color: var(--lw-secondary)"
       >
-        <div class="absolute inset-0 bg-white opacity-10" />
+        <div class="absolute inset-0" style="background-color: var(--lw-on-primary); opacity: 0.1" />
         <div class="relative z-10" style="color: var(--lw-on-secondary)">
           <div class="text-xs font-bold mb-1">{{ t('app.title') }}</div>
           <div class="text-[10px] opacity-90 leading-relaxed mb-3">{{ t('app.slogan') }}</div>

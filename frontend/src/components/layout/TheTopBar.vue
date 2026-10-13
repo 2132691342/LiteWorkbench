@@ -63,17 +63,18 @@ function handleCommand(command: string): void {
   >
     <div class="flex items-center gap-4 md:gap-8">
       <div class="flex items-center gap-3">
-        <LwButton
-          variant="text"
-          size="sm"
-          class="lg:hidden"
-          :title="t('app.expand')"
-          @click="appStore.openSidebar()"
-        >
-          <template #icon>
-            <el-icon><component :is="appStore.sidebarCollapsed ? Expand : Fold" /></el-icon>
-          </template>
-        </LwButton>
+        <el-tooltip :content="t('app.expand')" placement="bottom" :open-delay="300">
+          <LwButton
+            variant="text"
+            size="sm"
+            class="lg:hidden"
+            @click="appStore.openSidebar()"
+          >
+            <template #icon>
+              <el-icon><component :is="appStore.sidebarCollapsed ? Expand : Fold" /></el-icon>
+            </template>
+          </LwButton>
+        </el-tooltip>
         <div
           class="w-8 h-8 rounded-lg flex items-center justify-center font-bold lw-shadow-sm"
           style="background-color: var(--lw-secondary); color: var(--lw-on-primary)"
