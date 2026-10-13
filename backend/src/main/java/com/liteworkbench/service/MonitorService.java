@@ -77,10 +77,7 @@ public class MonitorService {
             .setThreadFactory(ThreadUtil.newNamedThreadFactory("lw-probe", true))
             .build();
 
-    /**
-     * Manticore 日志检索，按时间倒序分页；索引不可用时降级为空结果。
-     * 视角在服务端判定：全局角色（monitor:log:global）可按入参反查，其余用户强制锁定自己。
-     */
+    /** Manticore 日志检索，按时间倒序分页，索引不可用时降级为空结果；视角在服务端判定，非全局角色锁定本人 */
     public PageResult<LogDocVO> searchLogs(String keyword, String field, String level,
                                            String logger, String traceId, String userId, String runId,
                                            long from, long to, long page, long size) {
@@ -95,10 +92,7 @@ public class MonitorService {
         }
     }
 
-    /**
-     * 日志分布概览：级别计数 + 小时直方图，与检索共用视角与时间范围。
-     * 未传时间范围时默认近 24 小时；聚合异常降级为空结构，页面概览区显示占位。
-     */
+    /** 日志分布概览：与检索共用视角；未传时间范围默认近 24 小时，聚合异常降级为空结构 */
     public LogStatsVO logStats(long from, long to) {
         long now = System.currentTimeMillis();
         long effectiveFrom = from > 0 ? from : now - DEFAULT_STATS_WINDOW_MS;

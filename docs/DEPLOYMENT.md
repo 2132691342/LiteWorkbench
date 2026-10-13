@@ -93,7 +93,7 @@ podman run -d --name liteworkbench -p 24399:8080 \
 | RabbitMQ 凭据 | `LITEWORKBENCH_MQ_USERNAME` / `LITEWORKBENCH_MQ_PASSWORD` | admin / admin_public（开发默认） |
 | 默认供应方 | `LITEWORKBENCH_AGENT_PROVIDER` | openai |
 | 登录态有效期 | `LITEWORKBENCH_AUTH_TOKEN_TIMEOUT` | 7200 |
-| 种子账号初始密码 | `LITEWORKBENCH_ADMIN_PASSWORD` | 空（缺失时随机生成并只打印一次） |
+| 种子账号初始密码 | `LITEWORKBENCH_ADMIN_PASSWORD` | `admin@123`（编排文件默认值，可用环境变量覆盖） |
 | 数据加密密钥 | `LITEWORKBENCH_SECURITY_SECRET` | liteworkbench-default-secret（开发默认，生产必覆盖） |
 | 运行时数据目录 | `LITEWORKBENCH_RUNTIME_DATA_DIR` | `/var/lib/liteworkbench` |
 | 降级启动开关 | `LITEWORKBENCH_DEGRADATION_ALLOW_START` | true |
@@ -107,12 +107,12 @@ podman run -d --name liteworkbench -p 24399:8080 \
 
 | 类型 | 内容 |
 |---|---|
-| 种子账号 | `admin`（超级管理员）、`demo`（普通用户）；密码取 `LITEWORKBENCH_ADMIN_PASSWORD`，未配置则随机生成并仅在启动日志 WARN 打印一次；两个账号置 `pwd_reset_required = true`，首登强制改密 |
+| 种子账号 | `admin`（超级管理员）、`demo`（普通用户）；密码取 `LITEWORKBENCH_ADMIN_PASSWORD`（编排文件默认 `admin@123`，缺失时随机生成并仅在启动日志 WARN 打印一次）；两个账号置 `pwd_reset_required = true`，首登强制改密 |
 | 密码接管 | 配置了 `LITEWORKBENCH_ADMIN_PASSWORD` 且 `admin` 仍处于未激活状态（`pwd_reset_required = true`）时，每次启动都把该账号口令对齐到配置值——首次生成的随机密码没留存时的补救手段；账号一旦完成改密，配置项不再覆盖用户自己的密码 |
 | 存量库升级 | `pwd_reset_required` 列以 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` 补齐，默认 `false`：**已存在的账号不会被强制改密**，只有本次新建的种子账号与管理员新建的用户带该标记 |
 | 主机本地机密 | `deploy-app.sh` 启动前会 source 同目录的 `.env.app`（存在才加载，不入仓库），用于放 `LITEWORKBENCH_ADMIN_PASSWORD` 这类只属于该主机的值 |
 | 内置角色 | `super_admin`、`admin`、`user`（代码常量定义，不可删除改码） |
-| 菜单树 | 仪表盘、工作台、创作台、提示词、文件、技能、知识库、日志、监控、设置、组件库、系统管理（含按钮权限点） |
+| 菜单树 | 仪表盘、工作台、运行记录、创作台、提示词、文件、技能、知识库、日志、监控、设置、组件库、系统管理（含按钮权限点） |
 | 内置工具 | Python 执行、文件读写、HTTP 请求、知识库检索（固定 ID 幂等重放） |
 | 内置供应方 | `ollama` 本地供应方（无密钥，指向宿主机 Ollama） |
 | 内置提示词 | 文章大纲、标题构思、润色改写、要点摘要、中英互译、代码讲解（固定 ID 幂等重放，只读） |

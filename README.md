@@ -110,9 +110,9 @@ LiteWorkbench/
 │       └── logback-spring.xml
 ├── frontend/                    前端
 │   └── src/{api,views,components,stores,composables,styles,locales,router,types,utils}
-├── docs/                        项目级文档
-├── specs/                       子系统规格
-└── deploy/                      容器与编排
+├── docs/                        项目级文档：架构、数据模型、接口契约、错误码、部署、开发
+├── specs/                       子系统设计：一篇一个域，含模块设计、关键流程与取舍
+└── deploy/                      容器与编排（Dockerfile、应用编排、中间件编排、发布脚本）
 ```
 
 ## 5. 快速开始
@@ -148,10 +148,10 @@ npm run build    # 产物在 frontend/dist
 
 首次启动自动建表并写入种子数据，内置 `admin`（超级管理员）与 `demo`（普通用户）两个账号。
 
-**密码不在任何地方回显**：启动读取环境变量 `LITEWORKBENCH_ADMIN_PASSWORD` 作为初始密码；未设置时随机生成 16 位强密码并仅在启动日志中打印一次（WARN）。种子账号带 `pwd_reset_required` 标记，首次登录后必须立即改密才能使用其余功能。
+`deploy/docker-compose.app.yaml` 给定了默认初始口令 `admin@123`（可用环境变量 `LITEWORKBENCH_ADMIN_PASSWORD` 覆盖）；**该口令只对未激活账号生效**，首次登录后必须立即改密，改密完成即失效、配置项也不再覆盖。页面、接口响应与运行日志中不出现任何明文口令。
 
 ```bash
-export LITEWORKBENCH_ADMIN_PASSWORD='<your-strong-password>'
+export LITEWORKBENCH_ADMIN_PASSWORD='<your-strong-password>'   # 可选，覆盖编排默认值
 ```
 
 登录与改密请求中的密码字段为 `RSA/ECB/PKCS1Padding` 密文（浏览器端 JSEncrypt），公钥由 `GET /api/v1/auth/public-key` 下发且定期轮换，明文密码不出浏览器。
@@ -168,9 +168,15 @@ export LITEWORKBENCH_ADMIN_PASSWORD='<your-strong-password>'
 | [docs/ERROR-CODES.md](docs/ERROR-CODES.md) | 错误码分段与处理约定 |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | 本地开发、构建、测试 |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | 容器部署、配置、运维与排障 |
-| [specs/](specs/) | 子系统规格，一篇一个子系统，含模块设计与取舍 |
+| [specs/01-agent-core.md](specs/01-agent-core.md) | Agent 内核：推理循环、事件流、工具系统、Python 运行时 |
+| [specs/02-conversation.md](specs/02-conversation.md) | 会话与运行状态机、模型供应方与协议出站 |
+| [specs/03-workspace-assets.md](specs/03-workspace-assets.md) | 技能、文件存储、提示词库 |
+| [specs/04-knowledge-doc.md](specs/04-knowledge-doc.md) | 知识库解析与检索、创作台与 AI 辅助写作 |
+| [specs/05-observability.md](specs/05-observability.md) | 日志采集与检索、运行记录与回放、健康监控 |
+| [specs/06-security.md](specs/06-security.md) | 角色权限（RBAC）与登录安全 |
+| [specs/07-frontend.md](specs/07-frontend.md) | 前端外壳：技术栈、路由、状态、关键流程 |
 
-阅读顺序：**README（是什么） → ARCHITECTURE（怎么分层） → specs（每个子系统怎么实现） → AGENTS.md（写代码前查规范） → DESIGN.md（写页面前查视觉）**。
+阅读顺序：**README（是什么） → ARCHITECTURE（整体分层与流程） → specs（每个子系统怎么设计与实现、为什么、代价） → AGENTS.md（写代码前查规范） → DESIGN.md（写页面前查视觉）**。
 
 ## 7. 构建与交付
 

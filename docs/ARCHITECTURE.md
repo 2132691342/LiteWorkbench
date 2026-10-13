@@ -50,7 +50,7 @@
 | `service` | `SessionService` / `ProviderService` / `SkillService` / `FileService` / `ToolService` | 会话、供应方、技能、文件与工具的业务编排 |
 | `service` | `KbService` | 知识库 CRUD、归属校验、级联清理（文档原件 + 分块索引） |
 | `service` | `DocService` | 创作文档 CRUD、版本快照、全文索引同步、版本回滚 |
-| `service` | `DocAssistService` | AI 辅助写作：动作模板 + 选区 + 可选知识库片段 → 流式调用模型经 SSE 推送（建轻量 Run，记用量不落事件） |
+| `service` | `DocAssistService` | AI 辅助写作：动作模板 + 选区 + 可选知识库片段 → 流式调用模型经 SSE 推送（不建 Run，用量打日志） |
 | `service` | `PromptService` | 提示词模板 CRUD、内置只读保护、变量渲染 |
 | `service` | `KbDocService` | 文档上传（MinIO + MQ 派发）、状态查询、分块检索、文档删除 |
 | `service` | `KbTextChunker` | 文档分块：按目标长度切分并保留相邻重叠 |
@@ -86,7 +86,7 @@ POST /api/v1/auth/login  { username, password(密文), keyId }
   ├─ 1 按 keyId 取内存私钥解密，失败即 CREDENTIAL_INVALID  AuthService
   ├─ 2 按 username 查用户，校验存在且未停用                  UserMapper
   ├─ 3 失败计数（Redis 连续 5 次锁 10 分钟）                  AuthService
-  ├─ 4 校验密码（SHA-256 + 盐）与账号状态                     AuthService
+  ├─ 4 校验密码（PBKDF2-HMAC-SHA256，兼容旧 SHA-256 记录）与账号状态  AuthService
   ├─ 5 StpUtil.login(userId)，会话写入 Redis                  Sa-Token
   ├─ 6 组装 LoginUser（userId + roleCodes + perms）缓存进 TokenSession
   └─ 7 返回 token、用户信息、pwdResetRequired 与菜单权限标识
@@ -219,9 +219,7 @@ POST 写接口（带 @Idempotent）
       └─ ManticoreLogAppender → MQ lw.log → LogConsumer → Manticore lw_log
 ```
 
-MDC 注入点三处：`TraceFilter` 注入 `traceId`；Sa-Token 拦截器在鉴权通过后注入 `userId`；`RunService` 在运行编排期间注入 `sessionId` / `runId`。ManticoreLogAppender 原样读取四个键落 `lw_log` 的过滤列（匿名请求与系统线程允许为空）。
-
-MQ 不可用时降级为跳过索引，不阻塞主流程。
+MDC 注入点三处：`TraceFilter` 注入 `traceId`；Sa-Token 拦截器在鉴权通过后注入 `userId`；`RunService` 在运行编排期间注入 `sessionId` / `runId`。Appender 从事件快照读取四个键落 `lw_log` 的过滤列，匿名请求与系统线程允许为空；MQ 不可用时降级为跳过索引，不阻塞主流程。
 
 ### 5.7 知识库链路
 
@@ -272,11 +270,6 @@ POST /api/v1/doc/assist/stream（action + selection + instruction + kbId?，SSE�
 ### 5.9 日志检索链路
 
 ```
-业务代码 log.info/warn/error
-  → Logback AsyncAppender
-      ├─ RollingFileAppender（按天 + 按级别，三个文件）
-      └─ ManticoreLogAppender → MQ lw.log → LogConsumer → Manticore lw_log
-
 GET /api/v1/log/search（keyword / level / logger / traceId / field / from / to）
   → 视角判定：持有 monitor:log:global 走全局；否则强制 user_id = 当前用户
   → LogSearchMapper：等值过滤（level / logger / traceId / user_id）+ ts 范围 + 全文匹配
@@ -339,7 +332,7 @@ GET /api/v1/log/stats（from / to）
 | Hutool | 字符串 / 集合 / 日期 / JSON / 加解密 / HTTP 工具类 | 业务 ID 生成（`IdGenerator` 走 ULID，Hutool 不提供） |
 | Sa-Token | 登录态、`@SaCheckPermission` 权限注解 | 权限点来源与缓存（`config/StpInterfaceImpl`）、菜单种子对账 |
 | MyBatis | SQL 映射与事务 | 归属隔离条件、批量写入与聚合 SQL 的取舍（注解优先、复杂 SQL 落 XML） |
-| Manticore | 全文检索与分组聚合 | 建表 DDL、文档结构、写入与检索路径（见 spec 08 与 §5） |
+| Manticore | 全文检索与分组聚合 | 建表 DDL、文档结构、写入与检索路径（见 [specs/05](../specs/05-observability.md)） |
 | RabbitMQ | 异步削峰 | 消费失败降级（日志回退到文件直写、知识库解析置失败态） |
 | MinIO | 对象存储 | 按用户前缀隔离、预签名下载、级联删除 |
 | PostgreSQL | 关系存储与事务 | 行级归属隔离、`jsonb` 列的显式类型转换、幂等 DDL 演进 |

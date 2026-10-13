@@ -113,10 +113,7 @@ public class LogSearchMapper {
         }
     }
 
-    /**
-     * 检索日志，按 ts 倒序分页；Manticore 不可用或语法异常时降级为空结果。
-     * userId / runId 由服务端视角判定后传入：普通用户固定为自己，全局视角可为空或反查目标。
-     */
+    /** 检索日志，按 ts 倒序分页，异常降级为空结果；userId / runId 已由服务端视角判定后传入 */
     public LogSearchDTO search(String keyword, String field, String level,
                                String logger, String traceId, String userId, String runId,
                                long from, long to, long page, long size) {
@@ -135,10 +132,7 @@ public class LogSearchMapper {
         }
     }
 
-    /**
-     * 分布概览：级别计数 + 按小时直方图，与检索共用视角与时间范围过滤。
-     * 聚合走 /sql 的 GROUP BY（只读 SELECT），不拉结果集回内存再数；异常由调用方降级。
-     */
+    /** 分布概览：级别计数 + 按小时直方图，聚合走 /sql 的 GROUP BY，异常由调用方降级 */
     public LogStatsVO stats(String userId, long from, long to) {
         LogStatsVO stats = new LogStatsVO();
         stats.setLevels(levelCounts(userId, from, to));
@@ -234,12 +228,7 @@ public class LogSearchMapper {
         return result;
     }
 
-    /**
-     * 执行分组查询并把分组行归一为字段表列表。
-     * /sql 非 raw 模式把 SQL 编译成搜索查询，分组结果的形状是
-     * {@code {"hits":{"total":n,"hits":[{"_score":1,"_source":{列:值}}]}}}，
-     * 列值藏在每个命中的 _source 里；from / to 为 long，SQL 无可注入片段；异常转运行时由调用方降级。
-     */
+    /** 执行分组查询，把命中的 _source 归一为字段表列表；异常转运行时由调用方降级 */
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> groupRows(String sql) {
         SqlResponse response;

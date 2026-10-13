@@ -62,10 +62,7 @@ public class AgentLoop {
         this.cancelled = cancelled;
     }
 
-    /**
-     * 执行一次完整推理：思考 → 工具调用 → 观察，直到产出正文、达到迭代上限或被取消。
-     * 返回最终正文，可能为空（被取消且尚未产出内容时）。
-     */
+    /** 执行一次完整推理，直到产出正文、达到迭代上限或被取消；返回最终正文，可能为空 */
     public String run(List<Msg> messages, EventSink sink) {
         List<Msg> context = new ArrayList<>(messages);
         for (int iter = 1; iter <= maxIters; iter++) {

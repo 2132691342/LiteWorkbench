@@ -182,8 +182,8 @@ public R<String> create(@RequestBody @Valid UserREQ req) { ... }
 
 - **密码绝不明文过网**：登录、自助改密、管理员建用户、管理员重置密码四个入口的密码字段一律为 RSA 密文（`RSA/ECB/PKCS1Padding`，与浏览器端 JSEncrypt 对齐），公钥由 `GET /api/v1/auth/public-key` 下发（SPKI 的 Base64，进程内存持有，按 6 小时或 1000 次调用轮换）。解密失败即 `CREDENTIAL_INVALID`（自助改密与管理员设密为 `PAYLOAD_DECRYPT_FAILED`），不区分"密文坏"与"密码错"。
 - **密文字段不做长度校验**：RSA-2048 密文 Base64 后 344 字符，`@Size` 加在密文字段上必然误判；口令强度一律在服务端解密后的明文上判定。
-- **凭据绝不回显**：页面、README、接口响应一律不得出现初始密码或明文密码。种子账号密码来自环境变量 `LITEWORKBENCH_ADMIN_PASSWORD`；来自配置时**不打印**，缺失时随机生成并仅在启动日志 WARN 打印一次，同时置 `sys_user.pwd_reset_required = true`。
-- **未激活账号可被配置项接管**：配置了初始密码且种子 `admin` 仍 `pwd_reset_required = true` 时，启动把口令对齐到配置值；账号完成改密后配置项不再覆盖。
+- **凭据绝不回显**：页面、接口响应、运行日志一律不得出现初始密码或明文密码；明文口令只允许出现在部署编排文件（`deploy/docker-compose.app.yaml` 给的默认值，供私有部署直接登录）。种子账号口令来自环境变量 `LITEWORKBENCH_ADMIN_PASSWORD`；缺失时随机生成并仅在启动日志 WARN 打印一次，同时置 `sys_user.pwd_reset_required = true`。
+- **未激活账号可被配置项接管**：种子 `admin` 仍 `pwd_reset_required = true` 时，启动把口令对齐到配置值；账号完成改密后配置项不再覆盖。
 - **首登强制改密**：`pwd_reset_required` 为 true 的用户，登录后只允许调用 `/auth/password` 与 `/auth/current`，其余业务接口返回 `PASSWORD_RESET_REQUIRED`。
 - **失败计数**：同一用户名连续失败 5 次锁定 10 分钟（Redis 计数），登录接口另有按 IP 的 `@RateLimit`。
 
@@ -351,24 +351,24 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 
 ## 13. 注释规范
 
-只写"是什么"和"边界"，"为什么"一律归文档。
+只写"是什么"和"边界"，"为什么"一律归文档。注释越短越好：**文件头一行、方法一行签名说明、字段有歧义才有注释**。
 
 | 位置 | 要求 |
 |---|---|
 | 文件头 | 一行说明文件职责 |
-| 方法 | 一行签名说明 |
+| 方法 | 一行签名说明，禁止多行 `@param` / `@return` 块 |
 | 字段 | 有歧义才有注释 |
 | 行内 | 禁止连续注释块，需要解释时压成一行 |
+| 设计理由 | 不写进代码，写进 `specs/` 对应文档 |
 
 ## 14. 测试约定
 
-只保留覆盖长链路、复杂场景与跨模块契约的测试；简单断言（ID 格式、字符串清洗、空参校验）、纯算法与薄 mock 单元测试一律不写。当前共 3 个文件 4 个用例，随 `mvn test` 一次跑完。
+只保留覆盖长链路、复杂场景与跨模块契约的测试；简单断言（ID 格式、字符串清洗、空参校验、SSE 帧文本）、纯算法与薄 mock 单元测试一律不写。当前共 2 个文件 3 个用例，随 `mvn test` 一次跑完。
 
 | 文件 | 用例 | 覆盖 |
 |---|---|---|
 | `service/RunEventPipelineTest` | 2 | 事件长链路：一次完整运行的归一与合帧（增量合并边界、类型切换保序、工具起止与结果、用量入账）＋ 边界路径（超长裁剪、失败工具标记、异常事件） |
-| `api/SseFrameContractTest` | 1 | SSE 帧契约：业务帧带 `id=seq` 与固定事件名，心跳只发注释行 |
-| `config/PermissionContractTest` | 1 | 权限契约：控制器注解与 `PermConst` 声明的权限点全部存在于菜单种子 |
+| `config/PermissionContractTest` | 1 | 权限契约：api 包控制器注解与 `PermConst` 声明的权限点全部存在于菜单种子（自动扫描 api 包，无需登记清单） |
 
 用例名用中文直述业务断言；一个用例串起一条完整链路，一个文件只答一个契约问题；前端不写快照测试与纯渲染测试。
 

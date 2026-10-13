@@ -82,10 +82,7 @@ public class DataInitializer implements ApplicationRunner {
         }
     }
 
-    /**
-     * 菜单对账：种子按固定 ID 做 upsert（升级即订正文案与路由），并软删历史残留 ——
-     * 旧版本用随机 ID 建菜单，直接跳过已存在项会在升级后留下重复目录与旧文案。
-     */
+    /** 菜单对账：种子按固定 ID upsert 回写全部字段，并软删路由或权限码冲突但 ID 不在种子内的残留行 */
     private void reconcileMenus() {
         int created = 0;
         int updated = 0;
@@ -173,10 +170,7 @@ public class DataInitializer implements ApplicationRunner {
         log.info("[data.init.roles] super={} admin={} user={}", superRoleId, adminRoleId, userRoleId);
     }
 
-    /**
-     * 未激活的种子账号按配置的初始密码对齐：首次启动生成的密码只打印一次，运维若未留存就再也进不去，
-     * 这里给配置项留一个接管窗口；账号一旦完成改密（`pwd_reset_required = false`），配置项不再覆盖用户自己的密码。
-     */
+    /** 未激活的种子账号按配置的初始密码对齐，账号完成改密（pwd_reset_required = false）后不再覆盖 */
     private void realignSeedPassword() {
         String configured = authProperties.getAdminPassword();
         if (StrUtil.isBlank(configured)) {

@@ -323,11 +323,7 @@ export interface RunStreamHandlers {
   onError: (message: string) => void
 }
 
-/**
- * 以 fetch 发起流式对话并解析 SSE 帧。
- * 需要携带 Authorization 头，故不用原生 EventSource。
- * 返回中断函数：调用后停止消费（服务端按中断收尾）。
- */
+/** 以 fetch 发起流式对话并解析 SSE 帧（需带 Authorization 头，故不用原生 EventSource），返回中断函数 */
 export function openRunStream(body: ChatStreamREQ, handlers: RunStreamHandlers): (reason?: string) => void {
   const controller = new AbortController()
   const base = import.meta.env.VITE_API_BASE_URL ?? '/api/v1'
@@ -395,10 +391,7 @@ export interface AssistStreamHandlers {
   onError: (message: string) => void
 }
 
-/**
- * 以 fetch 发起流式辅助写作并解析 SSE 帧，返回中断函数。
- * 断连即取消服务端模型调用；帧格式 assist.event，data 为 {type, ...载荷}。
- */
+/** 以 fetch 发起流式辅助写作并解析 SSE 帧（assist.event + data 载荷），断连即取消服务端模型调用 */
 export function openAssistStream(body: DocAssistREQ, handlers: AssistStreamHandlers): (reason?: string) => void {
   const controller = new AbortController()
   const base = import.meta.env.VITE_API_BASE_URL ?? '/api/v1'

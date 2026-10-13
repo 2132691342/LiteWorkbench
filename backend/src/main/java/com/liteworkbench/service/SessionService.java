@@ -99,10 +99,7 @@ public class SessionService {
         log.info("[session.delete] sessionId={} userId={} messagesRemoved={}", sessionId, userId, removed);
     }
 
-    /**
-     * 首轮对话自动命名：标题仍为默认值时异步调模型生成，失败静默保持默认标题。
-     * 走 hutool-ai 同步通道（ModelCaller），不建 Run、不落事件。
-     */
+    /** 首轮对话自动命名：标题仍为默认值时异步调模型生成，失败静默保持默认标题 */
     public void autoRenameIfDefault(WbSessionDO session, String prompt) {
         if (!SessionConst.DEFAULT_TITLE.equals(session.getTitle())) {
             return;
