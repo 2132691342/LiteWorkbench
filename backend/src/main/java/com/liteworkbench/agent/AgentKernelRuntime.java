@@ -1,5 +1,6 @@
 package com.liteworkbench.agent;
 
+import cn.hutool.core.thread.ExecutorBuilder;
 import cn.hutool.core.thread.ThreadUtil;
 import com.liteworkbench.agent.event.AgentEvent;
 import com.liteworkbench.agent.event.AgentEventType;
@@ -16,6 +17,7 @@ import com.liteworkbench.domain.constant.AppConst;
 import com.liteworkbench.domain.constant.RunConst;
 import com.liteworkbench.domain.dto.RunEventDTO;
 import com.liteworkbench.runtime.PythonRuntime;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
@@ -23,7 +25,6 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
@@ -42,8 +43,21 @@ public class AgentKernelRuntime implements AgentRuntime {
     private final AgentEventAdapter adapter;
 
     /** 运行执行线程池：一次运行一个线程，阻塞在模型与工具上 */
-    private final ExecutorService executor =
-            Executors.newCachedThreadPool(ThreadUtil.newNamedThreadFactory("lw-agent", true));
+    private final ExecutorService executor = ExecutorBuilder.create()
+            .useSynchronousQueue()
+            .setThreadFactory(ThreadUtil.newNamedThreadFactory("lw-agent", true))
+            .build();
+
+    /** 启动期干跑注册：工具 Schema 错误在启动时暴露，不留到首次运行 */
+    @PostConstruct
+    public void validateToolsAtStartup() {
+        ToolRegistry registry = new ToolRegistry();
+        registry.register(new WorkbenchTools(toolGate, kbSearchPort, pythonRuntime, runtimeProperties,
+                "startup-check"));
+        int count = registry.names().size();
+        registry.shutdown();
+        log.info("[agent.tools] 工具 Schema 启动校验通过 count={}", count);
+    }
 
     @Override
     public RunHandle start(RunContext context, Consumer<RunEventDTO> sink) {

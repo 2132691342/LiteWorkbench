@@ -66,8 +66,10 @@ public class SecretCodec {
         if (StrUtil.isBlank(keyId) || StrUtil.isBlank(cipherBase64)) {
             return null;
         }
+        // 解密路径也参与轮换判定：前端缓存公钥纯登录时，仅靠公钥下发点计数会漏计
+        ensure();
         Entry entry = resolve(keyId);
-        if (entry == null) {
+        if (Objects.isNull(entry)) {
             log.warn("[secret.decrypt] 公钥已轮换或不存在 keyId={}", keyId);
             return null;
         }
@@ -84,11 +86,11 @@ public class SecretCodec {
 
     private Entry resolve(String keyId) {
         Entry snapshot = current;
-        if (snapshot.keyId.equals(keyId)) {
+        if (Objects.nonNull(snapshot) && Objects.equals(snapshot.keyId, keyId)) {
             return snapshot;
         }
         Entry stale = previous;
-        return Objects.nonNull(stale) && stale.keyId.equals(keyId) ? stale : null;
+        return Objects.nonNull(stale) && Objects.equals(stale.keyId, keyId) ? stale : null;
     }
 
     /** 轮换判定：超过使用次数或超过有效期即换新钥 */

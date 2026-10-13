@@ -40,9 +40,10 @@ public class LoginContextInterceptor implements HandlerInterceptor {
         MDC.remove(AppConst.MDC_RUN_ID);
     }
 
+    /** 强制改密白名单：仅放行取公钥、当前用户、改密与登出，前缀相等匹配防误放行 */
     private boolean allowed(String uri) {
         for (String path : AuthConst.PASSWORD_RESET_ALLOWED) {
-            if (uri.startsWith(path)) {
+            if (uri.equals(path)) {
                 return true;
             }
         }

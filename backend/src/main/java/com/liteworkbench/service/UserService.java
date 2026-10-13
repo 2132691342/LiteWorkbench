@@ -40,6 +40,7 @@ public class UserService {
     private final StpInterfaceImpl stpInterface;
     private final MenuService menuService;
     private final SecretCodec secretCodec;
+    private final LoginUserAssembler loginUserAssembler;
 
     /** 分页查询 */
     public PageResult<UserVO> page(UserPageREQ req) {
@@ -113,6 +114,7 @@ public class UserService {
             }
             stpInterface.clearPermCache(exists.getUserId());
             menuService.clearMenuCache(exists.getUserId());
+            loginUserAssembler.refreshSession(exists.getUserId());
         }
         log.info("[user.update] userId={} operatorId={}", exists.getUserId(), operatorId);
     }

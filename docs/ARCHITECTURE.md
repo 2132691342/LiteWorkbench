@@ -147,7 +147,7 @@ POST /api/v1/chat/stream
   ├─ 2 创建 Run（queued）+ 用户消息写入 Manticore lw_msg     RunService
   ├─ 3 建立 SseEmitter                      RunController
   ├─ 4 构建 AgentLoop（ModelClient 按 provider+model 缓存复用）  AgentKernelRuntime
-  ├─ 5 组装历史消息（消息索引最近 20 条，经 AgentMemory 压缩）→ 启动内核
+  ├─ 5 组装历史消息（消息索引最近 40 条，经 AgentMemory 压缩）→ 启动内核
   │     ├─ 归一化事件 → seq 递增
   │     ├─ 批量攒批写入 wb_event
   │     └─ 同步推送 SSE
@@ -298,6 +298,8 @@ GET /api/v1/log/stats（from / to）
 | 知识库解析 | MQ 异步消费，上传接口零等待；解析失败不重试挤压，直接置 failed 可手工重放 |
 | SSE | 独立线程池，超时 30min，心跳 15s |
 | 工具执行 | 独立线程池，Python 执行带进程级超时 |
+| 运行执行 | `agent` 后台线程池，每次运行一个任务，取消经 `RunHandle` 传播 |
+| AI 辅助写作 | 独立 `lw-assist` 线程池，请求线程只派发，断连即取消 |
 | 数据库 | HikariCP，池大小 10，连接超时 30s |
 | 文档索引 | 保存即覆盖写单条 Manticore 文档，成本与文档大小无关，不做批量攒批 |
 | 日志 | 异步 Appender，丢弃阈值以下日志不回压业务线程 |

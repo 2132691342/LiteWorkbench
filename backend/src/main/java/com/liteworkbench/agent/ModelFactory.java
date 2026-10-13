@@ -55,9 +55,9 @@ public class ModelFactory {
     /** 旧格式加密算法，仅用于解密兼容 */
     private static final String LEGACY_TRANSFORMATION = "AES/ECB/PKCS5Padding";
 
-    /** hutool-ai 内置的供应方码：命中即说明该协议有原生服务实现可复用 */
+    /** hutool-ai 有原生服务实现的供应方码：与协议通道一致，命中共用同步文本路径 */
     private static final Set<String> HUTOOL_AI_CODES =
-            Set.of("hutool", "deepseek", "openai", "doubao", "grok", "ollama", "gemini");
+            Set.of("deepseek", "openai", "doubao", "grok", "ollama");
 
     private final ProviderStore providerStore;
     private final AgentProperties agentProperties;

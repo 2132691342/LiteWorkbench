@@ -8,8 +8,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "liteworkbench.agent")
 public class AgentProperties {
 
-    /** 默认供应方编码 */
-    private String provider = "openai";
     /** 模型参数 */
     private Model model = new Model();
     /** 推理循环参数 */
@@ -25,8 +23,6 @@ public class AgentProperties {
         private String defaultName = "qwen-plus";
         /** 采样温度 */
         private Double temperature = 0.3;
-        /** 流式开关，内核固定走流式，保留配置位用于兼容 */
-        private boolean stream = true;
         /** 上下文窗口 token 数，超过即压缩 */
         private int contextWindow = 32000;
         /** 预留给模型输出的 token 数 */

@@ -164,6 +164,12 @@ function changeDocPage(next: number): void {
   void loadDocs()
 }
 
+function changeDocSize(next: number): void {
+  docSize.value = next
+  docPage.value = 1
+  void loadDocs()
+}
+
 const fileInput = ref<HTMLInputElement>()
 
 function openUpload(): void {
@@ -249,6 +255,12 @@ function changeSearchPage(next: number): void {
   void doSearch()
 }
 
+function changeSearchSize(next: number): void {
+  searchSize.value = next
+  searchPage.value = 1
+  void doSearch()
+}
+
 interface Segment {
   text: string
   hit: boolean
@@ -305,15 +317,18 @@ onBeforeUnmount(() => {
       <!-- 左：知识库列表 -->
       <LwPageState :loading="kbLoading" :error="kbError" :empty="!kbList.length" @retry="loadKbs">
         <div class="flex flex-col gap-2">
-          <button
+          <div
             v-for="kb in kbList"
             :key="kb.kbId"
-            type="button"
-            class="text-left rounded-xl border p-4 transition-all duration-200 cursor-pointer hover:-translate-y-0.5 hover:shadow-md"
+            class="text-left rounded-card border p-4 transition-all duration-200 cursor-pointer hover:-translate-y-0.5 hover:shadow-md"
             :class="kb.kbId === selectedKbId
               ? 'border-[var(--lw-primary)] bg-[var(--lw-secondary-selected)] shadow-sm'
               : 'border-[var(--lw-border)] bg-[var(--lw-surface)]'"
+            role="button"
+            tabindex="0"
+            :aria-selected="kb.kbId === selectedKbId"
             @click="selectKb(kb)"
+            @keydown.enter="selectKb(kb)"
           >
             <div class="flex items-center justify-between gap-2">
               <span class="font-bold text-sm truncate" :style="{ color: 'var(--lw-primary)' }">{{ kb.kbName }}</span>
@@ -333,7 +348,7 @@ onBeforeUnmount(() => {
               <span>{{ t('kb.docCount') }} {{ kb.docCount ?? 0 }}</span>
               <span>{{ t('kb.chunkCount') }} {{ kb.chunkCount ?? 0 }}</span>
             </div>
-          </button>
+          </div>
         </div>
       </LwPageState>
 
@@ -407,11 +422,13 @@ onBeforeUnmount(() => {
             </el-table>
             <div v-if="docTotal > docSize" class="flex justify-end mt-4">
               <el-pagination
-                layout="prev, pager, next"
+                layout="total, sizes, prev, pager, next"
                 :total="docTotal"
                 :page-size="docSize"
+                :page-sizes="[10, 20, 50]"
                 :current-page="docPage"
                 @current-change="changeDocPage"
+                @size-change="changeDocSize"
               />
             </div>
           </LwPageState>
@@ -459,11 +476,13 @@ onBeforeUnmount(() => {
             </div>
             <div v-if="searchTotal > searchSize" class="flex justify-end mt-4">
               <el-pagination
-                layout="prev, pager, next"
+                layout="total, sizes, prev, pager, next"
                 :total="searchTotal"
                 :page-size="searchSize"
+                :page-sizes="[10, 20, 50]"
                 :current-page="searchPage"
                 @current-change="changeSearchPage"
+                @size-change="changeSearchSize"
               />
             </div>
           </LwPageState>

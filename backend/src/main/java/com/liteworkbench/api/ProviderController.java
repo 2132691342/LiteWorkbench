@@ -28,7 +28,8 @@ public class ProviderController {
 
     private final ProviderService providerService;
 
-    /** 列表，登录即可用，密钥脱敏 */
+    /** 列表，密钥脱敏，权限与预设一致：供应方为平台级配置，仅管理角色可读 */
+    @SaCheckPermission(PermConst.WB_PROVIDER_LIST)
     @GetMapping("/list")
     public R<List<ProviderVO>> list() {
         return R.ok(providerService.list());

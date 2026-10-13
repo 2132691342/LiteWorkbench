@@ -30,7 +30,7 @@ public class MenuREQ implements Serializable {
     private String component;
     /** 图标名 */
     private String icon;
-    /** 权限标识 system:user:add */
+    /** 权限标识，形如 system:user:create */
     private String permCode;
     /** 排序号 */
     private Integer sortNo;

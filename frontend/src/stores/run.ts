@@ -131,10 +131,15 @@ export const useRunStore = defineStore('run', () => {
     return timeline.value.filter((item) => item.role === 'assistant').pop()
   }
 
-  /** 拉取当前会话的运行历史 */
+  /** 拉取当前会话的运行历史，失败记入 errorDetail 供页面内联提示 */
   async function loadRuns(sessionId: string): Promise<void> {
-    const page = await runApi.page({ sessionId, page: 1, size: 50 })
-    runs.value = page.list
+    try {
+      const page = await runApi.page({ sessionId, page: 1, size: 50 })
+      runs.value = page.list
+    } catch (err) {
+      errorDetail.value = err instanceof Error ? err.message : ''
+      throw err
+    }
   }
 
   /** 按 runId 回放：拉运行详情与全量事件，走同一 reducer 重建时间线 */

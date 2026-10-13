@@ -136,6 +136,11 @@ public class MenuService {
         if (Objects.equals(req.getMenuId(), req.getParentId())) {
             throw new BizException(ErrorCodeEnum.PARAM_INVALID, "父菜单不能是自己");
         }
+        // 祖先链闭环校验：两步更新可造成 A→B→A 环，构建树时会丢节点且不报错
+        if (StrUtil.isNotBlank(req.getParentId()) && !ROOT_PARENT_ID.equals(req.getParentId())
+                && isDescendantOf(req.getMenuId(), req.getParentId())) {
+            throw new BizException(ErrorCodeEnum.PARAM_INVALID, "父菜单不能是自己的子级");
+        }
         SysMenuDO menu = new SysMenuDO();
         BeanUtil.copyProperties(req, menu);
         menu.setMenuId(exists.getMenuId());
@@ -184,6 +189,22 @@ public class MenuService {
             throw new BizException(ErrorCodeEnum.MENU_NOT_FOUND, menuId);
         }
         return menu;
+    }
+
+    /** candidate 是否为 menuId 的子孙：沿祖先链上行，遇环或不存在即否 */
+    private boolean isDescendantOf(String menuId, String candidateId) {
+        String current = candidateId;
+        for (int i = 0; i < 64 && StrUtil.isNotBlank(current) && !ROOT_PARENT_ID.equals(current); i++) {
+            if (Objects.equals(current, menuId)) {
+                return true;
+            }
+            SysMenuDO parent = sysMenuMapper.selectById(current);
+            if (Objects.isNull(parent)) {
+                return false;
+            }
+            current = parent.getParentId();
+        }
+        return false;
     }
 
     private MenuVO toVO(SysMenuDO menu) {

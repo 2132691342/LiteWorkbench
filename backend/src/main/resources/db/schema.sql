@@ -319,7 +319,7 @@ CREATE INDEX IF NOT EXISTS idx_wb_prompt_owner ON wb_prompt (user_id, created_at
 
 -- ============================== 内置工具种子 ==============================
 
--- 工具种子用固定 ID 而非 ULID：ON CONFLICT 幂等重放，重启不产生重复行
+-- 工具种子用固定 ID 而非 ULID：upsert 幂等重放，重启不产生重复行，标签与风险等级变更随版本回写
 INSERT INTO wb_tool (tool_id, tool_name, tool_label, category, risk_level, enabled)
 VALUES
     ('TOOL_00000000000000000000000001', 'python_exec', 'Python 执行', 'runtime', 'confirm', true),
@@ -327,7 +327,10 @@ VALUES
     ('TOOL_00000000000000000000000003', 'file_write', '写入文件', 'file', 'confirm', true),
     ('TOOL_00000000000000000000000004', 'http_get', 'HTTP 请求', 'network', 'safe', true),
     ('TOOL_00000000000000000000000005', 'kb_search', '知识库检索', 'knowledge', 'safe', true)
-ON CONFLICT (tool_id) DO NOTHING;
+ON CONFLICT (tool_id) DO UPDATE SET
+    tool_label = EXCLUDED.tool_label,
+    category = EXCLUDED.category,
+    risk_level = EXCLUDED.risk_level;
 
 -- ============================== 旧库升级兜底（幂等） ==============================
 -- 只针对仍然存在的表；已下线表的语句不得保留，否则建表脚本会整段失败

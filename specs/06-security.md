@@ -30,12 +30,13 @@
 | `user` | 普通用户 | 用户级功能 + 自己数据的增删改权限点 |
 | — | 自定义角色 | 按需勾选菜单与权限点；勾选 `monitor:log:global` 即获得全局日志视角 |
 
-角色与菜单多对多（`sys_role_menu`），授权变更后立即清除相关用户的权限缓存。
+角色与菜单多对多（`sys_role_menu`），授权变更后立即清除相关用户的权限缓存。角色不提供停用入口：需要回收权限时直接删除角色（`ROLE_IN_USE` 保护已分配用户）或调整其菜单授权。
 
 ### 菜单与权限点
 
 - 树形三级：`dir` 目录 / `menu` 路由页 / `button` 权限点；`perm_code` 格式 `域:资源:动作`。
 - `menu_name` 存 i18n key（规则见 AGENTS.md §2.5），前端经 `menuLabel()` 渲染，翻译缺失也不裸显 key。
+- `visible = false` 的菜单不进用户菜单树（管理树仍可见可维护），用于临时下线入口而不删定义。
 - 种子 ID 为 `MENU_ + 26 位零填充序号`；启动时按 ID upsert 回写全部字段（名称、路由、组件、权限码、图标、排序），并软删"`route_path` 或 `perm_code` 命中种子但 ID 不在种子内"的残留行；已下线菜单按固定 ID 显式清理（软删 + 摘除授权）。
 
 **权限点清单**：
@@ -63,11 +64,11 @@
 | 传输 | 密码字段为 `RSA/ECB/PKCS1Padding` 密文（与浏览器端 JSEncrypt 对齐），公钥随请求前取；明文 HTTP 下 WebCrypto 不可用，故不依赖 `crypto.subtle` |
 | 存储 | `PBKDF2-HMAC-SHA256`，十万次迭代 + 随机盐，摘要与盐分列存 `sys_user` |
 | 初值 | 种子账号口令取环境变量 `LITEWORKBENCH_ADMIN_PASSWORD`（编排文件给的默认值仅供私有部署便利）；仅对未激活账号（`pwd_reset_required = true`）生效，账号完成自助改密后配置项不再覆盖 |
-| 首登 | 种子账号 `pwd_reset_required = true`，改密前只放行 `/auth/current` 与 `/auth/password` |
-| 失败 | 同用户名连续 5 次失败锁 10 分钟（Redis 计数），另有按 IP 限流 |
+| 首登 | 种子账号 `pwd_reset_required = true`，改密前只放行 `/auth/current`、`/auth/password`、`/auth/logout` 与 `/auth/public-key` |
+| 失败 | 同用户名连续 5 次失败锁 10 分钟（Redis 固定窗口：首次失败置 TTL，窗口内累加，成功登录清零），另有按 IP 限流 |
 | 会话 | Sa-Token 存 Redis，令牌走 `Authorization` 头（裸令牌，不加 `Bearer`），有效期 7200 秒 |
 
-密钥对进程内存持有，**每 6 小时或每 1000 次加密轮换**；`/auth/public-key` 返回当前 `keyId`，登录请求带上 `keyId`，服务端按 ID 查私钥，过期 ID 直接判凭据无效；轮换时旧钥保留一把兜住在途请求。密钥不落盘、不进日志。密码字段不做长度校验（RSA-2048 密文 Base64 后 344 字符），口令强度一律在服务端解密后的明文上判定。
+密钥对进程内存持有，**每 6 小时或每 1000 次解密调用轮换**（加密发生在前端，只能按服务端解密次数计）；`/auth/public-key` 返回当前 `keyId`，登录请求带上 `keyId`，服务端按 ID 查私钥，过期 ID 直接判凭据无效；轮换时旧钥保留一把兜住在途请求。密钥不落盘、不进日志。密码字段不做长度校验（RSA-2048 密文 Base64 后 344 字符），口令强度一律在服务端解密后的明文上判定。
 
 ## 契约
 
@@ -85,13 +86,21 @@ public final class LoginContext {
     public static void clear();
 }
 
-public interface SecretCodec {
+/** 登录口令加密封装：密钥对进程内存持有，按 6 小时或 1000 次解密轮换 */
+@Component
+public class SecretCodec {
+
+    /** 当前公钥 ID，随 /auth/public-key 下发 */
+    public String keyId();
 
     /** 当前公钥（SPKI 的 Base64），用于前端加密 */
-    PublicKeyPayload current();
+    public String publicKeyBase64();
+
+    /** 当前密钥对过期时间（毫秒） */
+    public long expiresAt();
 
     /** 按 keyId 解密，密钥不存在或解密失败返回 null */
-    String decrypt(String keyId, String cipherBase64);
+    public String decrypt(String keyId, String cipherBase64);
 }
 ```
 
@@ -120,12 +129,13 @@ POST /auth/login
   └─ finally 清理 LoginContext 与 MDC
 
 POST /auth/password
-  ├─ 1 两段密文解密；新密码强度校验（≥8 位且含字母与数字），否则 PASSWORD_WEAK
-  ├─ 2 校原密码 → 生成新盐与新 PBKDF2 摘要 → pwd_reset_required = false
-  └─ 3 StpUtil.logout()，强制用新密码重新登录
+  ├─ 1 两段密文解密；任一失败 → PAYLOAD_DECRYPT_FAILED
+  ├─ 2 校原密码，不符 → OLD_PASSWORD_INVALID
+  ├─ 3 新密码强度校验（≥8 位且含字母与数字），否则 PASSWORD_WEAK；新密码不得与原密码相同
+  └─ 4 生成新盐与新 PBKDF2 摘要 → pwd_reset_required = false → StpUtil.logout()，强制用新密码重新登录
 ```
 
-失败计数键 `lw:auth:fail:{username}`，成功登录即删除；锁定期间不区分"密码错"与"账号不存在"，提示统一为"用户名或密码错误"。授权变更失效：`grant` / 角色停用 / 角色删除 → 删除该角色下所有用户的权限缓存，下一次请求回源重建。
+失败计数键 `lw:auth:fail:{username}`，成功登录即删除；锁定期间不区分"密码错"与"账号不存在"，提示统一为"用户名或密码错误"。授权变更失效：`grant` / 角色删除 → 删除该角色下所有用户的权限缓存，下一次请求回源重建。
 
 ## 前端配合
 
@@ -151,6 +161,6 @@ POST /auth/password
 ## 约束
 
 - 用户资源 Mapper 查询必须显式带 `user_id`；平台级表（`sys_menu`、`sys_user_role`、`sys_role_menu`、`wb_tool`、`wb_provider`）除外。
-- 明文口令只允许出现在部署编排文件（私有部署便利），禁止出现在页面、接口响应、日志与事件 `payload` 中。
+- 明文口令只允许出现在部署编排文件（私有部署便利），禁止出现在页面、接口响应、日志与事件 `payload` 中；唯一例外是未配置 `LITEWORKBENCH_ADMIN_PASSWORD` 时随机生成的口令，仅在启动日志 WARN 打印一次。
 - 公钥接口必须带按 IP 限流，避免轮换密钥被打爆；登录接口另有按 IP 的 `@RateLimit`。
 - 权限标识一经发布不得改名，废弃只做下线处理；内置角色码在 `RoleCodeConst` 集中定义，禁止散落字面量。

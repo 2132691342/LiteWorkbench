@@ -63,7 +63,7 @@ async function handleSubmit(): Promise<void> {
 
 <template>
   <div class="min-h-full flex items-center justify-center p-6" style="background-color: var(--lw-surface)">
-    <div class="w-full max-w-md rounded-xl border p-8 flex flex-col gap-5"
+    <div class="w-full max-w-[400px] rounded-card border p-8 flex flex-col gap-5"
          style="background-color: var(--lw-surface-raised); border-color: var(--lw-border)">
       <div>
         <h1 class="text-xl font-bold tracking-tight" style="color: var(--lw-ink)">

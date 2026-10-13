@@ -98,6 +98,12 @@ function search(): void {
   void load()
 }
 
+function changeSize(next: number): void {
+  size.value = next
+  page.value = 1
+  void load()
+}
+
 function changePage(next: number): void {
   page.value = next
   void load()
@@ -153,11 +159,13 @@ onMounted(load)
         </el-table>
         <div v-if="total > size" class="flex justify-end mt-4">
           <el-pagination
-            layout="prev, pager, next"
+            layout="total, sizes, prev, pager, next"
             :total="total"
             :page-size="size"
+            :page-sizes="[10, 20, 50]"
             :current-page="page"
             @current-change="changePage"
+            @size-change="changeSize"
           />
         </div>
       </LwPageState>
@@ -166,7 +174,7 @@ onMounted(load)
     <el-dialog v-model="dialogVisible" :title="form.skillId ? t('common.edit') : t('common.create')" width="640">
       <el-form :model="form" label-width="90">
         <el-form-item :label="t('skills.skillCode')" required>
-          <el-input v-model="form.skillCode" :disabled="!!form.skillId" placeholder="summary_report" />
+          <el-input v-model="form.skillCode" :disabled="!!form.skillId" :placeholder="t('skills.skillCodePlaceholder')" />
         </el-form-item>
         <el-form-item :label="t('skills.skillName')" required>
           <el-input v-model="form.skillName" />

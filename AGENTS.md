@@ -395,7 +395,7 @@ Agent 内核全部写在 `agent` 包内，不引任何 Agent 框架。
 | 只引 `hutool-all`（5.8.46，已含 AI 模块），不再单独声明子模块 | 聚合包已包含所需模块 |
 | 业务 ID 一律走 `common.IdGenerator`，禁止 `IdUtil` / `UlidCreator` | Hutool 不提供 ULID，业务 ID 需带业务前缀且字典序近似时间序 |
 | 集合工具统一用 `CollUtil` | `CollectionUtil` 只是它的别名 |
-| 登录态存 Redis，令牌放 `Authorization` 头（裸令牌），权限码由 `config/StpInterfaceImpl` 从 `LoginUser` 解析 | 不从请求体采信用户身份 |
+| 登录态存 Redis，令牌放 `Authorization` 头（裸令牌），权限码由 `config/StpInterfaceImpl` 经 Redis 缓存回源数据库解析（角色码取登录会话快照） | 不从请求体采信用户身份 |
 
 ### 15.3 Manticore
 

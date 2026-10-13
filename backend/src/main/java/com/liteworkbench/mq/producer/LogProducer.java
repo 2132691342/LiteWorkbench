@@ -22,8 +22,8 @@ public class LogProducer implements LogPublisher {
     public void publish(LogMessage message) {
         try {
             rabbitTemplate.convertAndSend(RabbitConfig.LOG_EXCHANGE, RabbitConfig.LOG_ROUTING_KEY, message);
-        } catch (AmqpException e) {
-            // MQ 不可用降级为只落文件，不重试不阻塞；日志级别只允许 info/warn/error，此处按 warn 记录
+        } catch (Exception e) {
+            // MQ 不可用降级为只落文件，不重试不阻塞；消息转换等非 AmqpException 同样兜住
             log.warn("[log.publish] 投递失败，降级为只落文件 {}", e.getMessage());
         }
     }

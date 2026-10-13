@@ -13,6 +13,7 @@ import LwTag from '@/components/ui/LwTag.vue'
 import { usePermission } from '@/composables/usePermission'
 import type { MenuREQ, MenuVO } from '@/types/api'
 import { MENU_TYPE } from '@/utils/const'
+import { menuLabel } from '@/utils/menu'
 
 /** 菜单管理：树形表格维护目录、路由页与按钮权限点 */
 const { t } = useI18n()
@@ -86,7 +87,7 @@ async function submitDialog(): Promise<void> {
 
 /** 删除菜单，存在子级时后端会拒绝 */
 async function removeMenu(menu: MenuVO): Promise<void> {
-  await ElMessageBox.confirm(t('common.confirmDelete', { name: t(menu.menuName) }), t('common.delete'), {
+  await ElMessageBox.confirm(t('common.confirmDelete', { name: menuLabel(menu.menuName) }), t('common.delete'), {
     confirmButtonText: t('common.delete'),
     cancelButtonText: t('common.cancel'),
     type: 'error',
@@ -148,7 +149,7 @@ onMounted(load)
         <el-table-column :label="t('system.menu.sortNo')" prop="sortNo" width="90" />
         <el-table-column v-if="hasPerm('system:menu:update')" :label="t('common.actions')" width="220" fixed="right">
           <template #default="{ row }">
-            <div class="flex gap-1">
+            <div class="flex gap-2">
               <LwButton variant="text" size="sm" @click="openDialog(undefined, row)">{{ t('system.menu.addChild') }}</LwButton>
               <LwButton variant="text" size="sm" @click="openDialog(row)">{{ t('common.edit') }}</LwButton>
               <LwButton v-if="hasPerm('system:menu:delete')" variant="text" size="sm" @click="removeMenu(row)">
@@ -177,21 +178,21 @@ onMounted(load)
         <div class="grid grid-cols-2 gap-4">
           <label class="flex flex-col gap-1.5">
             <span class="lw-label">{{ t('system.menu.routePath') }}</span>
-            <input v-model="form.routePath" class="lw-input" placeholder="/dashboard" />
+            <input v-model="form.routePath" class="lw-input" :placeholder="t('system.menu.routePathPlaceholder')" />
           </label>
           <label class="flex flex-col gap-1.5">
             <span class="lw-label">{{ t('system.menu.component') }}</span>
-            <input v-model="form.component" class="lw-input" placeholder="Dashboard" />
+            <input v-model="form.component" class="lw-input" :placeholder="t('system.menu.componentPlaceholder')" />
           </label>
         </div>
         <div class="grid grid-cols-2 gap-4">
           <label class="flex flex-col gap-1.5">
             <span class="lw-label">{{ t('system.menu.icon') }}</span>
-            <input v-model="form.icon" class="lw-input" placeholder="dashboard" />
+            <input v-model="form.icon" class="lw-input" :placeholder="t('system.menu.iconPlaceholder')" />
           </label>
           <label class="flex flex-col gap-1.5">
             <span class="lw-label">{{ t('system.menu.permCode') }}</span>
-            <input v-model="form.permCode" class="lw-input" placeholder="system:user:create" />
+            <input v-model="form.permCode" class="lw-input" :placeholder="t('system.menu.permCodePlaceholder')" />
           </label>
         </div>
         <div class="grid grid-cols-2 gap-4 items-end">

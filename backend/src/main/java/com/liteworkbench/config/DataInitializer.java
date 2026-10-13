@@ -144,30 +144,50 @@ public class DataInitializer implements ApplicationRunner {
         return menu;
     }
 
-    /** 内置三角色 + 种子账号：admin（超级管理员）、demo（普通用户） */
+    /** 内置三角色 + 种子账号：admin（超级管理员）、demo（普通用户），按用户名分别补建 */
     private void initRolesAndUsers() {
-        if (Objects.nonNull(sysUserMapper.selectByUsername(ADMIN_USERNAME))) {
+        boolean adminExists = Objects.nonNull(sysUserMapper.selectByUsername(ADMIN_USERNAME));
+        boolean demoExists = Objects.nonNull(sysUserMapper.selectByUsername(DEMO_USERNAME));
+        if (adminExists && demoExists) {
             return;
         }
         List<SysMenuDO> menus = sysMenuMapper.selectAll();
         List<String> allMenuIds = menus.stream().map(SysMenuDO::getMenuId).toList();
         String initPassword = resolveInitPassword();
 
-        String superRoleId = createRole(RoleCodeConst.SUPER_ADMIN, "超级管理员", 0);
-        grantMenus(superRoleId, allMenuIds);
-        createUser(ADMIN_USERNAME, "超级管理员", superRoleId, initPassword);
+        String superRoleId = ensureRole(RoleCodeConst.SUPER_ADMIN, "超级管理员", 0, allMenuIds);
+        if (!adminExists) {
+            createUser(ADMIN_USERNAME, "超级管理员", superRoleId, initPassword);
+        }
 
-        String adminRoleId = createRole(RoleCodeConst.ADMIN, "平台管理员", 1);
-        grantMenus(adminRoleId, allMenuIds);
+        String adminRoleId = ensureRole(RoleCodeConst.ADMIN, "平台管理员", 1, allMenuIds);
 
-        String userRoleId = createRole(RoleCodeConst.USER, "普通用户", 2);
+        String userRoleId = ensureRole(RoleCodeConst.USER, "普通用户", 2, null);
         List<String> userMenuIds = menus.stream()
                 .filter(menu -> CollUtil.contains(USER_MENU_NAMES, menu.getMenuName()))
                 .map(SysMenuDO::getMenuId)
                 .toList();
         grantMenus(userRoleId, userMenuIds);
-        createUser(DEMO_USERNAME, "演示用户", userRoleId, initPassword);
+        if (!demoExists) {
+            createUser(DEMO_USERNAME, "演示用户", userRoleId, initPassword);
+        }
         log.info("[data.init.roles] super={} admin={} user={}", superRoleId, adminRoleId, userRoleId);
+    }
+
+    /** 角色按码幂等：已存在则复用，不存在则新建并授权 */
+    private String ensureRole(String code, String name, int sortNo, List<String> menuIds) {
+        SysRoleDO exists = sysRoleMapper.selectByCode(code);
+        if (Objects.nonNull(exists)) {
+            if (CollUtil.isNotEmpty(menuIds)) {
+                grantMenus(exists.getRoleId(), menuIds);
+            }
+            return exists.getRoleId();
+        }
+        String roleId = createRole(code, name, sortNo);
+        if (CollUtil.isNotEmpty(menuIds)) {
+            grantMenus(roleId, menuIds);
+        }
+        return roleId;
     }
 
     /** 未激活的种子账号按配置的初始密码对齐，账号完成改密（pwd_reset_required = false）后不再覆盖 */

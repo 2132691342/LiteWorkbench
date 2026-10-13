@@ -15,7 +15,6 @@ import com.liteworkbench.domain.constant.RedisKeyConst;
 import com.liteworkbench.domain.constant.UserStateEnum;
 import com.liteworkbench.domain.dto.LoginREQ;
 import com.liteworkbench.domain.dto.PasswordREQ;
-import com.liteworkbench.domain.entity.SysRoleDO;
 import com.liteworkbench.domain.entity.SysUserDO;
 import com.liteworkbench.domain.vo.LoginRESP;
 import com.liteworkbench.domain.vo.PublicKeyVO;
@@ -41,6 +40,7 @@ public class AuthService {
     private final SysRoleMapper sysRoleMapper;
     private final MenuService menuService;
     private final UserService userService;
+    private final LoginUserAssembler loginUserAssembler;
     private final SecretCodec secretCodec;
     private final StringRedisTemplate redisTemplate;
 
@@ -110,6 +110,11 @@ public class AuthService {
         return buildResp(loginUser, user);
     }
 
+    /** 授权变更后刷新目标用户的登录快照，/auth/current 与登录响应即时反映新角色与权限 */
+    public void refreshLoginUser(String userId) {
+        loginUserAssembler.refreshSession(userId);
+    }
+
     /** 修改自己的密码：两段密文解密 → 强度校验 → 落库清标记 → 强制重登 */
     public void changePassword(PasswordREQ req) {
         String userId = LoginContext.userId();
@@ -142,7 +147,8 @@ public class AuthService {
     private void markFail(String key) {
         try {
             Long count = redisTemplate.opsForValue().increment(key);
-            if (Objects.nonNull(count)) {
+            // 固定窗口：仅首次失败置 TTL，窗口内累加，避免持续试错无限续期锁定
+            if (Objects.nonNull(count) && count == 1L) {
                 redisTemplate.expire(key, Duration.ofSeconds(AuthConst.LOGIN_LOCK_SECONDS));
             }
         } catch (Exception e) {
@@ -159,16 +165,7 @@ public class AuthService {
     }
 
     private LoginUser buildLoginUser(SysUserDO user) {
-        List<SysRoleDO> roles = sysRoleMapper.selectByUserId(user.getUserId());
-        LoginUser loginUser = new LoginUser();
-        loginUser.setUserId(user.getUserId());
-        loginUser.setUsername(user.getUsername());
-        loginUser.setNickname(user.getNickname());
-        loginUser.setAvatarUrl(user.getAvatarUrl());
-        loginUser.setRoleCodes(roles.stream().map(SysRoleDO::getRoleCode).toList());
-        loginUser.setPerms(menuService.permsOf(user.getUserId()));
-        loginUser.setPwdResetRequired(Boolean.TRUE.equals(user.getPwdResetRequired()));
-        return loginUser;
+        return loginUserAssembler.assemble(user);
     }
 
     private LoginRESP buildResp(LoginUser loginUser, SysUserDO user) {
@@ -187,10 +184,12 @@ public class AuthService {
         vo.setUsername(loginUser.getUsername());
         vo.setNickname(loginUser.getNickname());
         vo.setAvatarUrl(loginUser.getAvatarUrl());
+        vo.setRoleIds(sysUserMapper.selectRoleIdsByUserId(loginUser.getUserId()));
         if (Objects.nonNull(user)) {
             vo.setEmail(user.getEmail());
             vo.setState(user.getState());
             vo.setLastLoginAt(TimeUtil.toMillis(user.getLastLoginAt()));
+            vo.setCreatedAt(TimeUtil.toMillis(user.getCreatedAt()));
         }
         return vo;
     }

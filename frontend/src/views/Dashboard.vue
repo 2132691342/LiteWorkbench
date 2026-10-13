@@ -101,9 +101,9 @@ onMounted(load)
       </div>
     </div>
 
-    <LwPageState :loading="loading" :error="error" :skeleton-rows="6" @retry="load">
+    <LwPageState :loading="loading" :error="error" :empty="!overview" :skeleton-rows="6" @retry="load">
       <div class="flex flex-col sm:flex-row justify-end gap-3">
-        <LwSegmented :model-value="view" :options="viewOptions" @update:model-value="setView" />
+        <LwSegmented :model-value="view" :options="viewOptions" equal @update:model-value="setView" />
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -137,21 +137,25 @@ onMounted(load)
         :title="view === 'runs' ? t('dashboard.trendTitle') : t('dashboard.tokenTrendTitle')"
         :desc="t('dashboard.trendDesc')"
       >
-        <LwAreaChart
-          v-if="view === 'runs'"
-          :categories="trendCategories"
-          :values="trendValues"
-          :name="t('dashboard.metricRuns')"
-          :height="300"
-        />
-        <LwAreaChart
-          v-else
-          :categories="tokenCategories"
-          :values="tokenValues"
-          :name="t('dashboard.metricTokens')"
-          :height="300"
-          secondary
-        />
+        <transition name="lw-fade" mode="out-in">
+          <LwAreaChart
+            v-if="view === 'runs'"
+            :key="'runs'"
+            :categories="trendCategories"
+            :values="trendValues"
+            :name="t('dashboard.metricRuns')"
+            :height="300"
+          />
+          <LwAreaChart
+            v-else
+            :key="'tokens'"
+            :categories="tokenCategories"
+            :values="tokenValues"
+            :name="t('dashboard.metricTokens')"
+            :height="300"
+            secondary
+          />
+        </transition>
       </LwCard>
 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">

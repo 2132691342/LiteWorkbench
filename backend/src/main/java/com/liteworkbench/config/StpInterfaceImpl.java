@@ -31,12 +31,17 @@ public class StpInterfaceImpl implements StpInterface {
     private final SysMenuMapper sysMenuMapper;
     private final AuthProperties authProperties;
 
-    /** 返回用户权限标识集合，命中缓存直接返回 */
+    /** 返回用户权限标识集合，命中缓存直接返回；Redis 故障时回源数据库，鉴权不中断 */
     @Override
     public List<String> getPermissionList(Object loginId, String loginType) {
         String userId = String.valueOf(loginId);
         String cacheKey = RedisKeyConst.cachePerm(userId);
-        List<String> cached = stringRedisTemplate.opsForList().range(cacheKey, 0, -1);
+        List<String> cached = null;
+        try {
+            cached = stringRedisTemplate.opsForList().range(cacheKey, 0, -1);
+        } catch (Exception e) {
+            log.warn("[perm.cache.read] userId={} 回源数据库 {}", userId, e.getMessage());
+        }
         if (CollUtil.isNotEmpty(cached)) {
             if (cached.size() == 1 && EMPTY_FLAG.equals(cached.get(0))) {
                 return CollUtil.newArrayList();
@@ -44,12 +49,16 @@ public class StpInterfaceImpl implements StpInterface {
             return cached;
         }
         List<String> perms = sysMenuMapper.selectPermCodesByUserId(userId);
-        if (CollUtil.isEmpty(perms)) {
-            stringRedisTemplate.opsForList().rightPush(cacheKey, EMPTY_FLAG);
-        } else {
-            stringRedisTemplate.opsForList().rightPushAll(cacheKey, perms);
+        try {
+            if (CollUtil.isEmpty(perms)) {
+                stringRedisTemplate.opsForList().rightPush(cacheKey, EMPTY_FLAG);
+            } else {
+                stringRedisTemplate.opsForList().rightPushAll(cacheKey, perms);
+            }
+            stringRedisTemplate.expire(cacheKey, Duration.ofSeconds(authProperties.getPermCacheSeconds()));
+        } catch (Exception e) {
+            log.warn("[perm.cache.write] userId={} {}", userId, e.getMessage());
         }
-        stringRedisTemplate.expire(cacheKey, Duration.ofSeconds(authProperties.getPermCacheSeconds()));
         return perms;
     }
 

@@ -33,6 +33,15 @@ public interface SysRoleMapper {
             """)
     SysRoleDO selectById(@Param("roleId") String roleId);
 
+    /** 按角色码查询，种子对账与幂等补通用 */
+    @Select("""
+            SELECT role_id, role_code, role_name, sort_no, state,
+                   created_by, created_at, updated_by, updated_at, deleted, remark
+            FROM sys_role
+            WHERE role_code = #{roleCode} AND deleted = false
+            """)
+    SysRoleDO selectByCode(@Param("roleCode") String roleCode);
+
     /** 全量列表，按排序与创建时间 */
     @Select("""
             SELECT role_id, role_code, role_name, sort_no, state,

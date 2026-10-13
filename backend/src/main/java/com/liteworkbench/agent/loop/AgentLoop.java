@@ -87,8 +87,10 @@ public class AgentLoop {
                 if (StrUtil.isNotBlank(result.getText())) {
                     sink.emit(AgentEvent.builder().type(AgentEventType.AGENT_RESULT)
                             .message(result.getText()).build());
+                    return result.getText();
                 }
-                return result.getText();
+                // 只有思考没有正文不收敛：继续下一轮，由迭代上限兜底
+                log.info("[agent.loop] iter={} 无正文产出，继续下一轮", iter);
             }
             for (ToolCall call : calls) {
                 if (cancelled.getAsBoolean()) {

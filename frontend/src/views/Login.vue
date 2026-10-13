@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { Lock, User } from '@element-plus/icons-vue'
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import LwButton from '@/components/ui/LwButton.vue'
+import LwErrorBar from '@/components/ui/LwErrorBar.vue'
 import { useUserStore } from '@/stores/user'
+import { fetchPublicKey } from '@/utils/crypto'
 
-/** 登录页：左侧品牌区 + 右侧凭证表单，错误内联展示不弹遮罩 */
+/** 登录页：居中单卡（DESIGN.md §12.3），进入即预热公钥，失败内联提示不降级明文 */
 const { t } = useI18n()
 const router = useRouter()
 const route = useRoute()
@@ -16,8 +18,24 @@ const userStore = useUserStore()
 const form = reactive({ username: '', password: '' })
 const loading = ref(false)
 const errorMessage = ref('')
+const keyReady = ref(false)
+const keyError = ref(false)
 
-/** 品牌区三条能力说明，文案走 i18n */
+/** 公钥预热：安全组件取不到时不降级明文，内联错误条 + 重试 */
+async function loadPublicKey(): Promise<void> {
+  keyError.value = false
+  try {
+    await fetchPublicKey()
+    keyReady.value = true
+  } catch {
+    keyReady.value = false
+    keyError.value = true
+  }
+}
+
+onMounted(loadPublicKey)
+
+/** 品牌卡三条能力说明，文案走 i18n */
 const features = computed(() => [
   {
     title: t('login.featureObserve'),
@@ -32,7 +50,7 @@ const features = computed(() => [
   {
     title: t('login.featureModel'),
     desc: t('login.featureModelDesc'),
-    icon: 'M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20M2 12h20',
+    icon: 'M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0 20M2 12h20',
   },
 ])
 
@@ -69,72 +87,45 @@ async function handleSubmit(): Promise<void> {
 </script>
 
 <template>
-  <div class="min-h-full flex flex-col lg:flex-row" style="background-color: var(--lw-surface)">
-    <!-- 品牌区 -->
-    <section class="relative flex-1 overflow-hidden flex items-center justify-center px-8 py-12">
-      <div
-        class="absolute w-[480px] h-[480px] rounded-full pointer-events-none"
-        style="top: -18%; left: -12%; background: var(--lw-primary); filter: blur(100px); opacity: 0.18"
-      />
-      <div
-        class="absolute w-[400px] h-[400px] rounded-full pointer-events-none"
-        style="bottom: -12%; right: -10%; background: var(--lw-secondary); filter: blur(100px); opacity: 0.18"
-      />
-      <div class="relative z-10 max-w-xl w-full flex flex-col items-center text-center lg:items-start lg:text-left">
+  <div class="min-h-full flex items-center justify-center p-6" style="background-color: var(--lw-surface)">
+    <div class="w-full max-w-[400px] flex flex-col gap-6">
+      <!-- 品牌区：方块图标 + 产品名 + 一句定位 -->
+      <div class="flex flex-col items-center text-center gap-3">
         <div
-          class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-bold mb-6"
-          style="background: var(--lw-surface-raised); border-color: var(--lw-border); color: var(--lw-primary)"
+          class="w-12 h-12 rounded-card flex items-center justify-center shadow-sm"
+          style="background: var(--lw-secondary)"
         >
-          <span class="w-1.5 h-1.5 rounded-full" style="background: var(--lw-primary)" />
-          {{ t('login.subtitle') }}
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" style="color: #ffffff">
+            <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+            <line x1="3" x2="21" y1="9" y2="9" />
+            <line x1="9" x2="9" y1="21" y2="9" />
+          </svg>
         </div>
-        <h1 class="text-4xl lg:text-5xl font-extrabold tracking-tight leading-tight mb-5" style="color: var(--lw-ink)">
-          {{ t('app.title') }}<br />
-          <span style="color: var(--lw-primary)">{{ t('app.slogan') }}</span>
-        </h1>
-        <p class="text-base mb-10 leading-relaxed max-w-md" style="color: var(--lw-ink-muted)">
-          {{ t('login.welcomeDesc') }}
-        </p>
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full">
-          <div
-            v-for="feature in features"
-            :key="feature.title"
-            class="p-5 rounded-2xl border text-left flex flex-col gap-3 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
-            style="background: var(--lw-surface-raised); border-color: var(--lw-border)"
-          >
-            <div
-              class="w-10 h-10 rounded-lg flex items-center justify-center"
-              style="background: var(--lw-primary-tint); color: var(--lw-primary)"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path :d="feature.icon" />
-              </svg>
-            </div>
-            <h3 class="font-bold text-sm" style="color: var(--lw-ink)">{{ feature.title }}</h3>
-            <p class="text-xs leading-relaxed" style="color: var(--lw-ink-muted)">{{ feature.desc }}</p>
-          </div>
+        <div>
+          <h1 class="text-2xl font-bold tracking-tight" style="color: var(--lw-ink)">{{ t('app.title') }}</h1>
+          <p class="text-xs mt-1" style="color: var(--lw-ink-muted)">{{ t('login.welcomeDesc') }}</p>
         </div>
       </div>
-    </section>
 
-    <!-- 表单区 -->
-    <section class="lg:w-[460px] shrink-0 flex items-center justify-center px-6 py-10 border-t lg:border-t-0 lg:border-l"
-             style="border-color: var(--lw-border); background: var(--lw-surface-raised)">
-      <div class="w-full max-w-sm flex flex-col gap-6">
+      <!-- 凭证表单卡 -->
+      <section class="lw-card p-6 flex flex-col gap-5">
         <div>
-          <h2 class="text-2xl font-bold tracking-tight" style="color: var(--lw-ink)">{{ t('login.welcome') }}</h2>
-          <p class="text-sm mt-1" style="color: var(--lw-ink-muted)">{{ t('login.title') }}</p>
+          <h2 class="text-lg font-bold tracking-tight" style="color: var(--lw-ink)">{{ t('login.welcome') }}</h2>
+          <p class="text-xs mt-1" style="color: var(--lw-ink-muted)">{{ t('login.title') }}</p>
         </div>
+
+        <LwErrorBar v-if="keyError" :message="t('login.keyFailed')" @retry="loadPublicKey" />
 
         <form class="flex flex-col gap-4" @submit.prevent="handleSubmit">
           <label class="flex flex-col gap-1.5">
             <span class="lw-label">{{ t('login.username') }}</span>
-            <div class="flex items-center px-3 rounded-control border transition-all duration-200 focus-within:shadow-sm"
+            <div class="flex items-center h-10 px-3 rounded-control border transition-all duration-200 focus-within:shadow-sm"
                  style="border-color: var(--lw-border)">
               <el-icon :size="15" style="color: var(--lw-ink-muted)"><User /></el-icon>
               <input
                 v-model="form.username"
-                class="w-full px-2 py-2.5 bg-transparent outline-none text-sm"
+                class="w-full px-2 bg-transparent outline-none text-sm"
                 :placeholder="t('login.usernamePlaceholder')"
                 autocomplete="username"
               />
@@ -143,15 +134,16 @@ async function handleSubmit(): Promise<void> {
 
           <label class="flex flex-col gap-1.5">
             <span class="lw-label">{{ t('login.password') }}</span>
-            <div class="flex items-center px-3 rounded-control border transition-all duration-200 focus-within:shadow-sm"
+            <div class="flex items-center h-10 px-3 rounded-control border transition-all duration-200 focus-within:shadow-sm"
                  style="border-color: var(--lw-border)">
               <el-icon :size="15" style="color: var(--lw-ink-muted)"><Lock /></el-icon>
               <input
                 v-model="form.password"
                 type="password"
-                class="w-full px-2 py-2.5 bg-transparent outline-none text-sm"
+                class="w-full px-2 bg-transparent outline-none text-sm"
                 :placeholder="t('login.passwordPlaceholder')"
                 autocomplete="current-password"
+                @keydown.enter.prevent="handleSubmit"
               />
             </div>
           </label>
@@ -161,7 +153,7 @@ async function handleSubmit(): Promise<void> {
             {{ errorMessage }}
           </p>
 
-          <LwButton native-type="submit" size="lg" block :loading="loading" class="mt-2">
+          <LwButton native-type="submit" size="lg" block :loading="loading" :disabled="!keyReady" class="mt-2">
             {{ loading ? t('login.submitting') : t('login.submit') }}
           </LwButton>
         </form>
@@ -175,7 +167,28 @@ async function handleSubmit(): Promise<void> {
           </svg>
           <span>{{ t('login.securityTip') }}</span>
         </p>
+      </section>
+
+      <!-- 能力说明：三张小卡，登录页唯一的信息补充 -->
+      <div class="grid grid-cols-3 gap-3">
+        <div
+          v-for="feature in features"
+          :key="feature.title"
+          class="p-3 rounded-card border text-left flex flex-col gap-2 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+          style="background: var(--lw-surface-raised); border-color: var(--lw-border)"
+        >
+          <div
+            class="w-8 h-8 rounded-lg flex items-center justify-center"
+            style="background: var(--lw-primary-tint); color: var(--lw-primary)"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path :d="feature.icon" />
+            </svg>
+          </div>
+          <h3 class="font-bold text-xs" style="color: var(--lw-ink)">{{ feature.title }}</h3>
+          <p class="text-[10px] leading-relaxed" style="color: var(--lw-ink-muted)">{{ feature.desc }}</p>
+        </div>
       </div>
-    </section>
+    </div>
   </div>
 </template>

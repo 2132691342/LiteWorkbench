@@ -34,6 +34,7 @@
           AND m.deleted = false
           AND m.state = 'normal'
           AND m.menu_type &lt;&gt; 'button'
+          AND m.visible = true
         ORDER BY m.sort_no ASC
     </select>
 

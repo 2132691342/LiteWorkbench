@@ -86,9 +86,9 @@ HTTP 状态码：成功 200，参数错误 400，未认证 401，无权限 403�
 }
 ```
 
-`menus` 是完整菜单树（`dir` / `menu` 两级，按钮权限点不进树），前端按 `component` 映射组件并注册路由。
+`menus` 是完整菜单树（`dir` / `menu` 两级，按钮权限点不进树），前端按 `component` 映射组件并注册路由；`visible = false` 的菜单不下发给前端，仅保留在管理树中供维护。
 
-`pwdResetRequired = true` 时前端必须跳到强制改密页；后端同时只放行 `/auth/current` 与 `/auth/password`，其余接口返回 `PASSWORD_RESET_REQUIRED`（2006）。
+`pwdResetRequired = true` 时前端必须跳到强制改密页；后端同时只放行 `/auth/current`、`/auth/password`、`/auth/logout` 与 `/auth/public-key`，其余接口返回 `PASSWORD_RESET_REQUIRED`（2006）。
 
 失败计数：同一用户名连续 5 次凭据错误锁定 10 分钟，返回 `ACCOUNT_LOCKED`（2007）；登录接口另有按 IP 的固定窗口限流。
 
@@ -154,11 +154,11 @@ Content-Type: application/json
 { "sessionId": "SESS_...", "content": "帮我分析这份数据" }
 ```
 
-响应 `Content-Type: text/event-stream`。SSE 只用单一通道 `event: run.event`，具体事件类型在 `data.type` 中区分；`id:` 字段为事件序号 `seq`，客户端断线重连时可携带 `Last-Event-ID` 从断点续拉。事件类型全集：
+响应 `Content-Type: text/event-stream`。SSE 只用单一通道 `event: run.event`，具体事件类型在 `data.eventType` 中区分；`id:` 字段为事件序号 `seq`，客户端断线重连时可携带 `Last-Event-ID` 从断点续拉。事件类型全集：
 
-| data.type | 载荷（除公共字段外） | 时机 |
+| eventType | 载荷（除公共字段外） | 时机 |
 |---|---|---|
-| `run.start` | `{ runId, sessionId, modelName }` | 运行创建 |
+| `run.start` | `{ phase }` | 运行创建 |
 | `thinking.delta` | `{ seq, delta }` | 思考增量 |
 | `text.delta` | `{ seq, delta }` | 正文增量 |
 | `tool.call` | `{ seq, toolName, arguments }` | 工具调用开始 |
@@ -172,7 +172,7 @@ Content-Type: application/json
 
 公共字段：`seq`、`runId`、`sessionId`、`occurredAt`。
 
-**规则**：`run.end` 与 `run.error` 必有且仅有其一，且都会先落库再推送（`seq` 单调递增），因此回放与实时看到同一序列；客户端收到后关闭连接。心跳为注释行 `: ping`，15 秒一次。单帧增量（`text.delta` / `thinking.delta`）超过 4KB 会被截断，完整正文以 `run.result` 为准；推送侧会对批内连续增量合帧（`textDelta` 拼接、`seq` 取最后一条）。
+**规则**：`run.end` 与 `run.error` 必有且仅有其一，且都会先落库再推送（`seq` 单调递增），因此回放与实时看到同一序列；客户端收到后关闭连接。心跳为注释行 `: ping`，15 秒一次。单帧增量（`text.delta` / `thinking.delta`）超过 4096 字符会被截断，完整正文以 `run.result` 为准；推送侧会对批内连续增量合帧（`textDelta` 拼接、`seq` 取最后一条）。
 
 ### 8.2 运行
 
@@ -264,8 +264,8 @@ Content-Type: application/json
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/v1/log/search` | Manticore 检索，参数 `keyword` `field` `level` `logger` `traceId` `userId` `runId` `from` `to` `page` `size`，返回 `PageResult<LogDocVO>`，登录即可用 |
-| GET | `/api/v1/log/stats` | 分布概览：级别计数 + 按小时时间直方图，参数同检索，登录即可用 |
+| GET | `/api/v1/log/search` | Manticore 检索，参数 `keyword` `field` `level` `logger` `traceId` `userId` `runId` `from` `to` `page` `size`，返回 `PageResult<LogDocVO>`（响应体带 `scope` 视角标识），登录即可用 |
+| GET | `/api/v1/log/stats` | 分布概览：级别计数 + 时间直方图，过滤参数同检索，登录即可用 |
 | GET | `/api/v1/monitor/health` | 各组件健康状态，权限 `monitor:health:list` |
 | GET | `/api/v1/monitor/overview` | 仪表盘汇总指标，权限 `monitor:health:list` |
 | GET | `/api/v1/runtime/python` | Python 运行时探测结果，权限 `monitor:health:list` |
@@ -283,11 +283,11 @@ Content-Type: application/json
 | `logger` | Logger 名等值（如 `com.liteworkbench.service.RunService`） |
 | `traceId` | 链路标识等值，用于把一次请求的全部日志串成时间线 |
 | `userId` | 用户 ID 等值，仅全局视角生效（普通用户传了也无效，服务端强制覆盖为自己） |
-| `runId` | 运行 ID 等值，用于把一次运行的全部日志串成时间线 |
-| `from` / `to` | 时间范围，毫秒时间戳；两者都传才生效 |
-| `page` / `size` | 分页，按 `ts` 倒序 |
+| `runId` | 运行 ID 等值，用于把一次运行的全部日志串成时间线；普通用户视角下仅能收窄本人结果 |
+| `from` / `to` | 时间范围，毫秒时间戳；两者都传才生效，缺省默认近 7 天 |
+| `page` / `size` | 分页，按 `ts` 倒序，单页上限 500 条 |
 
-`log/stats` 返回 `{ levels: [{level, count}], histogram: [{hour, count}] }`：`histogram` 按小时粒度覆盖查询区间，上限 168 个桶（7 天），更早的区间按天聚合由前端决定是否展示。
+`log/stats` 返回 `{ scope, levels: [{level, count}], histogram: [{bucket, count}], bucketMs }`：`histogram` 默认按小时粒度覆盖查询区间（上限 168 个桶），区间超过 7 天自动改按天分桶（`bucketMs` 回传桶宽，前端据此渲染坐标）。
 
 `monitor/overview` 返回：`sessionCount` / `runCount` / `successRunCount` / `todayRunCount` / `totalTokens` / `runTrend` / `tokenTrend` / `toolDistribution`。
 

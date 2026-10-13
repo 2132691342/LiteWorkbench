@@ -361,11 +361,21 @@ export interface LogSearchParams {
   size?: number
 }
 
-/** 日志分布概览：级别计数与小时直方图；scope 为当前检索视角 */
+/** 日志分布概览：级别计数与时间直方图；scope 为当前检索视角，bucketMs 为直方图桶宽（小时 / 天） */
 export interface LogStatsVO {
   scope?: 'global' | 'self'
   levels?: { level: string; count: number }[]
   histogram?: { hour: number; count: number }[]
+  bucketMs?: number
+}
+
+/** 日志检索分页结果：分页字段之外带检索视角标识 */
+export interface LogPageVO {
+  list: LogDocVO[]
+  total: number
+  page: number
+  size: number
+  scope?: 'global' | 'self'
 }
 
 /* ===== 知识库 ===== */

@@ -40,6 +40,8 @@
 
 **索引表 `lw_log`**（字段见 [DATA-MODEL §6.1](../docs/DATA-MODEL.md)）：`message` 是唯一全文列（ICU 中文分词），`level` / `logger` / `trace_id` / `user_id` / `session_id` / `run_id` / `ts` 是过滤列。保留 30 天，由应用定时任务每日 `DELETE FROM lw_log WHERE ts < 截止毫秒`（Manticore 无文档级 TTL）。
 
+**写入裁剪**（索引体积可控）：`message` 截 4000 字符、`logger` 保留尾部 128 字符、`exception` 截 4000 字符；投递失败按 60 秒一次限流告警，不逐条刷屏。MQ 三件套名为交换机 `lw.log.exchange`、路由键 `lw.log.index`、队列 `lw.log.index.queue`；知识库解析任务为 `lw.kb.parse`。
+
 **降级**：MQ 不可用跳过索引只落文件；Manticore 检索异常返回空结果并告警，原文仍在滚动文件可查；聚合异常返回空结构，前端显示占位骨架。
 
 ### 日志检索：视角 + 全文 + 等值 + 时间
@@ -48,14 +50,14 @@
 |---|---|---|
 | 视角 | `monitor:log:global` | 持有 → 全局检索；否则服务端强制 `user_id = 当前用户` |
 | 全文 | `keyword` + `field=message` | ICU 分词全文匹配，命中词前端高亮 |
-| 等值 | `level` / `logger` / `traceId` / `userId` / `runId` | 属性列等值，可组合；`userId` / `runId` 仅全局视角有效 |
+| 等值 | `level` / `logger` / `traceId` / `userId` / `runId` | 属性列等值，可组合；`userId` 仅全局视角有效，`runId` 在普通用户视角下只能收窄本人结果 |
 | 关键字改判 | `field=logger` | 按类名精确匹配 |
 | 链路钻取 | `field=traceId` | 把一次请求的全部日志按 `ts` 升序串成时间线 |
 | 时间 | `from` / `to` | 毫秒时间戳，两者都传才生效；前端另给 15m / 1h / 24h / 7d 预设 |
 
 排序固定 `ts` 倒序，分页上限 500 条/页；`traceId` 钻取场景前端按 `ts` 升序重排。**视角判定只在服务端**：检索与聚合共用同一判定函数，普通用户传入的 `userId` 被覆盖为自己（不报错、不泄漏），响应带 `scope` 字段供前端展示视角标识。
 
-**分布概览**（`GET /log/stats`，与检索共用过滤条件）：级别计数驱动概览卡；按小时粒度时间直方图（上限 168 桶，区间超过 7 天按天分桶）驱动柱状图，点击某桶把时间范围收敛到该桶。聚合走 Manticore 分组查询，不拉回内存再数。
+**分布概览**（`GET /log/stats`，过滤参数与视角同检索）：级别计数驱动概览卡；时间直方图按小时粒度分桶（上限 168 桶），区间超过 7 天自动改按天分桶（响应回传 `bucketMs` 桶宽），点击某桶把时间范围收敛到该桶。聚合走 Manticore 分组查询，不拉回内存再数。检索缺省时间范围时服务端默认近 7 天，禁止无界查询。
 
 ### 运行记录
 
@@ -113,6 +115,8 @@
 | POST | `/api/v1/run/abort/{runId}` | 中断非终态运行 |
 | GET | `/api/v1/monitor/health` | 逐组件状态，权限 `monitor:health:list` |
 | GET | `/api/v1/monitor/overview` | 仪表盘汇总，权限 `monitor:health:list` |
+| GET | `/api/v1/runtime/python` | Python 运行时探测结果（来源 / 版本 / 状态），权限 `monitor:health:list` |
+| POST | `/api/v1/runtime/python/reprobe` | 清探测缓存重新探测，权限 `monitor:python:reprobe` |
 
 日志中心两个接口登录即可用（范围由 `monitor:log:global` 决定收窄与否）；运行记录全部登录即可用，归属强制校验，不泄露他人运行。
 

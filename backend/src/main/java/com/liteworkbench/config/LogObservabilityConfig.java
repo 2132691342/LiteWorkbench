@@ -9,7 +9,7 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/** 日志汇聚接线：Appender → LogProducer(MQ)，启动时幂等建表 */
+/** 日志汇聚接线：Appender → LogProducer(MQ)；建表由 ManticoreIndexConfig 统一负责 */
 @Slf4j
 @Configuration
 public class LogObservabilityConfig {
@@ -19,11 +19,5 @@ public class LogObservabilityConfig {
     public LogPublisher logPublisherBridge(LogProducer producer) {
         ManticoreLogAppender.setPublisher(producer);
         return producer;
-    }
-
-    /** 启动幂等创建 Manticore 日志表，失败不阻断启动 */
-    @Bean
-    public ApplicationRunner logIndexInitializer(LogSearchMapper logSearchMapper) {
-        return args -> logSearchMapper.ensureTable();
     }
 }

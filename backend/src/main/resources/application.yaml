@@ -94,11 +94,9 @@ liteworkbench:
     # 种子账号初始密码：生产用 LITEWORKBENCH_ADMIN_PASSWORD 注入，缺失则随机生成并仅打印一次
     admin-password: ${LITEWORKBENCH_ADMIN_PASSWORD:}
   agent:
-    provider: ${LITEWORKBENCH_AGENT_PROVIDER:openai}
     model:
       default-name: qwen-plus
       temperature: 0.3
-      stream: true
       # 上下文窗口与输出预留，超出即压缩历史
       context-window: 32000
       reserve-tokens: 4096

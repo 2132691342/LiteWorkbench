@@ -105,10 +105,10 @@ body {
   border-color: var(--lw-secondary);
   color: var(--lw-secondary);
 }
-.lw-btn--secondary:hover:not(:disabled) {
+.lw-btn--secondary:hover:not(:disabled):not(.is-loading) {
   background-color: var(--lw-secondary-tint);
 }
-.lw-btn--secondary:active:not(:disabled) {
+.lw-btn--secondary:active:not(:disabled):not(.is-loading) {
   color: var(--lw-secondary-hover);
   border-color: var(--lw-secondary-hover);
 }
@@ -118,10 +118,10 @@ body {
   border-color: var(--lw-primary);
   color: var(--lw-primary);
 }
-.lw-btn--ghost:hover:not(:disabled) {
+.lw-btn--ghost:hover:not(:disabled):not(.is-loading) {
   background-color: var(--lw-primary-tint);
 }
-.lw-btn--ghost:active:not(:disabled) {
+.lw-btn--ghost:active:not(:disabled):not(.is-loading) {
   border-color: var(--lw-primary-active);
   color: var(--lw-primary-active);
 }
@@ -130,10 +130,10 @@ body {
   background-color: var(--lw-error);
   color: var(--lw-on-primary);
 }
-.lw-btn--danger:hover:not(:disabled) {
+.lw-btn--danger:hover:not(:disabled):not(.is-loading) {
   background-color: var(--lw-error-hover);
 }
-.lw-btn--danger:active:not(:disabled) {
+.lw-btn--danger:active:not(:disabled):not(.is-loading) {
   background-color: var(--lw-error-active);
 }
 
@@ -143,8 +143,35 @@ body {
   padding-left: 8px;
   padding-right: 8px;
 }
-.lw-btn--text:hover:not(:disabled) {
+.lw-btn--text:hover:not(:disabled):not(.is-loading) {
   background-color: var(--lw-primary-tint);
+}
+.lw-btn--text:active:not(:disabled):not(.is-loading) {
+  background-color: var(--lw-primary-tint);
+  color: var(--lw-primary-active);
+}
+
+/* 焦点环：仅键盘导航时出现，鼠标点击不显示 */
+.lw-btn:focus-visible,
+.lw-segmented__item:focus-visible,
+.run-row:focus-visible {
+  outline: 2px solid var(--lw-primary);
+  outline-offset: 2px;
+}
+
+/* 减弱动态：尊重系统偏好，关闭缩放与位移，仅保留颜色过渡 */
+@media (prefers-reduced-motion: reduce) {
+  .lw-btn:hover:not(:disabled):not(.is-loading),
+  .lw-btn:active:not(:disabled):not(.is-loading),
+  .el-button:not(.is-disabled):not(.is-loading):hover,
+  .el-button:not(.is-disabled):not(.is-loading):active {
+    transform: none;
+  }
+  .lw-btn,
+  .el-button,
+  .lw-segmented__item {
+    transition-duration: var(--lw-dur-fast);
+  }
 }
 
 /* 尺寸 */
@@ -164,12 +191,13 @@ body {
   font-size: 16px;
 }
 
-/* ===== 分段切换：白底容器 + 选中浅紫底 + 主紫字 ===== */
+/* ===== 分段切换：白底容器 + 选中浅紫底 + 主紫字；容器固定 40px 与 h-10 控件对齐 ===== */
 .lw-segmented {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  padding: 4px;
+  height: 40px;
+  padding: 3px;
   background: var(--lw-surface-raised);
   border: 1px solid var(--lw-border);
   border-radius: 8px;
@@ -185,7 +213,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 28px;
+  height: 32px;
   padding: 0 12px;
   border: none;
   border-radius: 6px;
@@ -201,6 +229,14 @@ body {
   height: 32px;
   padding: 0 16px;
   font-size: 13px;
+}
+
+.lw-segmented--sm {
+  height: 32px;
+}
+.lw-segmented--sm .lw-segmented__item {
+  height: 26px;
+  padding: 0 10px;
 }
 
 .lw-segmented__item:hover:not(:disabled):not(.is-active) {
@@ -385,9 +421,36 @@ body {
   --el-text-color-regular: var(--lw-ink);
   --el-text-color-secondary: var(--lw-ink-muted);
   --el-fill-color-blank: var(--lw-surface-raised);
+  /* 控件高度对齐：默认 40px（h-10），与 LwButton md 同档，消除同行高低不齐 */
+  --el-component-size: 40px;
+  --el-component-size-large: 48px;
+  --el-component-size-small: 32px;
+  /* 过渡时长对齐设计令牌 */
+  --el-transition-duration: 200ms;
+  --el-transition-duration-fast: 120ms;
+  /* 表格：白底表头 + 44px 行高 + 禁斑马纹 */
+  --el-table-header-bg-color: var(--lw-surface-raised);
+  --el-table-header-text-color: var(--lw-ink-muted);
+  --el-table-row-height: 44px;
+  --el-table-border-color: var(--lw-border);
+  --el-table-row-hover-bg-color: var(--lw-primary-tint);
 }
 
-/* Element Plus 按钮全局补足五态：hover 放大 / active 缩小 / disabled 静默 / loading 不缩放 */
+.el-table th.el-table__cell {
+  font-size: 12px;
+  font-weight: 700;
+  background-color: var(--lw-surface-raised);
+}
+
+.el-table .el-table__cell {
+  font-size: 14px;
+}
+
+.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell {
+  background-color: var(--lw-surface-raised);
+}
+
+/* Element Plus 按钮全局补足五态：hover 放大 / active 缩小 / disabled 视觉 / loading 锁宽不缩放 */
 .el-button {
   font-weight: 600;
   transition: all var(--lw-dur) var(--lw-ease);
@@ -406,6 +469,9 @@ body {
 .el-button.is-disabled,
 .el-button:disabled {
   transform: none;
+  background-color: var(--lw-surface-disabled);
+  border-color: var(--lw-border);
+  color: var(--lw-ink-disabled);
 }
 
 .el-button.is-loading {
@@ -418,12 +484,6 @@ body {
   box-shadow: none;
 }
 
-.el-table {
-  --el-table-border-color: var(--lw-border);
-  --el-table-header-bg-color: var(--lw-surface);
-  --el-table-row-hover-bg-color: var(--lw-primary-tint);
-}
-
 .el-dialog {
   border-radius: 12px;
 }
@@ -431,6 +491,10 @@ body {
 .el-dialog__title {
   font-weight: 700;
   color: var(--lw-ink);
+}
+
+.el-drawer {
+  border-radius: 12px 0 0 12px;
 }
 
 /* ===== Markdown 消息渲染 ===== */

@@ -37,14 +37,23 @@ export const useMonitorStore = defineStore('monitor', () => {
     }
   }
 
-  /** Python 运行时探测结果 */
+  /** Python 运行时探测结果，失败不阻塞健康面板（错误由健康聚合兜底） */
   async function loadPython(): Promise<void> {
-    python.value = await monitorApi.pythonStatus()
+    try {
+      python.value = await monitorApi.pythonStatus()
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : ''
+    }
   }
 
   /** 清缓存重探 Python */
   async function reprobe(): Promise<void> {
-    python.value = await monitorApi.pythonReprobe()
+    try {
+      python.value = await monitorApi.pythonReprobe()
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : ''
+      throw err
+    }
   }
 
   return { health, overview, python, loading, error, loadHealth, loadOverview, loadPython, reprobe }

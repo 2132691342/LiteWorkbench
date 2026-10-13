@@ -35,6 +35,7 @@ public class RoleService {
     private final SysRoleMapper sysRoleMapper;
     private final StpInterfaceImpl stpInterface;
     private final MenuService menuService;
+    private final LoginUserAssembler loginUserAssembler;
 
     /** 分页查询 */
     public PageResult<RoleVO> page(PageREQ req) {
@@ -123,12 +124,13 @@ public class RoleService {
         log.info("[role.grant] roleId={} menuCount={}", req.getRoleId(), CollUtil.size(req.getMenuIds()));
     }
 
-    /** 清除角色下所有用户的权限与菜单缓存 */
+    /** 清除角色下所有用户的权限与菜单缓存，并刷新登录会话快照，授权变更即时生效 */
     public void evictPermCache(String roleId) {
         List<String> userIds = sysRoleMapper.selectUserIdsByRoleId(roleId);
         if (CollUtil.isNotEmpty(userIds)) {
             userIds.forEach(stpInterface::clearPermCache);
             userIds.forEach(menuService::clearMenuCache);
+            userIds.forEach(loginUserAssembler::refreshSession);
         }
     }
 

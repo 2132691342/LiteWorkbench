@@ -6,6 +6,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import LwButton from '@/components/ui/LwButton.vue'
 import LwCard from '@/components/ui/LwCard.vue'
 import LwPageState from '@/components/ui/LwPageState.vue'
+import LwTag from '@/components/ui/LwTag.vue'
 import { promptApi } from '@/api'
 import { usePermission } from '@/composables/usePermission'
 import type { PromptREQ, PromptVO, PromptVariable } from '@/types/api'
@@ -25,6 +26,7 @@ const error = ref('')
 
 const dialog = ref(false)
 const editingId = ref('')
+const submitting = ref(false)
 const form = ref<PromptREQ>({ promptTitle: '', category: '', content: '', variables: '' })
 
 const renderDialog = ref(false)
@@ -71,18 +73,26 @@ async function openEdit(item: PromptVO): Promise<void> {
 }
 
 async function submit(): Promise<void> {
+  if (submitting.value) return
   if (form.value.variables && !isJsonArray(form.value.variables)) {
     ElMessage.error(t('prompt.invalidJson'))
     return
   }
-  if (editingId.value) {
-    await promptApi.update({ ...form.value, promptId: editingId.value })
-  } else {
-    await promptApi.create(form.value)
+  submitting.value = true
+  try {
+    if (editingId.value) {
+      await promptApi.update({ ...form.value, promptId: editingId.value })
+    } else {
+      await promptApi.create(form.value)
+    }
+    dialog.value = false
+    ElMessage.success(t('common.success'))
+    await load()
+  } catch {
+    // 拦截器已提示，保留弹窗供修正
+  } finally {
+    submitting.value = false
   }
-  dialog.value = false
-  ElMessage.success(t('common.success'))
-  await load()
 }
 
 function isJsonArray(raw: string): boolean {
@@ -148,6 +158,12 @@ function changePage(next: number): void {
   void load()
 }
 
+function changeSize(next: number): void {
+  size.value = next
+  page.value = 1
+  void load()
+}
+
 onMounted(load)
 </script>
 
@@ -181,7 +197,7 @@ onMounted(load)
             <template #default="{ row }">
               <div class="flex items-center gap-2">
                 <span class="font-bold text-lw-ink">{{ row.promptTitle }}</span>
-                <el-tag v-if="row.builtin" size="small" type="info">{{ t('prompt.builtin') }}</el-tag>
+                <LwTag v-if="row.builtin" tone="secondary">{{ t('prompt.builtin') }}</LwTag>
               </div>
             </template>
           </el-table-column>
@@ -219,11 +235,13 @@ onMounted(load)
         </el-table>
         <div v-if="total > size" class="flex justify-end mt-4">
           <el-pagination
-            layout="prev, pager, next"
+            layout="total, sizes, prev, pager, next"
             :total="total"
             :page-size="size"
+            :page-sizes="[10, 20, 50]"
             :current-page="page"
             @current-change="changePage"
+            @size-change="changeSize"
           />
         </div>
       </LwPageState>
@@ -261,7 +279,7 @@ onMounted(load)
       </div>
       <template #footer>
         <LwButton variant="ghost" @click="dialog = false">{{ t('common.cancel') }}</LwButton>
-        <LwButton @click="submit">{{ t('common.save') }}</LwButton>
+        <LwButton :loading="submitting" @click="submit">{{ t('common.save') }}</LwButton>
       </template>
     </el-dialog>
 

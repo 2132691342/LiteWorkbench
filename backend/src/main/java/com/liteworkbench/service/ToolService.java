@@ -10,6 +10,7 @@ import com.liteworkbench.common.BizException;
 import com.liteworkbench.common.ErrorCodeEnum;
 import com.liteworkbench.common.LoginContext;
 import com.liteworkbench.config.RuntimeProperties;
+import com.liteworkbench.domain.constant.ToolRiskEnum;
 import com.liteworkbench.domain.dto.InvokeToolREQ;
 import com.liteworkbench.domain.entity.WbToolDO;
 import com.liteworkbench.domain.vo.ToolVO;
@@ -64,7 +65,7 @@ public class ToolService {
         if (!Boolean.TRUE.equals(tool.getEnabled())) {
             throw new BizException(ErrorCodeEnum.TOOL_DISABLED, toolName);
         }
-        if (!"safe".equals(tool.getRiskLevel()) && !Boolean.TRUE.equals(req.getConfirmed())) {
+        if (!ToolRiskEnum.SAFE.getCode().equals(tool.getRiskLevel()) && !Boolean.TRUE.equals(req.getConfirmed())) {
             // confirm / danger 工具有副作用，页面必须显式确认；Agent 路径由平台级启用开关统一闸门
             throw new BizException(ErrorCodeEnum.TOOL_CONFIRM_REQUIRED, tool.getToolLabel());
         }
@@ -73,9 +74,8 @@ public class ToolService {
             args.putAll(req.getArgs());
         }
         long timeoutSeconds = resolveTimeout(req);
-        if (Objects.nonNull(req.getTimeoutSeconds())) {
-            args.put("timeoutSeconds", req.getTimeoutSeconds());
-        }
+        // 页面未指定超时时把归一后的值显式传给工具，避免工具自身默认值与页面语义不一致
+        args.put("timeoutSeconds", timeoutSeconds);
         ToolRegistry registry = new ToolRegistry();
         registry.register(new WorkbenchTools(toolGate, kbSearchPort, pythonRuntime, runtimeProperties, userId));
         long start = System.currentTimeMillis();

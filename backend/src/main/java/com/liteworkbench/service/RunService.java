@@ -17,6 +17,7 @@ import com.liteworkbench.common.LoginContext;
 import com.liteworkbench.common.PageResult;
 import com.liteworkbench.common.TimeUtil;
 import com.liteworkbench.config.AgentProperties;
+import com.liteworkbench.domain.constant.AppConst;
 import com.liteworkbench.domain.constant.EventTypeEnum;
 import com.liteworkbench.domain.constant.IdPrefixConst;
 import com.liteworkbench.domain.constant.MessageRoleEnum;
@@ -39,6 +40,7 @@ import com.liteworkbench.domain.vo.RunVO;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -101,6 +103,9 @@ public class RunService {
             throw new BizException(ErrorCodeEnum.SESSION_BUSY);
         }
         String runId = IdGenerator.generate(IdPrefixConst.RUN);
+        // 编排期日志携带会话与运行标识，与 agent 后台线程、冲刷/心跳任务同口径
+        MDC.put(AppConst.MDC_SESSION_ID, session.getSessionId());
+        MDC.put(AppConst.MDC_RUN_ID, runId);
         try {
             // 会话未指定供应方时取默认可用供应方，全新环境不会因缺配置直接失败
             var provider = StrUtil.isNotBlank(session.getProviderCode())
@@ -122,16 +127,24 @@ public class RunService {
 
             ActiveRun run = new ActiveRun(runId, userId, session.getSessionId(), sink);
             active.put(runId, run);
-            dispatch(run, context);
-            // 首轮对话自动命名会话：异步、静默，失败不影响对话
-            sessionService.autoRenameIfDefault(session, req.getContent());
+            // 首轮对话自动命名会话：运行结束后异步触发，静默失败不影响对话
+            dispatch(run, context, () -> sessionService.autoRenameIfDefault(session, req.getContent()));
             log.info("[run.start] userId={} sessionId={} runId={} model={}",
                     userId, session.getSessionId(), runId, modelName);
             return runId;
         } catch (RuntimeException e) {
-            redisTemplate.delete(RedisKeyConst.lockRun(session.getSessionId()));
-            active.remove(runId);
+            // 启动失败也要落终态并发终态帧，不留 queued 僵尸行
+            ActiveRun run = active.get(runId);
+            if (Objects.nonNull(run)) {
+                settleError(run, e);
+            } else {
+                markRunFailed(runId);
+                releaseLock(session.getSessionId());
+            }
             throw e;
+        } finally {
+            MDC.remove(AppConst.MDC_SESSION_ID);
+            MDC.remove(AppConst.MDC_RUN_ID);
         }
     }
 
@@ -178,14 +191,22 @@ public class RunService {
         log.info("[run.abort] runId={} 孤儿运行直接置终态", runId);
     }
 
-    /** 启动内核：事件入批缓冲，终态由句柄完成通知收尾 */
-    private void dispatch(ActiveRun run, RunContext context) {
+    /** 启动内核：事件入批缓冲，终态由句柄完成通知收尾，postSettle 在终态后触发（自动命名） */
+    private void dispatch(ActiveRun run, RunContext context, Runnable postSettle) {
         run.handle = agentRuntime.start(context, run::offer);
         run.handle.completion().whenComplete((ignored, error) -> {
-            if (Objects.nonNull(error)) {
-                settleError(run, error);
-            } else {
-                settleSuccess(run);
+            try {
+                if (Objects.nonNull(error)) {
+                    settleError(run, error);
+                } else {
+                    settleSuccess(run);
+                }
+            } finally {
+                try {
+                    postSettle.run();
+                } catch (Exception e) {
+                    log.warn("[run.postSettle] runId={} {}", run.runId, e.getMessage());
+                }
             }
         });
         scheduleHeartbeat(run);
@@ -196,23 +217,28 @@ public class RunService {
         }
     }
 
-    /** 通道关闭回调：由 api 层在 SSE 完成 / 超时 / 出错时调用，统一清理运行占用 */
+    /** 通道关闭回调：由 api 层在 SSE 完成 / 超时 / 出错时调用，按中断收敛并释放运行占用 */
     public void onChannelClosed(String runId) {
         ActiveRun run = active.get(runId);
         if (Objects.isNull(run)) {
             return;
         }
         run.cancel();
-        cleanup(run);
+        settleAborted(run);
     }
 
     /** 冲刷所有活动运行的批缓冲 */
     private void flushAll() {
         for (ActiveRun run : active.values()) {
             try {
+                MDC.put(AppConst.MDC_SESSION_ID, run.sessionId);
+                MDC.put(AppConst.MDC_RUN_ID, run.runId);
                 flush(run);
             } catch (Exception e) {
                 log.error("[run.event.flush] runId={} 冲刷失败 {}", run.runId, e.getMessage());
+            } finally {
+                MDC.remove(AppConst.MDC_SESSION_ID);
+                MDC.remove(AppConst.MDC_RUN_ID);
             }
         }
     }
@@ -283,9 +309,13 @@ public class RunService {
         }
     }
 
-    /** 成功收尾：stop_reason 区分正常与达到迭代上限 */
+    /** 成功收尾：取消标志优先，中断与完成竞争时终态记 aborted */
     private void settleSuccess(ActiveRun run) {
         if (!run.settled.compareAndSet(false, true)) {
+            return;
+        }
+        if (cancellationWins(run)) {
+            finishAborted(run);
             return;
         }
         flush(run);
@@ -308,9 +338,13 @@ public class RunService {
                 System.currentTimeMillis() - run.startedAt);
     }
 
-    /** 失败收尾 */
+    /** 失败收尾：取消标志优先，取消导致的异常按中断收敛 */
     private void settleError(ActiveRun run, Throwable error) {
         if (!run.settled.compareAndSet(false, true)) {
+            return;
+        }
+        if (cancellationWins(run)) {
+            finishAborted(run);
             return;
         }
         log.error("[run.failed] runId={} error={}", run.runId, error.getMessage(), error);
@@ -328,11 +362,16 @@ public class RunService {
         cleanup(run);
     }
 
-    /** 中断收尾：取消请求或推送失败触发 */
+    /** 中断收尾：取消请求或通道关闭触发 */
     private void settleAborted(ActiveRun run) {
         if (!run.settled.compareAndSet(false, true)) {
             return;
         }
+        finishAborted(run);
+    }
+
+    /** 中断收敛本体：取消与完成/异常竞争时的共同终态 */
+    private void finishAborted(ActiveRun run) {
         log.info("[run.aborted] runId={}", run.runId);
         flush(run);
         WbRunDO dbRun = runMapper.selectById(run.runId);
@@ -348,6 +387,22 @@ public class RunService {
                 "usage", Map.of("inputTokens", run.usage[0], "outputTokens", run.usage[1])));
         completeSink(run);
         cleanup(run);
+    }
+
+    /** 取消标志是否胜出：已请求取消的运行，完成通知与异常都按中断收敛 */
+    private boolean cancellationWins(ActiveRun run) {
+        RunHandle handle = run.handle;
+        return Objects.nonNull(handle) && handle.isCancelled();
+    }
+
+    /** 启动失败且无 SSE 通道可推时，直接落失败终态，避免僵尸 queued 行 */
+    private void markRunFailed(String runId) {
+        WbRunDO terminal = new WbRunDO();
+        terminal.setRunId(runId);
+        terminal.setState(RunStatusEnum.FAILED.getCode());
+        terminal.setStopReason(StopReasonEnum.ERROR.getCode());
+        terminal.setDurationMs(0L);
+        runMapper.updateTerminal(terminal);
     }
 
     /** 运行终态与用量落库 */
@@ -438,6 +493,8 @@ public class RunService {
 
     private void scheduleHeartbeat(ActiveRun run) {
         run.heartbeat = heartbeatExecutor.scheduleAtFixedRate(() -> {
+            MDC.put(AppConst.MDC_SESSION_ID, run.sessionId);
+            MDC.put(AppConst.MDC_RUN_ID, run.runId);
             try {
                 if (run.settled.get()) {
                     cancelHeartbeat(run);
@@ -447,6 +504,9 @@ public class RunService {
             } catch (Exception e) {
                 cancelHeartbeat(run);
                 run.cancel();
+            } finally {
+                MDC.remove(AppConst.MDC_SESSION_ID);
+                MDC.remove(AppConst.MDC_RUN_ID);
             }
         }, RunConst.SSE_HEARTBEAT_MS, RunConst.SSE_HEARTBEAT_MS, TimeUnit.MILLISECONDS);
     }

@@ -79,8 +79,10 @@ public class LogSearchMapper {
                     // 列已存在时语句失败，属预期
                 }
             }
+            // 复验覆盖全文列：若 /insert 曾把表建错结构，全文列缺失会在此暴露
             utilsApi.sql(StrUtil.format(
-                    "SELECT log_id, user_id, run_id FROM {} WHERE level = '__probe__' LIMIT 1", TABLE), false);
+                    "SELECT log_id, user_id, session_id, run_id, message, exception FROM {} WHERE level = '__probe__' LIMIT 1",
+                    TABLE), false);
             log.info("[log.table] 表就绪 {}", TABLE);
             return true;
         } catch (Exception e) {
@@ -117,13 +119,15 @@ public class LogSearchMapper {
     public LogSearchDTO search(String keyword, String field, String level,
                                String logger, String traceId, String userId, String runId,
                                long from, long to, long page, long size) {
-        long offset = Math.max(page - 1, 0) * Math.max(size, 1);
+        // 单页上限 500，offset 用截断后的页大小计算，避免大 size 翻页漏数据
+        long pageSize = Math.max(1, Math.min(size, 500));
+        long offset = Math.max(page - 1, 0) * pageSize;
         try {
             SearchResponse response = searchApi.search(new SearchRequest()
                     .table(TABLE)
                     .query(logQuery(keyword, field, level, logger, traceId, userId, runId, from, to))
                     .sort(List.of(Map.of("ts", "desc")))
-                    .limit((int) Math.max(1, Math.min(size, 500)))
+                    .limit((int) pageSize)
                     .offset((int) Math.max(0, offset)));
             return new LogSearchDTO(parseLogs(response), totalOf(response));
         } catch (Exception e) {
@@ -132,11 +136,15 @@ public class LogSearchMapper {
         }
     }
 
-    /** 分布概览：级别计数 + 按小时直方图，聚合走 /sql 的 GROUP BY，异常由调用方降级 */
-    public LogStatsVO stats(String userId, long from, long to) {
+    /** 分布概览：级别计数 + 时间直方图，过滤条件与检索一致；dayBucket 为真时按天分桶 */
+    public LogStatsVO stats(String userId, String keyword, String field, String level,
+                            String logger, String traceId, String runId,
+                            long from, long to, boolean dayBucket) {
+        String filter = filterClause(keyword, field, level, logger, traceId, runId);
         LogStatsVO stats = new LogStatsVO();
-        stats.setLevels(levelCounts(userId, from, to));
-        stats.setHistogram(hourHistogram(userId, from, to));
+        stats.setLevels(levelCounts(userId, filter, from, to));
+        stats.setHistogram(histogram(userId, filter, from, to, dayBucket));
+        stats.setBucketMs(dayBucket ? 86_400_000L : 3_600_000L);
         return stats;
     }
 
@@ -187,12 +195,12 @@ public class LogSearchMapper {
     }
 
     /** 级别计数：SELECT level, COUNT(*) GROUP BY level（Manticore 不支持 COUNT(1)） */
-    private List<LogStatsVO.LevelCount> levelCounts(String userId, long from, long to) {
+    private List<LogStatsVO.LevelCount> levelCounts(String userId, String filter, long from, long to) {
         String sql = StrUtil.format("""
                 SELECT level, COUNT(*) AS cnt FROM {}
-                WHERE ts >= {} AND ts <= {}{}
+                WHERE ts >= {} AND ts <= {}{}{}
                 GROUP BY level
-                """, TABLE, from, to, userClause(userId));
+                """, TABLE, from, to, userClause(userId), filter);
         List<LogStatsVO.LevelCount> result = new ArrayList<>();
         for (Map<String, Object> row : groupRows(sql)) {
             Object level = row.get("level");
@@ -206,26 +214,64 @@ public class LogSearchMapper {
         return result;
     }
 
-    /** 小时直方图：DIV 整数除分桶（`/` 在 Manticore 是浮点除，桶起点会漂移），桶起点毫秒时间戳升序，上限 168 桶（7 天） */
-    private List<LogStatsVO.HourCount> hourHistogram(String userId, long from, long to) {
+    /** 时间直方图：DIV 整数除分桶（`/` 在 Manticore 是浮点除，桶起点会漂移），桶起点毫秒时间戳升序；
+     *  小时分桶上限 168 个（7 天），天分桶上限 90 个 */
+    private List<LogStatsVO.HourCount> histogram(String userId, String filter, long from, long to,
+                                                 boolean dayBucket) {
+        long bucketMs = dayBucket ? 86_400_000L : 3_600_000L;
+        int limit = dayBucket ? 90 : 168;
         String sql = StrUtil.format("""
-                SELECT ts DIV 3600000 AS hour_bucket, COUNT(*) AS cnt FROM {}
-                WHERE ts >= {} AND ts <= {}{}
-                GROUP BY hour_bucket
-                ORDER BY hour_bucket ASC
-                LIMIT 168
-                """, TABLE, from, to, userClause(userId));
+                SELECT ts DIV {} AS bucket, COUNT(*) AS cnt FROM {}
+                WHERE ts >= {} AND ts <= {}{}{}
+                GROUP BY bucket
+                ORDER BY bucket ASC
+                LIMIT {}
+                """, bucketMs, TABLE, from, to, userClause(userId), filter, limit);
         List<LogStatsVO.HourCount> result = new ArrayList<>();
         for (Map<String, Object> row : groupRows(sql)) {
-            Object bucket = row.get("hour_bucket");
+            Object bucket = row.get("bucket");
             if (Objects.nonNull(bucket)) {
                 LogStatsVO.HourCount count = new LogStatsVO.HourCount();
-                count.setHour(numberValue(bucket) * 3_600_000L);
+                count.setHour(numberValue(bucket) * bucketMs);
                 count.setCount(numberValue(row.get("cnt")));
                 result.add(count);
             }
         }
         return result;
+    }
+
+    /** 聚合过滤片段：与检索同一套等值与全文条件，字符串值统一转义防注入 */
+    private static String filterClause(String keyword, String field, String level,
+                                       String logger, String traceId, String runId) {
+        StringBuilder clause = new StringBuilder();
+        if (StrUtil.isNotBlank(level)) {
+            clause.append(" AND level = '").append(escape(level.toUpperCase())).append("'");
+        }
+        if (StrUtil.isNotBlank(logger)) {
+            clause.append(" AND logger = '").append(escape(logger)).append("'");
+        }
+        if (StrUtil.isNotBlank(traceId)) {
+            clause.append(" AND trace_id = '").append(escape(traceId)).append("'");
+        }
+        if (StrUtil.isNotBlank(runId)) {
+            clause.append(" AND run_id = '").append(escape(runId)).append("'");
+        }
+        if (StrUtil.isNotBlank(keyword)) {
+            String matchField = StrUtil.isBlank(field) ? "message" : field;
+            if ("logger".equals(matchField)) {
+                clause.append(" AND logger = '").append(escape(keyword)).append("'");
+            } else if ("traceId".equals(matchField)) {
+                clause.append(" AND trace_id = '").append(escape(keyword)).append("'");
+            } else {
+                clause.append(" AND MATCH('message', '").append(escape(keyword)).append("')");
+            }
+        }
+        return clause.toString();
+    }
+
+    /** SQL 字符串值转义：单引号加倍，聚合语句为字符串拼接，必须过该函数 */
+    private static String escape(String value) {
+        return StrUtil.nullToEmpty(value).replace("'", "''");
     }
 
     /** 执行分组查询，把命中的 _source 归一为字段表列表；异常转运行时由调用方降级 */

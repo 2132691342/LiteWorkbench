@@ -58,7 +58,7 @@ Agent **无状态**：上下文不存在 Agent 里，每次运行由工作台从
 | `AGENT_END` | `run.end` | — |
 | `AGENT_ERROR` | `run.error` | — |
 
-未识别的内核类型不丢事件，归一为 `custom` 并原样带出类型字符串。`run.end` / `run.error` 不由内核产出：终态帧由 `RunService` 按运行结果合成，保证运行状态只有一处写。
+未识别的内核类型不丢事件：`AgentEventType` 为封闭枚举，归一 switch 穷举全部类型，新增事件类型必须同步映射表，由编译器保证不漏。
 
 ### 工具模型
 
@@ -129,7 +129,7 @@ event: run.event
 data: {"runId":"RUN_...","seq":12,"eventType":"text.delta","textDelta":"你好"}
 ```
 
-空闲期每 15 秒（`RunConst.SSE_HEARTBEAT_MS`）发一行注释心跳 `: ping` 保活；心跳不带 `event` 与 `data`，因此不污染事件流，心跳发送失败即取消该运行。
+每 15 秒（`RunConst.SSE_HEARTBEAT_MS`）发一行注释心跳 `: ping` 保活；心跳不带 `event` 与 `data`，因此不污染事件流，心跳发送失败即取消该运行。
 
 ## 关键流程
 
@@ -171,7 +171,7 @@ for (iter = 1; iter <= maxIters; iter++)
            落库保持逐条，回放粒度不受合帧影响。
 ```
 
-累积快照不随每个 delta 下发，避免 O(n²) 的文本拷贝。`run.end` 与 `run.error` 必有且仅有其一；单条增量超 4KB 截断，完整内容以 `run.result` 为准。
+累积快照不随每个 delta 下发，避免 O(n²) 的文本拷贝。`run.end` 与 `run.error` 必有且仅有其一；单条增量超 4096 字符截断，完整内容以 `run.result` 为准。
 
 ### 工具执行与输出裁剪
 
@@ -228,7 +228,7 @@ execute(request)
 ## 约束
 
 - 禁止在 `agent` 包引用 `api` 层任何类型；禁止在 `AgentLoop` 内直接 `new` 协作者。
-- 每个模型调用必须带超时（流式 180s / 同步 120s / 建连 30s）；建连或读超时抛 `MODEL_CALL_TIMEOUT`，其余出站失败抛 `MODEL_CALL_FAILED`；流式路径超时由 service 层把运行落为 `failed`。
+- 每个模型调用必须带超时（建连 30s / 流式读 180s / 同步读 120s；hutool-ai 原生同步通道与流式共用 180s 读超时）；建连或读超时抛 `MODEL_CALL_TIMEOUT`，其余出站失败抛 `MODEL_CALL_FAILED`；流式路径超时由 service 层把运行落为 `failed`。
 - 工具输出进入上下文前必须经过控制字符清理与长度裁剪；每个工具必须带超时，工具方法必须返回 `String`。
 - 写文件类工具必须把路径限定在当前用户工作区内（拒绝绝对路径与任何 `..` 片段）；禁止在工具内读取环境变量中的密钥。
 - 新增工具必须同步写入 `wb_tool` 初始化数据，并在注册期通过 Schema 校验。

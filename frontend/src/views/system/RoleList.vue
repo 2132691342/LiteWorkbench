@@ -12,6 +12,7 @@ import LwSkeleton from '@/components/ui/LwSkeleton.vue'
 import LwTag from '@/components/ui/LwTag.vue'
 import { usePermission } from '@/composables/usePermission'
 import type { MenuVO, RoleREQ, RoleVO } from '@/types/api'
+import { menuLabel } from '@/utils/menu'
 
 /** 角色管理：列表、增改删、菜单授权树 */
 const { t } = useI18n()
@@ -158,7 +159,7 @@ onMounted(load)
           </el-table-column>
           <el-table-column :label="t('common.actions')" width="260" fixed="right">
             <template #default="{ row }">
-              <div class="flex gap-1">
+              <div class="flex gap-2">
                 <LwButton v-if="hasPerm('system:role:update')" variant="text" size="sm" @click="openDialog(row)">
                   {{ t('common.edit') }}
                 </LwButton>
@@ -182,8 +183,10 @@ onMounted(load)
             v-model:current-page="query.page"
             v-model:page-size="query.size"
             :total="total"
-            layout="total, prev, pager, next"
+            :page-sizes="[10, 20, 50]"
+            layout="total, sizes, prev, pager, next"
             @current-change="load"
+            @size-change="load"
           />
         </div>
       </template>
@@ -218,7 +221,7 @@ onMounted(load)
         node-key="menuId"
         show-checkbox
         default-expand-all
-        :props="{ label: (data: MenuVO) => t(data.menuName), children: 'children' }"
+        :props="{ label: (data: MenuVO) => menuLabel(data.menuName), children: 'children' }"
       />
       <template #footer>
         <div class="flex justify-end gap-3">

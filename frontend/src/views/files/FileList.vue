@@ -8,6 +8,7 @@ const VuePdfEmbed = defineAsyncComponent(() => import('vue-pdf-embed'))
 import LwButton from '@/components/ui/LwButton.vue'
 import LwCard from '@/components/ui/LwCard.vue'
 import LwPageState from '@/components/ui/LwPageState.vue'
+import LwTag from '@/components/ui/LwTag.vue'
 import { fileApi } from '@/api'
 import { usePermission } from '@/composables/usePermission'
 import type { FileVO } from '@/types/api'
@@ -23,6 +24,7 @@ const page = ref(1)
 const size = ref(20)
 const loading = ref(false)
 const error = ref('')
+const uploading = ref(false)
 const uploadInput = ref<HTMLInputElement | null>(null)
 
 /** 在线预览：图片直显，pdf / docx / 表格按类型渲染，其余只给下载 */
@@ -118,7 +120,7 @@ async function onFileChange(event: Event): Promise<void> {
     ElMessage.error(t('files.tooLarge'))
     return
   }
-  loading.value = true
+  uploading.value = true
   try {
     await fileApi.upload(file)
     ElMessage.success(t('common.success'))
@@ -126,7 +128,7 @@ async function onFileChange(event: Event): Promise<void> {
   } catch (e) {
     error.value = (e as Error).message
   } finally {
-    loading.value = false
+    uploading.value = false
   }
 }
 
@@ -149,6 +151,12 @@ function changePage(next: number): void {
   void load()
 }
 
+function changeSize(next: number): void {
+  size.value = next
+  page.value = 1
+  void load()
+}
+
 onMounted(load)
 </script>
 
@@ -159,7 +167,7 @@ onMounted(load)
         <h2 class="lw-title">{{ t('files.title') }}</h2>
         <p class="lw-subtitle mt-1">{{ t('files.desc') }}</p>
       </div>
-      <LwButton :loading="loading" @click="pickFile">
+      <LwButton :loading="uploading" @click="pickFile">
         <template #icon><el-icon><Upload /></el-icon></template>
         {{ t('files.upload') }}
       </LwButton>
@@ -174,7 +182,7 @@ onMounted(load)
           </el-table-column>
           <el-table-column :label="t('files.category')" width="110">
             <template #default="{ row }">
-              <el-tag size="small" type="info">{{ row.category }}</el-tag>
+              <LwTag tone="muted">{{ row.category }}</LwTag>
             </template>
           </el-table-column>
           <el-table-column :label="t('logs.time')" width="180">
@@ -193,11 +201,13 @@ onMounted(load)
         </el-table>
         <div v-if="total > size" class="flex justify-end mt-4">
           <el-pagination
-            layout="prev, pager, next"
+            layout="total, sizes, prev, pager, next"
             :total="total"
             :page-size="size"
+            :page-sizes="[10, 20, 50]"
             :current-page="page"
             @current-change="changePage"
+            @size-change="changeSize"
           />
         </div>
       </LwPageState>

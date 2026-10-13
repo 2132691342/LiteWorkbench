@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { Search } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LwBarChart from '@/components/charts/LwBarChart.vue'
 import LwButton from '@/components/ui/LwButton.vue'
 import LwCard from '@/components/ui/LwCard.vue'
 import LwPageState from '@/components/ui/LwPageState.vue'
+import LwSegmented from '@/components/ui/LwSegmented.vue'
 import LwTag from '@/components/ui/LwTag.vue'
 import { logApi } from '@/api'
 import type { LogDocVO } from '@/types/api'
@@ -23,6 +25,8 @@ const expanded = ref('')
 const copiedId = ref('')
 const levels = ref<{ level: string; count: number }[]>([])
 const histogram = ref<{ hour: number; count: number }[]>([])
+/** 直方图桶宽毫秒：服务端按区间在小时 / 天之间切换 */
+const bucketMs = ref(3_600_000)
 
 /** 时间字段同时接受 number（预设/钻取写入）与 el-date-picker 的 value-format="x" 字符串，请求前统一归一 */
 type TimeInput = number | string | undefined
@@ -93,7 +97,7 @@ function levelTotal(level: string): string {
   return (levelCount.value.get(level) ?? 0).toLocaleString()
 }
 
-/** 直方图类目：按桶数量自适应格式，超过 48 桶只显示首末 */
+/** 直方图类目：按桶数量自适应格式，超过 48 桶只显示首末；天桶只显示日期 */
 const histogramCategories = computed(() =>
   histogram.value.map((item, index) => {
     if (histogram.value.length <= 48 || index === 0 || index === histogram.value.length - 1) {
@@ -106,6 +110,9 @@ const histogramCategories = computed(() =>
 function formatHour(value: number): string {
   const date = new Date(value)
   const pad = (n: number) => String(n).padStart(2, '0')
+  if (bucketMs.value >= 86_400_000) {
+    return `${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+  }
   return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:00`
 }
 
@@ -180,6 +187,8 @@ async function search(): Promise<void> {
     })
     docs.value = result.list
     total.value = result.total
+    // 视角以检索响应为准，与结果同源
+    if (result.scope) scope.value = result.scope === 'global' ? 'global' : 'self'
   } catch (e) {
     error.value = (e as Error).message
   } finally {
@@ -190,10 +199,21 @@ async function search(): Promise<void> {
 async function loadStats(): Promise<void> {
   statsLoading.value = true
   try {
-    const stats = await logApi.stats({ from: toMillis(query.from), to: toMillis(query.to) })
+    const stats = await logApi.stats({
+      keyword: query.keyword || undefined,
+      field: query.field || undefined,
+      level: query.level || undefined,
+      logger: query.logger || undefined,
+      traceId: query.traceId || undefined,
+      userId: query.userId || undefined,
+      runId: query.runId || undefined,
+      from: toMillis(query.from),
+      to: toMillis(query.to),
+    })
     levels.value = stats.levels ?? []
     histogram.value = stats.histogram ?? []
-    scope.value = stats.scope === 'global' ? 'global' : 'self'
+    if (stats.bucketMs) bucketMs.value = stats.bucketMs
+    if (stats.scope) scope.value = stats.scope === 'global' ? 'global' : 'self'
   } catch {
     // 概览降级：不影响主检索，卡片显示占位
     levels.value = []
@@ -213,22 +233,23 @@ function applyPreset(key: string): void {
   handleSearch()
 }
 
-/** 直方图钻取：点某桶把时间范围收敛到该小时 */
+/** 直方图钻取：点某桶把时间范围收敛到该桶 */
 function drillHour(index: number): void {
   const bucket = histogram.value[index]
   if (!bucket) return
   activePreset.value = ''
   query.from = bucket.hour
-  query.to = bucket.hour + 3_600_000
+  query.to = bucket.hour + bucketMs.value
   handleSearch()
 }
 
-/** 复制 traceId：图标 400ms 切对勾 */
+/** 复制 traceId：按钮文案 400ms 切对勾并 toast 提示 */
 async function copyTraceId(traceId: string): Promise<void> {
   if (!traceId) return
   try {
     await navigator.clipboard.writeText(traceId)
     copiedId.value = traceId
+    ElMessage.success(t('logs.copied'))
     window.setTimeout(() => {
       if (copiedId.value === traceId) copiedId.value = ''
     }, 400)
@@ -297,13 +318,13 @@ onBeforeUnmount(() => {
       </el-tooltip>
     </div>
 
-    <!-- 分布概览：级别计数卡 + 小时直方图，随过滤条件联动 -->
+    <!-- 分布概览：级别计数卡 + 时间直方图，随过滤条件联动 -->
     <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
       <LwCard v-for="level in ['ERROR', 'WARN', 'INFO']" :key="level">
         <div class="flex items-center justify-between">
-          <span class="text-xs font-bold" style="color: var(--lw-ink-muted)">{{ level }}</span>
+          <span class="text-xs font-bold" style="color: var(--lw-ink-muted)">{{ t(`logs.level_${level.toLowerCase()}`) }}</span>
           <LwTag :tone="level === 'ERROR' ? 'error' : level === 'WARN' ? 'warning' : 'primary'">
-            {{ t(`logs.level_${level.toLowerCase()}`) }}
+            {{ level }}
           </LwTag>
         </div>
         <div class="text-2xl font-bold tracking-tight" style="color: var(--lw-ink)">
@@ -348,9 +369,7 @@ onBeforeUnmount(() => {
           @clear="handleSearch"
         />
         <el-select v-model="query.level" :placeholder="t('logs.level')" clearable style="width: 130px" @change="handleSearch">
-          <el-option label="ERROR" value="ERROR" />
-          <el-option label="WARN" value="WARN" />
-          <el-option label="INFO" value="INFO" />
+          <el-option v-for="item in ['ERROR', 'WARN', 'INFO']" :key="item" :label="t(`logs.level_${item.toLowerCase()}`)" :value="item" />
         </el-select>
         <el-input
           v-model="query.logger"
@@ -401,22 +420,19 @@ onBeforeUnmount(() => {
           style="width: 190px"
           @change="onTimeChange"
         />
-        <LwButton variant="ghost" size="sm" @click="handleSearch">
+        <LwButton variant="ghost" @click="handleSearch">
           <template #icon><el-icon><Search /></el-icon></template>
           {{ t('common.search') }}
         </LwButton>
       </div>
-      <div class="flex flex-wrap items-center gap-2 mt-3">
+      <div class="flex flex-wrap items-center gap-3 mt-3">
         <span class="text-xs" style="color: var(--lw-ink-muted)">{{ t('logs.quickRange') }}</span>
-        <LwButton
-          v-for="preset in PRESETS"
-          :key="preset.key"
-          :variant="activePreset === preset.key ? 'primary' : 'secondary'"
-          size="sm"
-          @click="applyPreset(preset.key)"
-        >
-          {{ t(`logs.preset_${preset.key}`) }}
-        </LwButton>
+        <LwSegmented
+          :model-value="activePreset"
+          :options="PRESETS.map((item) => ({ value: item.key, label: t(`logs.preset_${item.key}`) }))"
+          equal
+          @update:model-value="applyPreset"
+        />
       </div>
       <p class="text-xs mt-3" style="color: var(--lw-ink-muted)">
         {{ t('logs.syntaxTip') }}
@@ -435,7 +451,11 @@ onBeforeUnmount(() => {
             :key="doc.logId"
             class="rounded-lg border px-4 py-3 cursor-pointer transition-all duration-200 hover:lw-shadow-sm"
             style="border-color: var(--lw-border)"
+            role="button"
+            tabindex="0"
+            :aria-expanded="expanded === doc.logId"
             @click="expanded = expanded === doc.logId ? '' : doc.logId"
+            @keydown.enter="expanded = expanded === doc.logId ? '' : doc.logId"
           >
             <div class="flex items-center gap-3">
               <LwTag :tone="levelTone(doc.level)">{{ doc.level }}</LwTag>
@@ -448,7 +468,8 @@ onBeforeUnmount(() => {
               </span>
               <span class="text-xs opacity-50 shrink-0 hidden md:block">{{ doc.logger }}</span>
             </div>
-            <div v-if="expanded === doc.logId" class="mt-3 text-xs flex flex-col gap-2">
+            <transition name="lw-fade">
+              <div v-if="expanded === doc.logId" class="mt-3 text-xs flex flex-col gap-2">
               <div class="flex flex-wrap items-center gap-3 opacity-60">
                 <span>{{ t('logs.traceId') }}: {{ doc.traceId || '-' }}</span>
                 <span>{{ t('logs.logger') }}: {{ doc.logger }}</span>
@@ -480,7 +501,8 @@ onBeforeUnmount(() => {
                 class="whitespace-pre-wrap break-all max-h-64 overflow-auto p-3 rounded-lg"
                 style="background: var(--lw-error-tint); color: var(--lw-error-ink)"
               >{{ doc.exception }}</pre>
-            </div>
+              </div>
+            </transition>
           </div>
         </div>
         <div class="flex justify-end mt-4">

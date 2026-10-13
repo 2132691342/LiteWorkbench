@@ -57,12 +57,17 @@ export const useSessionStore = defineStore('session', () => {
     }
   }
 
-  /** 选中会话并加载消息 */
+  /** 选中会话并加载消息，失败记入 error 供页面内联提示 */
   async function select(sessionId: string): Promise<void> {
     activeSessionId.value = sessionId
     loadingMessages.value = true
+    error.value = ''
     try {
       messages.value = await sessionApi.messages(sessionId)
+    } catch (err) {
+      messages.value = []
+      error.value = err instanceof Error ? err.message : ''
+      throw err
     } finally {
       loadingMessages.value = false
     }
@@ -70,12 +75,17 @@ export const useSessionStore = defineStore('session', () => {
 
   /** 重新拉取单个会话详情，回填列表 */
   async function refreshDetail(sessionId: string): Promise<void> {
-    const detail = await sessionApi.detail(sessionId)
-    const index = list.value.findIndex((item) => item.sessionId === sessionId)
-    if (index >= 0) {
-      const next = [...list.value]
-      next.splice(index, 1, detail)
-      list.value = next
+    try {
+      const detail = await sessionApi.detail(sessionId)
+      const index = list.value.findIndex((item) => item.sessionId === sessionId)
+      if (index >= 0) {
+        const next = [...list.value]
+        next.splice(index, 1, detail)
+        list.value = next
+      }
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : ''
+      throw err
     }
   }
 

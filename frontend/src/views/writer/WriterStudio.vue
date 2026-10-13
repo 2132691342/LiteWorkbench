@@ -11,6 +11,7 @@ import LwCard from '@/components/ui/LwCard.vue'
 import LwEmpty from '@/components/ui/LwEmpty.vue'
 import LwMarkdown from '@/components/ui/LwMarkdown.vue'
 import LwPageState from '@/components/ui/LwPageState.vue'
+import LwSegmented from '@/components/ui/LwSegmented.vue'
 import { docApi, kbApi, openAssistStream } from '@/api'
 import { usePermission } from '@/composables/usePermission'
 import type { DocVO, DocVersionVO, KbVO } from '@/types/api'
@@ -40,7 +41,17 @@ const docType = ref<DocType>('markdown')
 const sourceKbId = ref('')
 const dirty = ref(false)
 const saving = ref(false)
+const opening = ref(false)
 const mode = ref<'edit' | 'preview'>('edit')
+
+/** 编辑 / 预览切换：离开编辑态时同步编辑器内容 */
+function switchMode(next: string | number): void {
+  const target = next === 'preview' ? 'preview' : 'edit'
+  if (target === 'preview' && isRich.value) {
+    content.value = editorRef.value?.getHtml() ?? content.value
+  }
+  mode.value = target
+}
 
 const versions = ref<DocVersionVO[]>([])
 const versionDrawer = ref(false)
@@ -90,20 +101,27 @@ async function load(): Promise<void> {
 }
 
 async function open(doc: DocVO): Promise<void> {
-  if (dirty.value && !await confirmDiscard()) {
+  if (dirty.value && !(await confirmDiscard())) {
     return
   }
-  const detail = await docApi.detail(doc.docId)
-  current.value = detail
-  title.value = detail.docTitle
-  content.value = detail.content ?? ''
-  category.value = detail.category ?? ''
-  tags.value = detail.tags ?? ''
-  summary.value = detail.summary ?? ''
-  docType.value = (detail.docType ?? 'markdown') as DocType
-  sourceKbId.value = detail.sourceKbId ?? ''
-  dirty.value = false
-  mode.value = 'edit'
+  opening.value = true
+  try {
+    const detail = await docApi.detail(doc.docId)
+    current.value = detail
+    title.value = detail.docTitle
+    content.value = detail.content ?? ''
+    category.value = detail.category ?? ''
+    tags.value = detail.tags ?? ''
+    summary.value = detail.summary ?? ''
+    docType.value = (detail.docType ?? 'markdown') as DocType
+    sourceKbId.value = detail.sourceKbId ?? ''
+    dirty.value = false
+    mode.value = 'edit'
+  } catch (e) {
+    ElMessage.error((e as Error).message)
+  } finally {
+    opening.value = false
+  }
 }
 
 async function confirmDiscard(): Promise<boolean> {
@@ -379,9 +397,14 @@ void loadKbOptions()
               <el-option :label="t('writer.type_rich')" value="rich" />
               <el-option :label="t('writer.type_code')" value="code" />
             </el-select>
-            <LwButton variant="ghost" size="sm" @click="mode = mode === 'edit' ? 'preview' : 'edit'">
-              {{ mode === 'edit' ? t('writer.preview') : t('writer.edit') }}
-            </LwButton>
+            <LwSegmented
+              :model-value="mode"
+              :options="[
+                { value: 'edit', label: t('writer.edit') },
+                { value: 'preview', label: t('writer.preview') },
+              ]"
+              @update:model-value="switchMode"
+            />
             <LwButton variant="text" size="sm" @click="openVersions">
               <template #icon><el-icon><Refresh /></el-icon></template>
               {{ t('writer.versions') }}

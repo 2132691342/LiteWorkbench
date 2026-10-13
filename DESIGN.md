@@ -97,7 +97,7 @@
 ```
 
 - 顶栏左侧为品牌方块（`--lw-secondary` 底 + 白图标）与产品名，右侧为语言切换与用户区（圆形头像 `--lw-surface-subtle` 底 + `--lw-primary` 字）。
-- 侧栏顶部为菜单组（分组标题 10px 大写、`--lw-ink-muted`），菜单项 `h-10` 圆角，悬停为黑色 5% 叠加，选中为 `--lw-primary` 文字 + `--lw-secondary-selected` 底；底部固定品牌卡（`--lw-secondary` 底 + `--lw-on-secondary` 字，悬停轻微放大）。
+- 侧栏顶部为菜单组（分组标题 10px 大写、`--lw-ink-muted`），一级菜单项 `h-10` 圆角、二级子项 `h-9`，悬停为黑色 5% 叠加，选中为 `--lw-primary` 文字 + `--lw-secondary-selected` 底；底部固定品牌卡（`--lw-secondary` 底 + `--lw-on-secondary` 字，悬停轻微放大）。
 - 主区滚屏，侧栏与顶栏固定；断点 `lg` 以下侧栏收起为抽屉（遮罩 `--lw-overlay`）。
 - 指标卡：白底 + 1px 边框 + 12px 圆角，右上角 56px 图标 `opacity-10`，悬停时图标放大、卡片上移并加 `--lw-shadow-md`。
 
@@ -145,7 +145,7 @@
 视图 / 时间范围 / 视角的组内单选一律用 `components/ui/LwSegmented.vue`，禁止各页自造 tab 或 pill：
 
 ```
-容器：白底 + 1px --lw-border + 8px 圆角 + 4px 内边距，组内按钮等高
+容器：白底 + 1px --lw-border + 8px 圆角 + 4px 内边距，组内按钮等高，容器高 40px（与 h-10 控件对齐）
 项  ：px-3 py-1.5，12px 加粗；未选中 --lw-ink-muted，悬停转 --lw-ink
 选中：--lw-surface-subtle 底（或浅紫底）+ --lw-primary 字 + 轻阴影
 动效：选中底 `--lw-dur-fast` 淡入，悬停颜色 `--lw-dur-fast` 过渡

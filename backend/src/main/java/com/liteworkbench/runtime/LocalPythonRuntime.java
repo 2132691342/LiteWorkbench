@@ -185,10 +185,10 @@ public class LocalPythonRuntime implements PythonRuntime {
         return effective;
     }
 
-    /** 超时取调用值与默认值的较小者，封顶 300 秒 */
+    /** 超时归一：调用值与配置默认值取较小者，未传用配置默认，封顶 300 秒 */
     private long normalizeTimeout(long timeoutSeconds) {
-        long request = timeoutSeconds <= 0
-                ? properties.getPython().getTimeoutSeconds() : timeoutSeconds;
+        long fallback = properties.getPython().getTimeoutSeconds();
+        long request = timeoutSeconds <= 0 ? fallback : Math.min(timeoutSeconds, fallback);
         return Math.min(request, MAX_TIMEOUT_SECONDS);
     }
 

@@ -6,8 +6,10 @@ import cn.hutool.core.thread.ExecutorBuilder;
 import cn.hutool.core.thread.ThreadUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
+import com.liteworkbench.common.BizException;
+import com.liteworkbench.common.ErrorCodeEnum;
 import com.liteworkbench.common.LoginContext;
-import com.liteworkbench.common.PageResult;
+import com.liteworkbench.config.StorageProperties;
 import com.liteworkbench.domain.constant.EventTypeEnum;
 import com.liteworkbench.domain.constant.PermConst;
 import com.liteworkbench.domain.constant.RedisKeyConst;
@@ -15,6 +17,7 @@ import com.liteworkbench.domain.dto.LogSearchDTO;
 import com.liteworkbench.domain.constant.RunStatusEnum;
 import com.liteworkbench.domain.vo.HealthRESP;
 import com.liteworkbench.domain.vo.LogDocVO;
+import com.liteworkbench.domain.vo.LogPageVO;
 import com.liteworkbench.domain.vo.LogStatsVO;
 import com.liteworkbench.domain.vo.OverviewRESP;
 import com.liteworkbench.domain.vo.PythonStatusVO;
@@ -43,11 +46,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
-/** 健康探测与仪表盘汇总 */
+/** 健康探测、日志检索统计与仪表盘汇总 */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -58,6 +62,12 @@ public class MonitorService {
     private static final long OVERVIEW_CACHE_SECONDS = 60L;
     /** 日志概览默认统计窗口：近 24 小时 */
     private static final long DEFAULT_STATS_WINDOW_MS = 24 * 60 * 60 * 1000L;
+    /** 日志检索默认窗口：近 7 天，禁止无界查询 */
+    private static final long DEFAULT_SEARCH_WINDOW_MS = 7 * 24 * 60 * 60 * 1000L;
+    /** 直方图按小时分桶的最大区间，超过改按天分桶 */
+    private static final long HOUR_BUCKET_MAX_SPAN_MS = 7 * 24 * 60 * 60 * 1000L;
+    /** 检索字段白名单：message 全文 / logger 与 traceId 等值 */
+    private static final Set<String> LOG_FIELDS = Set.of("message", "logger", "traceId");
 
     private final HealthMapper healthMapper;
     private final RedisConnectionFactory redisConnectionFactory;
@@ -70,6 +80,7 @@ public class MonitorService {
     private final LogSearchMapper logSearchMapper;
     private final StringRedisTemplate redisTemplate;
     private final UtilsApi manticoreUtilsApi;
+    private final StorageProperties storageProperties;
 
     /** 探测专用线程池，探测互不阻塞 */
     private final ExecutorService probeExecutor = ExecutorBuilder.create()
@@ -77,35 +88,65 @@ public class MonitorService {
             .setThreadFactory(ThreadUtil.newNamedThreadFactory("lw-probe", true))
             .build();
 
-    /** Manticore 日志检索，按时间倒序分页，索引不可用时降级为空结果；视角在服务端判定，非全局角色锁定本人 */
-    public PageResult<LogDocVO> searchLogs(String keyword, String field, String level,
-                                           String logger, String traceId, String userId, String runId,
-                                           long from, long to, long page, long size) {
+    /** Manticore 日志检索，按时间倒序分页，索引不可用时降级为空结果；视角在服务端判定，非全局角色锁定本人；
+     *  未传时间范围时默认近 7 天，禁止无界查询；响应带 scope 视角标识 */
+    public LogPageVO searchLogs(String keyword, String field, String level,
+                                String logger, String traceId, String userId, String runId,
+                                long from, long to, long page, long size) {
+        validateField(field);
+        String scope = globalLogScope() ? "global" : "self";
+        long now = System.currentTimeMillis();
+        long effectiveFrom = from > 0 ? from : now - DEFAULT_SEARCH_WINDOW_MS;
+        long effectiveTo = to > 0 ? to : now;
         String scopeUserId = resolveScopeUserId(userId);
         try {
             LogSearchDTO result = logSearchMapper.search(keyword, field, level, logger, traceId,
-                    scopeUserId, runId, from, to, page, size);
-            return PageResult.of(result.list(), result.total(), page, size);
+                    scopeUserId, runId, effectiveFrom, effectiveTo, page, size);
+            LogPageVO vo = new LogPageVO();
+            vo.setList(result.list());
+            vo.setTotal(result.total());
+            vo.setPage(page);
+            vo.setSize(size);
+            vo.setScope(scope);
+            return vo;
         } catch (Exception e) {
             log.warn("[log.search] 检索失败，降级为空结果 {}", e.getMessage());
-            return PageResult.empty(page, size);
+            LogPageVO vo = new LogPageVO();
+            vo.setList(List.of());
+            vo.setPage(page);
+            vo.setSize(size);
+            vo.setScope(scope);
+            return vo;
         }
     }
 
-    /** 日志分布概览：与检索共用视角；未传时间范围默认近 24 小时，聚合异常降级为空结构 */
-    public LogStatsVO logStats(long from, long to) {
+    /** 日志分布概览：过滤条件与视角同检索；未传时间范围默认近 24 小时，超 7 天按天分桶，异常降级为空结构 */
+    public LogStatsVO logStats(String keyword, String field, String level, String logger,
+                               String traceId, String userId, String runId, long from, long to) {
+        validateField(field);
+        String scope = globalLogScope() ? "global" : "self";
         long now = System.currentTimeMillis();
         long effectiveFrom = from > 0 ? from : now - DEFAULT_STATS_WINDOW_MS;
         long effectiveTo = to > 0 ? to : now;
+        boolean dayBucket = effectiveTo - effectiveFrom > HOUR_BUCKET_MAX_SPAN_MS;
         try {
-            LogStatsVO stats = logSearchMapper.stats(resolveScopeUserId(null), effectiveFrom, effectiveTo);
-            stats.setScope(globalLogScope() ? "global" : "self");
+            LogStatsVO stats = logSearchMapper.stats(resolveScopeUserId(userId), keyword, field, level,
+                    logger, traceId, runId, effectiveFrom, effectiveTo, dayBucket);
+            stats.setScope(scope);
             return stats;
         } catch (Exception e) {
             log.warn("[log.stats] 聚合失败，降级为空结构 {}", e.getMessage());
             LogStatsVO stats = new LogStatsVO();
-            stats.setScope(globalLogScope() ? "global" : "self");
+            stats.setScope(scope);
+            stats.setBucketMs(dayBucket ? 86_400_000L : 3_600_000L);
             return stats;
+        }
+    }
+
+    /** 检索字段白名单校验，非法值直接拒绝而非静默丢弃关键字 */
+    private void validateField(String field) {
+        if (StrUtil.isNotBlank(field) && !LOG_FIELDS.contains(field)) {
+            throw new BizException(ErrorCodeEnum.PARAM_INVALID, "不支持的检索字段：" + field);
         }
     }
 
@@ -142,7 +183,7 @@ public class MonitorService {
             return "log index ok";
         }));
         components.add(probe("minio", 5, () -> minioClient.bucketExists(BucketExistsArgs.builder()
-                .bucket("liteworkbench").build()) ? "bucket ready" : "bucket missing"));
+                .bucket(storageProperties.getBucketName()).build()) ? "bucket ready" : "bucket missing"));
         components.add(probe("rabbitmq", 3, () -> {
             rabbitConnectionFactory.createConnection().close();
             return "connected";

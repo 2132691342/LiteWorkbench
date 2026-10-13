@@ -52,7 +52,6 @@
   --lw-primary-light-8: #e1dced;
 
   /* 主色之上的文字色与骨架屏底色 */
-  --lw-on-primary: #ffffff;
   --lw-skeleton-a: var(--purple_sequential-color-1);
 
   /* 阴影仅两级 */

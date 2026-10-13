@@ -4,7 +4,7 @@ import lombok.Data;
 
 import java.util.List;
 
-/** 日志分布概览：级别计数与按小时时间直方图，驱动日志中心顶部卡片与柱状图 */
+/** 日志分布概览：级别计数与时间直方图，驱动日志中心顶部卡片与柱状图 */
 @Data
 public class LogStatsVO {
 
@@ -14,8 +14,11 @@ public class LogStatsVO {
     /** 各级别计数，缺级别不补零 */
     private List<LevelCount> levels;
 
-    /** 按小时分桶的计数，桶起点为整点毫秒时间戳，升序 */
+    /** 分桶计数，桶起点毫秒时间戳升序；默认按小时分桶，区间超过 7 天按天分桶 */
     private List<HourCount> histogram;
+
+    /** 直方图桶宽毫秒：3600000（小时）/ 86400000（天），前端据此渲染坐标 */
+    private long bucketMs = 3_600_000L;
 
     /** 单个级别计数 */
     @Data

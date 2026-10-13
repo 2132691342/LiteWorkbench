@@ -8,7 +8,7 @@ public final class OutputSanitizer {
     /** 裁剪后保留的最大字符数 */
     public static final int MAX_CHARS = 8000;
     /** 截断提示语 */
-    private static final String TRUNCATE_NOTICE = "...[输出已截断，仅保留结尾 %d 字符]...";
+    private static final String TRUNCATE_NOTICE = "...[已丢弃前 %d 字符，仅保留结尾 %d 字符]...";
 
     private OutputSanitizer() {
     }

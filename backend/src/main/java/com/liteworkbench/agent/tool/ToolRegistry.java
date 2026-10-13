@@ -30,15 +30,13 @@ import java.util.function.Predicate;
 @Slf4j
 public class ToolRegistry {
 
-    /** 输出保留长度，超出保尾（traceback 末行才是原因） */
-    private static final int OUTPUT_MAX = 8000;
     /** 并发执行工具数上限 */
     private static final int POOL_SIZE = 8;
 
     private final Map<String, ToolDefinition> definitions = new LinkedHashMap<>();
 
-    private final ExecutorService executor = Executors.newFixedThreadPool(POOL_SIZE,
-            ThreadUtil.newNamedThreadFactory("lw-tool", true));
+    /** 执行线程池懒创建：无工具调用的运行不占线程 */
+    private volatile ExecutorService executor;
 
     /** 扫描并注册一个工具实现类，Schema 不合法即抛异常（错误左移到启动期） */
     public void register(Object bean) {
@@ -88,7 +86,7 @@ public class ToolRegistry {
             return error(StrUtil.format("未知工具 {}", name));
         }
         JSONObject arguments = parseArguments(argumentsJson);
-        Future<String> future = executor.submit(() -> call(definition, arguments));
+        Future<String> future = executor().submit(() -> call(definition, arguments));
         try {
             return future.get(timeoutSeconds, TimeUnit.SECONDS);
         } catch (TimeoutException e) {
@@ -104,9 +102,27 @@ public class ToolRegistry {
         }
     }
 
-    /** 关闭执行线程池 */
+    /** 关闭执行线程池（未创建过则为空操作） */
     public void shutdown() {
-        executor.shutdownNow();
+        ExecutorService current = executor;
+        if (Objects.nonNull(current)) {
+            current.shutdownNow();
+        }
+    }
+
+    /** 执行线程池：首次调用时创建 */
+    private ExecutorService executor() {
+        ExecutorService current = executor;
+        if (Objects.nonNull(current)) {
+            return current;
+        }
+        synchronized (this) {
+            if (Objects.isNull(executor)) {
+                executor = Executors.newFixedThreadPool(POOL_SIZE,
+                        ThreadUtil.newNamedThreadFactory("lw-tool", true));
+            }
+            return executor;
+        }
     }
 
     private String call(ToolDefinition definition, JSONObject arguments) {
@@ -116,7 +132,8 @@ public class ToolRegistry {
         }
         try {
             Object result = definition.getMethod().invoke(definition.getTarget(), values);
-            return cut(OutputSanitizer.clean(Objects.toString(result, StrUtil.EMPTY)));
+            // 控制字符清理与保尾裁剪统一在 OutputSanitizer 完成，此处只做反射调用
+            return OutputSanitizer.clean(Objects.toString(result, StrUtil.EMPTY));
         } catch (InvocationTargetException e) {
             Throwable cause = Objects.isNull(e.getTargetException()) ? e : e.getTargetException();
             throw new IllegalStateException(Objects.toString(cause.getMessage(), cause.getClass().getSimpleName()));
@@ -205,16 +222,6 @@ public class ToolRegistry {
             log.warn("[tool.args] 参数不是合法 JSON，按空参数处理 {}", head(argumentsJson));
             return JSONUtil.createObj();
         }
-    }
-
-    /** 超长保尾并说明丢弃量 */
-    private String cut(String output) {
-        String text = Objects.toString(output, StrUtil.EMPTY);
-        if (text.length() <= OUTPUT_MAX) {
-            return text;
-        }
-        return StrUtil.format("（已丢弃前 {} 字符）\n{}", text.length() - OUTPUT_MAX,
-                text.substring(text.length() - OUTPUT_MAX));
     }
 
     private String error(String message) {

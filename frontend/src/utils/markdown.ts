@@ -1,5 +1,6 @@
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js/lib/core'
+import { i18n } from '@/locales'
 import bash from 'highlight.js/lib/languages/bash'
 import c from 'highlight.js/lib/languages/c'
 import cpp from 'highlight.js/lib/languages/cpp'
@@ -73,10 +74,11 @@ md.renderer.rules.fence = (tokens, idx, options, env, self) => {
   const inner = defaultFence
     ? defaultFence(tokens, idx, options, env, self)
     : self.renderToken(tokens, idx, options)
+  const copyLabel = i18n.global.t('common.copy')
   return (
     `<div class="md-code">` +
     `<div class="md-code-head"><span>${md.utils.escapeHtml(lang)}</span>` +
-    `<button type="button" class="md-copy" data-md-copy title="copy">${COPY_ICON}</button></div>` +
+    `<button type="button" class="md-copy" data-md-copy title="${md.utils.escapeHtml(copyLabel)}" aria-label="${md.utils.escapeHtml(copyLabel)}">${COPY_ICON}</button></div>` +
     `${inner}</div>`
   )
 }

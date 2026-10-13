@@ -21,18 +21,18 @@ const health = computed(() => monitorStore.health)
 const python = computed(() => monitorStore.python)
 const reprobing = ref(false)
 
-const componentNames: Record<string, string> = {
-  postgres: 'PostgreSQL',
-  redis: 'Redis',
-  manticore: 'Manticore',
-  minio: 'MinIO',
-  rabbitmq: 'RabbitMQ',
-  python: 'Python Runtime',
-}
+const componentNames = computed<Record<string, string>>(() => ({
+  postgres: t('monitor.componentPostgres'),
+  redis: t('monitor.componentRedis'),
+  manticore: t('monitor.componentManticore'),
+  minio: t('monitor.componentMinio'),
+  rabbitmq: t('monitor.componentRabbitmq'),
+  python: t('monitor.componentPython'),
+}))
 
 const items = computed(() =>
   (health.value?.components ?? []).map((component) => ({
-    name: componentNames[component.name] ?? component.name,
+    name: componentNames.value[component.name] ?? component.name,
     status: component.status,
     detail: component.detail ?? '',
     costMs: component.costMs,
@@ -72,9 +72,11 @@ onMounted(load)
         <p class="lw-subtitle mt-1">{{ t('monitor.desc') }}</p>
       </div>
       <div class="flex items-center gap-3">
-        <LwTag v-if="aggregate" :tone="toneOf(aggregate) === 'success' ? 'success' : toneOf(aggregate) === 'error' ? 'error' : 'warning'">
-          {{ aggregate }}
-        </LwTag>
+        <span class="h-10 inline-flex items-center">
+          <LwTag v-if="aggregate" :tone="toneOf(aggregate) === 'success' ? 'success' : toneOf(aggregate) === 'error' ? 'error' : 'warning'">
+            {{ aggregate }}
+          </LwTag>
+        </span>
         <LwButton variant="ghost" @click="load">
           <template #icon><el-icon><Refresh /></el-icon></template>
           {{ t('common.refresh') }}
@@ -88,7 +90,7 @@ onMounted(load)
           <div
             v-for="item in items"
             :key="item.name"
-            class="p-4 rounded-xl border flex items-center justify-between gap-3 transition-all duration-200 hover:shadow-md"
+            class="p-4 rounded-card border flex items-center justify-between gap-3 transition-all duration-200 hover:shadow-md"
             style="border-color: var(--lw-border)"
           >
             <div class="min-w-0">
@@ -97,7 +99,7 @@ onMounted(load)
             </div>
             <div class="flex flex-col items-end gap-1 shrink-0">
               <LwTag :tone="toneOf(item.status)">{{ item.status }}</LwTag>
-              <span class="text-xs opacity-50">{{ item.costMs }}ms</span>
+              <span class="text-xs opacity-50">{{ t('monitor.costMs', { ms: item.costMs }) }}</span>
             </div>
           </div>
         </div>

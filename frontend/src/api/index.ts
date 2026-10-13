@@ -21,7 +21,7 @@ import type {
   KbREQ,
   KbSearchParams,
   KbVO,
-  LogDocVO,
+  LogPageVO,
   LogSearchParams,
   LogStatsVO,
   LoginREQ,
@@ -311,8 +311,8 @@ export const monitorApi = {
 /* ===== 日志检索 ===== */
 
 export const logApi = {
-  search: (params: LogSearchParams) => get<PageResult<LogDocVO>>('/log/search', params),
-  stats: (params: { from?: number; to?: number }) => get<LogStatsVO>('/log/stats', params),
+  search: (params: LogSearchParams) => get<LogPageVO>('/log/search', params),
+  stats: (params: Omit<LogSearchParams, 'page' | 'size'>) => get<LogStatsVO>('/log/stats', params),
 }
 
 /* ===== SSE 流式对话 ===== */

@@ -231,7 +231,7 @@ onMounted(() => {
           </el-table-column>
           <el-table-column :label="t('common.actions')" width="300" fixed="right">
             <template #default="{ row }">
-              <div class="flex gap-1">
+              <div class="flex gap-2">
                 <LwButton v-if="hasPerm('system:user:update')" variant="text" size="sm" @click="openDialog(row)">
                   {{ t('common.edit') }}
                 </LwButton>

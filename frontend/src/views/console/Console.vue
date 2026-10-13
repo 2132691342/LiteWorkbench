@@ -15,6 +15,7 @@ import { useRunStream } from '@/composables/useRunStream'
 import { useRunStore, type ChatMessage } from '@/stores/run'
 import { useSessionStore } from '@/stores/session'
 import type { RunVO } from '@/types/api'
+import { formatTime } from '@/utils/const'
 
 /** 工作台：左侧会话与运行历史，右侧流式时间线（实时与回放同路径） */
 const { t } = useI18n()
@@ -165,10 +166,11 @@ function scrollToBottom(): void {
 
 function toolLabel(name: string): string {
   const labels: Record<string, string> = {
-    python_exec: 'Python',
+    python_exec: t('console.toolPython'),
     file_read: t('console.toolRead'),
     file_write: t('console.toolWrite'),
-    http_get: 'HTTP',
+    http_get: t('console.toolHttp'),
+    kb_search: t('console.toolKb'),
   }
   return labels[name] ?? name
 }
@@ -184,22 +186,14 @@ function runStatusText(run: RunVO): string {
   return t(`console.runStatus_${run.status}`)
 }
 
-function formatTime(value?: number): string {
-  if (!value) return ''
-  return new Date(value).toLocaleString()
-}
-
 /** 运行元信息：耗时与 Token 用量，两者都有才展示 */
 function runMeta(run: RunVO): string {
-  const parts: string[] = []
-  if (run.durationMs) {
-    parts.push(run.durationMs >= 1000 ? `${(run.durationMs / 1000).toFixed(1)}s` : `${run.durationMs}ms`)
-  }
+  const durationMs = run.durationMs ?? 0
+  const duration =
+    durationMs >= 1000 ? `${(durationMs / 1000).toFixed(1)}s` : `${durationMs}ms`
   const tokens = (run.inputTokens ?? 0) + (run.outputTokens ?? 0)
-  if (tokens > 0) {
-    parts.push(`${tokens.toLocaleString()} tokens`)
-  }
-  return parts.join(' · ')
+  if (tokens <= 0) return duration
+  return t('console.runMeta', { duration, tokens: tokens.toLocaleString() })
 }
 
 watch(() => runStore.timeline.length, scrollToBottom)
@@ -244,15 +238,26 @@ onMounted(async () => {
               ? 'color: var(--lw-primary); font-weight: 600; background: var(--lw-primary-tint)'
               : 'color: var(--lw-ink)'
           "
+          role="button"
+          tabindex="0"
+          :aria-selected="item.sessionId === sessionStore.activeSessionId"
           @click="selectSession(item.sessionId)"
+          @keydown.enter="selectSession(item.sessionId)"
+          @keydown.space.prevent="selectSession(item.sessionId)"
         >
           <span class="text-sm truncate">{{ item.title }}</span>
-          <el-icon
-            class="opacity-0 group-hover:opacity-60 transition-opacity"
-            @click.stop="removeSession(item.sessionId)"
-          >
-            <Delete />
-          </el-icon>
+          <el-tooltip :open-delay="300" :content="t('console.sessionDelete')" placement="top">
+            <el-icon
+              class="opacity-0 group-hover:opacity-60 transition-opacity focus:opacity-60"
+              role="button"
+              tabindex="0"
+              aria-label="delete session"
+              @click.stop="removeSession(item.sessionId)"
+              @keydown.enter.stop="removeSession(item.sessionId)"
+            >
+              <Delete />
+            </el-icon>
+          </el-tooltip>
         </div>
       </div>
 
@@ -280,15 +285,9 @@ onMounted(async () => {
             <div class="text-xs truncate mt-0.5">{{ run.prompt }}</div>
             <div class="flex items-center justify-between gap-2 mt-0.5">
               <span v-if="runMeta(run)" class="text-xs opacity-50 font-mono">{{ runMeta(run) }}</span>
-              <button
-                type="button"
-                class="text-xs shrink-0 transition-opacity hover:opacity-70"
-                style="color: var(--lw-primary)"
-                :title="t('console.openInRuns')"
-                @click.stop="openInRuns(run.runId)"
-              >
+              <LwButton variant="text" size="sm" class="shrink-0" @click.stop="openInRuns(run.runId)">
                 {{ t('console.openInRuns') }}
-              </button>
+              </LwButton>
             </div>
           </div>
         </div>
@@ -335,7 +334,7 @@ onMounted(async () => {
           <template v-for="(message, index) in messages" :key="index">
             <div v-if="message.role === 'user'" class="flex justify-end">
               <div
-                class="max-w-[80%] px-4 py-2.5 rounded-2xl rounded-br-md text-sm leading-relaxed whitespace-pre-wrap"
+                class="max-w-[80%] px-4 py-2.5 rounded-card rounded-br-[4px] text-sm leading-relaxed whitespace-pre-wrap"
                 style="background: var(--lw-primary); color: var(--lw-on-primary)"
               >
                 {{ message.content }}
@@ -367,11 +366,8 @@ onMounted(async () => {
                 </div>
                 <pre v-if="step.output" class="mt-1 whitespace-pre-wrap break-all max-h-40 overflow-auto">{{ step.output }}</pre>
               </div>
-              <div
-                v-if="message.content || message.streaming"
-                class="max-w-[80%] px-4 py-3 rounded-2xl rounded-bl-md border"
-                :style="{ background: 'var(--lw-surface-raised)', 'border-color': 'var(--lw-border)' }"
-              >
+              <!-- 助手消息左对齐无气泡，Markdown 全文渲染（DESIGN.md §12.2） -->
+              <div v-if="message.content || message.streaming" class="text-sm">
                 <LwMarkdown :content="message.content" /><span v-if="message.streaming" class="lw-cursor">▍</span>
               </div>
             </div>

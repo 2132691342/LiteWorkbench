@@ -36,7 +36,7 @@ const route = useRoute()
 const runs = shallowRef<RunVO[]>([])
 const total = ref(0)
 const page = ref(1)
-const size = 20
+const size = ref(20)
 const loadingList = ref(false)
 const listError = ref('')
 const stateFilter = ref('all')
@@ -214,7 +214,7 @@ async function loadRuns(): Promise<void> {
   try {
     const result = await runApi.page({
       page: page.value,
-      size,
+      size: size.value,
       state: stateFilter.value === 'all' ? undefined : stateFilter.value,
     })
     runs.value = result.list
@@ -232,8 +232,14 @@ function changeFilter(value: string): void {
   void loadRuns()
 }
 
-function changePage(step: number): void {
-  page.value += step
+function changePage(next: number): void {
+  page.value = next
+  void loadRuns()
+}
+
+function changeSize(next: number): void {
+  size.value = next
+  page.value = 1
   void loadRuns()
 }
 
@@ -368,14 +374,16 @@ void loadRuns()
           </div>
         </LwPageState>
 
-        <div v-if="total > size" class="flex items-center justify-between pt-1">
-          <span class="text-xs" style="color: var(--lw-ink-muted)">
-            {{ t('common.total') }} {{ total }} · {{ page }}/{{ Math.ceil(total / size) }}
-          </span>
-          <div class="flex gap-2">
-            <LwButton variant="ghost" size="sm" :disabled="page <= 1" @click="changePage(-1)">‹</LwButton>
-            <LwButton variant="ghost" size="sm" :disabled="page * size >= total" @click="changePage(1)">›</LwButton>
-          </div>
+        <div v-if="total > size" class="flex justify-end pt-1">
+          <el-pagination
+            v-model:current-page="page"
+            v-model:page-size="size"
+            :total="total"
+            :page-sizes="[10, 20, 50]"
+            layout="total, sizes, prev, pager, next"
+            @current-change="changePage"
+            @size-change="changeSize"
+          />
         </div>
       </div>
 
@@ -434,14 +442,13 @@ void loadRuns()
               <div class="flex flex-wrap items-center justify-between gap-3">
                 <LwSegmented v-model="view" :options="viewOptions" />
                 <div v-if="view === 'timeline'" class="flex items-center gap-2">
-                  <LwButton variant="ghost" size="sm" @click="toggleReplay">
+                  <LwButton variant="ghost" @click="toggleReplay">
                     {{ replaying ? t('runs.replayPause') : t('runs.replayPlay') }}
                   </LwButton>
                   <LwSegmented
                     v-if="replaying"
                     :model-value="replaySpeed"
                     :options="speedOptions"
-                    size="sm"
                     @update:model-value="setSpeed"
                   />
                   <span v-if="replaying" class="text-xs" style="color: var(--lw-ink-muted)">
