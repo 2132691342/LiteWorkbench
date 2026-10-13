@@ -2,16 +2,16 @@
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import LwButton from '@/components/ui/LwButton.vue'
+import LwErrorPage from '@/components/ui/LwErrorPage.vue'
 
-/** 404 兜底页 */
+/** 404：页面不存在或已被移动 */
 const { t } = useI18n()
 const router = useRouter()
 </script>
 
 <template>
-  <div class="lw-page items-center justify-center" style="min-height: 60vh">
-    <div class="text-6xl font-extrabold tracking-tight" style="color: var(--lw-primary)">404</div>
-    <p class="text-sm" style="color: var(--lw-ink-muted)">{{ t('notFound.title') }}</p>
+  <LwErrorPage code="404" :title="t('notFound.title')" :description="t('error.notFoundDesc')">
     <LwButton @click="router.push('/dashboard')">{{ t('notFound.back') }}</LwButton>
-  </div>
+    <LwButton variant="ghost" @click="router.back()">{{ t('error.backPrev') }}</LwButton>
+  </LwErrorPage>
 </template>

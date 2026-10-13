@@ -1,6 +1,7 @@
 import {
   Brush,
   ChatDotRound,
+  Clock,
   Coin,
   Connection,
   Document,
@@ -23,6 +24,7 @@ export const MENU_ICONS: Record<string, Component> = {
   dashboard: Grid,
   chat: ChatDotRound,
   console: ChatDotRound,
+  history: Clock,
   folder: Files,
   bulb: MagicStick,
   document: Document,

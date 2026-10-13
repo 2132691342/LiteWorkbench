@@ -132,7 +132,7 @@
 | 码 | 标识 | HTTP | 提示 |
 |---|---|---|---|
 | 7001 | `PYTHON_NOT_READY` | 503 | Python 运行时未就绪 |
-| 7002 | `PYTHON_BUNDLE_MISSING` | 503 | 内置运行时包缺失 |
+| 7002 | `PYTHON_BUNDLE_MISSING` | 503 | 内置解释器目录缺失 |
 | 7003 | `PYTHON_EXEC_FAILED` | 500 | 脚本执行失败 |
 | 7004 | `PYTHON_UNSAFE_PATH` | 400 | 脚本包含不安全的路径引用 |
 

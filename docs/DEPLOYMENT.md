@@ -253,7 +253,8 @@ Manticore 无文档级 TTL，日志表保留由应用定时任务（每日一次
 | 知识库文档一直 pending | 状态不流转 | MQ 不可用或消费者掉线：看 `[kb.parse]` 日志，恢复后重解析 |
 | 知识库 8604 / 8605 | 上传被拒 / 解析失败 | 8604 换支持的格式；8605 看文档行 `error_message`，修原件后重解析 |
 | 会话消息 / 知识块读不到 | 旧会话消息不全 | 这两类是 Manticore 文档，与 Redis 无关：查 Manticore 容器与数据卷是否被重建、`lw_msg` / `lw_kbchunk` 索引是否还在（用带 `FROM` 的语句探测，`SELECT 1` 在本版本会被 501，证明不了任何事） |
-| 日志中心查不到 | 检索为空 | MQ 降级时日志只落文件（记 warn）；索引启动幂等创建；文档 30 天 TTL 过期即不可查 |
+| 日志中心查不到 | 检索为空 | MQ 降级时日志只落文件（记 warn）；索引启动幂等创建；文档 30 天 TTL 过期即不可查；普通用户只看到自己的日志，排查他人需管理员（`monitor:log:global`） |
+| 升级后日志检索报 `Unknown column user_id` | `lw_log` 仍是旧结构且启动期 ALTER 未生效 | 重启应用触发幂等建表与补列；仍失败时在容器内 `curl -X POST 'http://manticore:9308/cli' -H 'Content-Type: text/plain' --data 'ALTER TABLE lw_log ADD COLUMN user_id string'` 手工补齐后重探 |
 | 事件回放缺尾部 | 回放不完整 | 事件按 200ms 定时攒批落库，进程被强杀可能丢最后一批；以会话助手消息为准 |
 | 容器连不上中间件 | Connection refused 但中间件健康 | aardvark-dns 残留记录把主机名解析到旧 IP：对涉事容器逐个 `network disconnect` + `connect`；严禁对共享网络 `network rm` |
 | 端口不可达但容器在跑 | 容器内 8080 返回 UP，宿主机 24399 失败 | rootless Podman 的 `CNI-HOSTPORT-DNAT` 残留指向已删容器 IP：删除该端口的 iptables 规则后重建，或重跑 `deploy-app.sh` |

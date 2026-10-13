@@ -35,6 +35,17 @@ public class ModelCaller {
         return complete(prompt, provider.getProviderCode(), modelFactory.resolveModelName(provider, null));
     }
 
+    /** 静默调用：失败或空文本返回 null，供会话自动命名等不影响主链路的场景使用 */
+    public String completeQuietly(String prompt) {
+        try {
+            String text = complete(prompt);
+            return StrUtil.isBlank(text) ? null : text;
+        } catch (Exception e) {
+            log.warn("[model.sync] 静默调用失败 {}", e.getMessage());
+            return null;
+        }
+    }
+
     /** 指定供应方与模型同步生成文本，超时与失败转对应错误码 */
     public String complete(String prompt, String providerCode, String modelName) {
         WbProviderDO provider = modelFactory.loadProvider(providerCode);

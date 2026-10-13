@@ -10,8 +10,10 @@ import com.liteworkbench.common.ErrorCodeEnum;
 import com.liteworkbench.common.IdGenerator;
 import com.liteworkbench.common.TimeUtil;
 import com.liteworkbench.domain.constant.IdPrefixConst;
+import com.liteworkbench.domain.constant.ProviderPresetEnum;
 import com.liteworkbench.domain.dto.ProviderREQ;
 import com.liteworkbench.domain.entity.WbProviderDO;
+import com.liteworkbench.domain.vo.ProviderPresetVO;
 import com.liteworkbench.domain.vo.ProviderVO;
 import com.liteworkbench.mapper.WbProviderMapper;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
@@ -42,20 +45,36 @@ public class ProviderService {
         return providerMapper.selectAll().stream().map(this::toVO).toList();
     }
 
-    /** 新建供应方 */
+    /** 预设列表：与 hutool-ai 对齐的五个预设，前端新建表单下拉用 */
+    public List<ProviderPresetVO> presets() {
+        return Arrays.stream(ProviderPresetEnum.values()).map(preset -> {
+            ProviderPresetVO vo = new ProviderPresetVO();
+            vo.setProviderCode(preset.getCode());
+            vo.setBaseUrl(preset.getBaseUrl());
+            vo.setDefaultModel(preset.getDefaultModel());
+            vo.setProtocol(ProviderPresetEnum.isOllama(preset.getCode()) ? "ollama" : "openai");
+            vo.setRequiresKey(!ProviderPresetEnum.isOllama(preset.getCode()));
+            return vo;
+        }).toList();
+    }
+
+    /** 新建供应方：端点与默认模型留空时回落预设默认值 */
     @Transactional(rollbackFor = Exception.class)
     public String create(ProviderREQ req, String userId) {
         var conflict = providerMapper.countByCodeExclude(req.getProviderCode(), "");
         if (conflict > 0) {
             throw new BizException(ErrorCodeEnum.STATE_CONFLICT, "供应方编码已存在");
         }
+        ProviderPresetEnum preset = ProviderPresetEnum.ofCode(req.getProviderCode());
         WbProviderDO provider = new WbProviderDO();
         provider.setProviderId(IdGenerator.generate(IdPrefixConst.PROVIDER));
         provider.setProviderCode(req.getProviderCode());
         provider.setProviderName(req.getProviderName());
-        provider.setBaseUrl(req.getBaseUrl());
+        provider.setBaseUrl(StrUtil.blankToDefault(req.getBaseUrl(),
+                Objects.nonNull(preset) ? preset.getBaseUrl() : null));
         provider.setApiKeyEnc(encryptIfPresent(req.getApiKey()));
-        provider.setDefaultModel(req.getDefaultModel());
+        provider.setDefaultModel(StrUtil.blankToDefault(req.getDefaultModel(),
+                Objects.nonNull(preset) ? preset.getDefaultModel() : null));
         provider.setEnabled(Objects.nonNull(req.getEnabled()) ? req.getEnabled() : Boolean.TRUE);
         provider.setCreatedBy(userId);
         providerMapper.insert(provider);

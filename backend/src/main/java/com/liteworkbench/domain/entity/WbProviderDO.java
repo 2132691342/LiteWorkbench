@@ -23,7 +23,7 @@ public class WbProviderDO implements Serializable {
 
     /** 供应方 ID，PROV_ 前缀 */
     private String providerId;
-    /** 供应方编码 openai / anthropic / ollama，全局唯一 */
+    /** 供应方编码，预设 openai / deepseek / doubao / grok / ollama，全局唯一 */
     private String providerCode;
     /** 展示名 */
     private String providerName;

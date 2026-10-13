@@ -164,6 +164,192 @@ body {
   font-size: 16px;
 }
 
+/* ===== 分段切换：白底容器 + 选中浅紫底 + 主紫字 ===== */
+.lw-segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  background: var(--lw-surface-raised);
+  border: 1px solid var(--lw-border);
+  border-radius: 8px;
+  box-shadow: var(--lw-shadow-sm);
+}
+
+.lw-segmented.is-equal .lw-segmented__item {
+  flex: 1;
+  justify-content: center;
+}
+
+.lw-segmented__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--lw-ink-muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--lw-dur-fast) var(--lw-ease);
+}
+
+.lw-segmented--md .lw-segmented__item {
+  height: 32px;
+  padding: 0 16px;
+  font-size: 13px;
+}
+
+.lw-segmented__item:hover:not(:disabled):not(.is-active) {
+  color: var(--lw-ink);
+  background: var(--lw-primary-tint);
+}
+
+.lw-segmented__item.is-active {
+  background: var(--lw-surface-subtle);
+  color: var(--lw-primary);
+  box-shadow: var(--lw-shadow-sm);
+}
+
+.lw-segmented__item:disabled {
+  color: var(--lw-ink-disabled);
+  cursor: not-allowed;
+}
+
+.lw-segmented__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--lw-primary-tint);
+  color: var(--lw-primary);
+  font-size: 10px;
+  line-height: 1;
+}
+
+.lw-segmented__item.is-active .lw-segmented__count {
+  background: var(--lw-primary);
+  color: var(--lw-on-primary);
+}
+
+/* ===== 运行记录：列表行与时间线块 ===== */
+.run-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--lw-border);
+  border-radius: 8px;
+  background: var(--lw-surface-raised);
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--lw-dur-fast) var(--lw-ease);
+}
+
+.run-row:hover {
+  border-color: var(--lw-border-strong);
+  background: var(--lw-primary-tint);
+}
+
+.run-row.is-active {
+  border-color: var(--lw-secondary);
+  background: var(--lw-secondary-selected);
+}
+
+.run-row__prompt {
+  font-size: 13px;
+  color: var(--lw-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run-row__meta {
+  display: flex;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--lw-ink-muted);
+}
+
+.tl-thinking {
+  background: var(--lw-surface-subtle);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.tl-thinking summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--lw-ink-muted);
+}
+
+.tl-thinking pre {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--lw-ink-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.tl-tool {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--lw-border);
+  border-radius: 8px;
+  background: var(--lw-surface-raised);
+}
+
+.tl-tool summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--lw-ink-muted);
+}
+
+.tl-tool pre {
+  margin-top: 6px;
+  padding: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 260px;
+  overflow: auto;
+  background: var(--lw-surface-subtle);
+  border-radius: 6px;
+}
+
+.tl-model {
+  align-self: flex-start;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--lw-primary);
+  background: var(--lw-primary-tint);
+  border-radius: 6px;
+}
+
+.replay-banner {
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--lw-primary);
+  background: var(--lw-secondary-tint);
+  border-radius: 8px;
+}
+
 .lw-spinner {
   width: 14px;
   height: 14px;
@@ -201,17 +387,35 @@ body {
   --el-fill-color-blank: var(--lw-surface-raised);
 }
 
+/* Element Plus 按钮全局补足五态：hover 放大 / active 缩小 / disabled 静默 / loading 不缩放 */
 .el-button {
   font-weight: 600;
-}
-
-.el-button:not(.is-disabled):hover {
-  transform: scale(1.05);
   transition: all var(--lw-dur) var(--lw-ease);
 }
 
-.el-button:not(.is-disabled):active {
+.el-button:not(.is-disabled):not(.is-loading):hover {
+  transform: scale(1.05);
+  box-shadow: var(--lw-shadow-md);
+}
+
+.el-button:not(.is-disabled):not(.is-loading):active {
   transform: scale(0.95);
+  box-shadow: none;
+}
+
+.el-button.is-disabled,
+.el-button:disabled {
+  transform: none;
+}
+
+.el-button.is-loading {
+  pointer-events: none;
+}
+
+.el-button.is-loading:hover,
+.el-button.is-loading:active {
+  transform: none;
+  box-shadow: none;
 }
 
 .el-table {

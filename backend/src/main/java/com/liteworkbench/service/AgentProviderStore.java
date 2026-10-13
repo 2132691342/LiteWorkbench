@@ -26,7 +26,7 @@ public class AgentProviderStore implements ProviderStore {
         return providerMapper.selectById(providerId);
     }
 
-    /** 默认可用供应方：配置完整的 openai/anthropic 优先，其次 ollama，再其次任一启用项 */
+    /** 默认可用供应方：配置完整的云端供应方（OpenAI 兼容族）优先，其次 ollama，再其次任一启用项 */
     @Override
     public WbProviderDO findDefault() {
         List<WbProviderDO> enabled = providerMapper.selectAll().stream()
@@ -37,10 +37,11 @@ public class AgentProviderStore implements ProviderStore {
                         .findFirst().orElse(enabled.isEmpty() ? null : enabled.get(0)));
     }
 
-    /** 云端协议且密钥与端点齐备 */
+    /** 云端供应方：ollama 之外均按 OpenAI 兼容族处理，要求密钥与端点齐备 */
     private boolean isReadyCloud(WbProviderDO provider) {
-        boolean cloud = isProtocol(provider, "openai") || isProtocol(provider, "anthropic");
-        return cloud && StrUtil.isNotBlank(provider.getBaseUrl()) && StrUtil.isNotBlank(provider.getApiKeyEnc());
+        return !isProtocol(provider, "ollama")
+                && StrUtil.isNotBlank(provider.getBaseUrl())
+                && StrUtil.isNotBlank(provider.getApiKeyEnc());
     }
 
     /** 协议判定：编码含协议关键字即命中，未知编码按 OpenAI 兼容处理 */

@@ -3,7 +3,7 @@
 一个自托管的企业级个人 AI 创作工作台：多用户、多角色、多菜单权限。Agent 负责干活，工作台负责让你**看见并控制**它是怎么干的，并把产出沉淀为可复用的创作资产。
 
 - 后端：JDK 17 + Spring Boot 3.5.12 + MyBatis 3.0.4 + Hutool 5.8.46（含 hutool-ai）+ Sa-Token 1.42.0 + ULID
-- Agent：**自研内核**，模型出站只依赖 hutool-ai，OpenAI 兼容 / Anthropic / Ollama 三协议，不引任何 Agent 框架
+- Agent：**自研内核**，模型出站只依赖 hutool-ai，供应方预设与 hutool-ai 对齐（OpenAI / DeepSeek / Doubao / Grok / Ollama），不引任何 Agent 框架
 - 前端：Vue 3.4.34 + TypeScript 5.4.5 + Vite 5.2.12 + Element Plus 2.9.0 + UnoCSS 0.58.6 + Pinia 2.1.7 + ECharts 5.5.0 + WangEditor
 - 存储：PostgreSQL 16（镜像内置 pgvector 扩展，预留）+ Manticore 25.0.0（全文检索）+ Redis 8 + MinIO + RabbitMQ
 - 运行形态：容器，内置 Python 运行时，对外端口 `24399`
@@ -23,14 +23,14 @@ LiteWorkbench 解决的是两件事：**"Agent 跑起来之后我看不见它在
 | 用户与权限 | 用户 / 角色 / 菜单三段式 RBAC，按钮级权限点，Sa-Token 会话 |
 | 安全登录 | 密码 RSA 加密传输、失败锁定、首登强制改密、凭据零回显 |
 | 会话工作台 | 多轮对话，流式输出，随时中断；一次对话产生一条可回放、可审计的 Run |
-| 运行可观测 | Run / Step / Event 三层时间线，工具调用输入输出可见，可中断可回放 |
-| 创作台 | 文档创作（Markdown / 富文本 / 代码）、版本快照与回滚、AI 续写润色摘要扩写翻译、全站全文检索 |
+| 运行可观测 | 独立运行记录页：Run / Event 时间线、工具调用链、Token 与耗时统计、回放播放器，工具调用输入输出可见，可中断可回放 |
+| 创作台 | 文档创作（Markdown / 富文本 / 代码）、版本快照与回滚、AI 续写润色摘要扩写翻译（流式）、全站全文检索 |
 | 提示词库 | 内置模板 + 自定义模板，`{{变量}}` 渲染，一键应用到会话 |
 | 知识库 | 原件存 MinIO，切片分块存 Manticore，页面检索与 Agent 工具共用同一份索引 |
 | 工具系统 | Python 运行时、文件读写、HTTP 请求、知识库检索，均带超时与输出裁剪 |
 | 技能 | 存 `wb_skill` 表，两段式：摘要常驻提示词，命中触发词才展开正文，节省上下文 |
 | 文件空间 | MinIO 对象存储，按用户隔离前缀，支持在线预览与预签名下载 |
-| 日志中心 | 应用日志汇聚 Manticore，按级别 / 关键字 / Logger / traceId / 时间多维检索，带分布概览与时间直方图 |
+| 日志中心 | 应用日志自动汇聚 Manticore（traceId / userId / sessionId / runId 全链路标识），管理员看全局视角，普通用户看本人视角，带分布概览与时间直方图 |
 | 健康监控 | 数据库、Redis、Manticore、MinIO、RabbitMQ、Python 运行时逐项探测 |
 | 仪表盘 | 运行量、Token 消耗、工具调用分布的可视化统计 |
 | 组件库 | 设计规范的可视化样例，五态按钮、语义色、异步三态、图表全量可点 |
@@ -62,7 +62,7 @@ LiteWorkbench 解决的是两件事：**"Agent 跑起来之后我看不见它在
 | 持久 | MyBatis Spring Boot Starter | 3.0.4 | SQL 映射，XML 管理 |
 | 工具 | Hutool | 5.8.46 | 字符串/集合/日期/加解密，含 `hutool-ai` 模型出站 |
 | Agent | 自研内核 | — | 推理循环、工具注册、事件归一、上下文压缩 |
-| 模型 | `agent/model` 三协议客户端 | — | OpenAI 兼容、Anthropic、Ollama（含 SSE 增量解析与取消） |
+| 模型 | `agent/model` 协议客户端 | — | OpenAI 兼容（覆盖 OpenAI / DeepSeek / Doubao / Grok）与 Ollama（含 SSE 增量解析、工具调用累积与取消） |
 | 认证 | Sa-Token | 1.42.0 | 登录、权限注解、会话管理 |
 | ID | ulid-creator | 5.1.0 | ULID 生成 |
 | 数据库 | PostgreSQL + pgvector | 16 | 业务数据；pgvector 扩展预留，本期不建向量列 |

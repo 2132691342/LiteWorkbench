@@ -6,6 +6,7 @@ import com.liteworkbench.common.LoginContext;
 import com.liteworkbench.common.R;
 import com.liteworkbench.domain.constant.PermConst;
 import com.liteworkbench.domain.dto.ProviderREQ;
+import com.liteworkbench.domain.vo.ProviderPresetVO;
 import com.liteworkbench.domain.vo.ProviderVO;
 import com.liteworkbench.service.ProviderService;
 import jakarta.validation.Valid;
@@ -31,6 +32,13 @@ public class ProviderController {
     @GetMapping("/list")
     public R<List<ProviderVO>> list() {
         return R.ok(providerService.list());
+    }
+
+    /** 预设列表：code / baseUrl / defaultModel / 协议通道，新建表单下拉用 */
+    @SaCheckPermission(PermConst.WB_PROVIDER_LIST)
+    @GetMapping("/presets")
+    public R<List<ProviderPresetVO>> presets() {
+        return R.ok(providerService.presets());
     }
 
     /** 新建 */

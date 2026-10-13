@@ -12,11 +12,13 @@ import com.liteworkbench.agent.tool.ToolRegistry;
 import com.liteworkbench.agent.tool.WorkbenchTools;
 import com.liteworkbench.config.AgentProperties;
 import com.liteworkbench.config.RuntimeProperties;
+import com.liteworkbench.domain.constant.AppConst;
 import com.liteworkbench.domain.constant.RunConst;
 import com.liteworkbench.domain.dto.RunEventDTO;
 import com.liteworkbench.runtime.PythonRuntime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -65,10 +67,13 @@ public class AgentKernelRuntime implements AgentRuntime {
         return handle;
     }
 
-    /** 后台执行：事件带 seq 顺序回调，结束或异常统一收敛句柄 */
+    /** 后台执行：MDC 注入运行链路标识；事件带 seq 顺序回调，结束或异常统一收敛句柄 */
     private void run(RunHandle handle, RunContext context, AgentLoop loop, List<Msg> messages,
                      ToolRegistry registry, AtomicLong seq, Consumer<RunEventDTO> sink) {
         long started = System.currentTimeMillis();
+        MDC.put(AppConst.MDC_USER_ID, context.userId());
+        MDC.put(AppConst.MDC_SESSION_ID, context.sessionId());
+        MDC.put(AppConst.MDC_RUN_ID, context.runId());
         try {
             sink.accept(adapter.adapt(AgentEvent.builder().type(AgentEventType.AGENT_START).build(),
                     context.runId(), context.sessionId(), seq.getAndIncrement()));
@@ -82,6 +87,9 @@ public class AgentKernelRuntime implements AgentRuntime {
             registry.shutdown();
             log.info("[agent.run] runId={} 内核结束 cost={}ms", context.runId(),
                     System.currentTimeMillis() - started);
+            MDC.remove(AppConst.MDC_USER_ID);
+            MDC.remove(AppConst.MDC_SESSION_ID);
+            MDC.remove(AppConst.MDC_RUN_ID);
         }
     }
 }

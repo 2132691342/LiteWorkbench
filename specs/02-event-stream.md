@@ -31,7 +31,7 @@
 | `AGENT_END` | `run.end` | — |
 | `AGENT_ERROR` | `run.error` | — |
 
-协议差异（OpenAI 的 `data:` SSE、Anthropic 的命名事件、Ollama 的 NDJSON）在 `agent/model` 内被拉平，归一表只面对内核事件，因此换模型协议不动前端、不动落库结构。未识别的内核类型不丢事件，归一为 `custom` 并原样带出类型字符串。
+协议差异（OpenAI 兼容的 `data:` SSE、Ollama 的 NDJSON）在 `agent/model` 内被拉平，归一表只面对内核事件，因此换模型协议不动前端、不动落库结构。未识别的内核类型不丢事件，归一为 `custom` 并原样带出类型字符串。
 
 `run.end` / `run.error` 不由内核产出：内核只发 `AGENT_START` 与循环内事件，终态帧由 `RunService` 按运行结果合成，保证运行状态只有一处写。
 

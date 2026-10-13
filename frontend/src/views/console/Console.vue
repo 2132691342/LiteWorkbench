@@ -2,6 +2,7 @@
 import { Delete, Edit, Position, Promotion, RefreshLeft, VideoPlay } from '@element-plus/icons-vue'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import ConsoleQuickStart from '@/components/console/ConsoleQuickStart.vue'
 import LwButton from '@/components/ui/LwButton.vue'
@@ -17,6 +18,7 @@ import type { RunVO } from '@/types/api'
 
 /** 工作台：左侧会话与运行历史，右侧流式时间线（实时与回放同路径） */
 const { t } = useI18n()
+const router = useRouter()
 const sessionStore = useSessionStore()
 const runStore = useRunStore()
 const { start: startStream, dispose: disposeStream } = useRunStream()
@@ -136,6 +138,11 @@ async function replay(runId: string): Promise<void> {
   if (runStore.streaming || !runId) return
   await runStore.replay(runId)
   scrollToBottom()
+}
+
+/** 跳转到运行记录页并定位该运行（独立详情视图） */
+function openInRuns(runId: string): void {
+  void router.push({ path: '/runs', query: { runId } })
 }
 
 async function backToLive(): Promise<void> {
@@ -271,7 +278,18 @@ onMounted(async () => {
               <LwTag :tone="runStatusTone(run)">{{ runStatusText(run) }}</LwTag>
             </div>
             <div class="text-xs truncate mt-0.5">{{ run.prompt }}</div>
-            <div v-if="runMeta(run)" class="text-xs opacity-50 mt-0.5 font-mono">{{ runMeta(run) }}</div>
+            <div class="flex items-center justify-between gap-2 mt-0.5">
+              <span v-if="runMeta(run)" class="text-xs opacity-50 font-mono">{{ runMeta(run) }}</span>
+              <button
+                type="button"
+                class="text-xs shrink-0 transition-opacity hover:opacity-70"
+                style="color: var(--lw-primary)"
+                :title="t('console.openInRuns')"
+                @click.stop="openInRuns(run.runId)"
+              >
+                {{ t('console.openInRuns') }}
+              </button>
+            </div>
           </div>
         </div>
       </div>

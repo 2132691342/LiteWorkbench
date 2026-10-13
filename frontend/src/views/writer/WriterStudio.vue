@@ -11,7 +11,7 @@ import LwCard from '@/components/ui/LwCard.vue'
 import LwEmpty from '@/components/ui/LwEmpty.vue'
 import LwMarkdown from '@/components/ui/LwMarkdown.vue'
 import LwPageState from '@/components/ui/LwPageState.vue'
-import { docApi, kbApi } from '@/api'
+import { docApi, kbApi, openAssistStream } from '@/api'
 import { usePermission } from '@/composables/usePermission'
 import type { DocVO, DocVersionVO, KbVO } from '@/types/api'
 import { formatTime } from '@/utils/const'
@@ -194,7 +194,10 @@ function captureSelection(): string {
   return content.value.slice(el.selectionStart, el.selectionEnd)
 }
 
-async function assist(): Promise<void> {
+/** 流式辅助的中断句柄：断连即取消服务端模型调用 */
+let assistAbort: ((reason?: string) => void) | null = null
+
+function assist(): void {
   const selection = captureSelection()
   selectedText.value = selection
   if (!selection && !current.value) {
@@ -203,20 +206,39 @@ async function assist(): Promise<void> {
   }
   assistRunning.value = true
   assistText.value = ''
-  try {
-    const result = await docApi.assist({
+  assistAbort = openAssistStream(
+    {
       docId: current.value?.docId,
       action: assistAction.value,
       selection,
       instruction: assistInstruction.value,
       kbId: assistKbId.value || undefined,
-    })
-    assistText.value = result.text
-  } catch (e) {
-    error.value = (e as Error).message
-  } finally {
-    assistRunning.value = false
-  }
+    },
+    {
+      onDelta: (text) => {
+        assistText.value += text
+      },
+      onEnd: (payload) => {
+        assistRunning.value = false
+        assistAbort = null
+        if (payload.text) {
+          assistText.value = payload.text
+        }
+      },
+      onError: (message) => {
+        assistRunning.value = false
+        assistAbort = null
+        error.value = message
+      },
+    },
+  )
+}
+
+/** 停止生成：断开流式连接，服务端在下一检查点取消模型调用 */
+function stopAssist(): void {
+  assistAbort?.('user-stop')
+  assistAbort = null
+  assistRunning.value = false
 }
 
 function appendResult(): void {
@@ -275,6 +297,8 @@ watch(content, () => {
 })
 
 onBeforeUnmount(() => {
+  assistAbort?.('unmount')
+  assistAbort = null
   editorRef.value?.destroy?.()
   editorRef.value = null
 })
@@ -451,12 +475,20 @@ void loadKbOptions()
           />
         </div>
 
-        <LwButton block :loading="assistRunning" @click="assist">
-          {{ assistRunning ? t('writer.assistGenerating') : t('writer.assistRun') }}
+        <LwButton v-if="!assistRunning" block @click="assist">
+          {{ t('writer.assistRun') }}
+        </LwButton>
+        <LwButton v-else block variant="danger" @click="stopAssist">
+          {{ t('writer.assistStop') }}
         </LwButton>
 
-        <div v-if="assistText" class="flex flex-col gap-2">
-          <div class="lw-label">{{ t('writer.assistAction') }}</div>
+        <div v-if="assistText || assistRunning" class="flex flex-col gap-2">
+          <div class="flex items-center gap-2">
+            <div class="lw-label">{{ t('writer.assistResult') }}</div>
+            <span v-if="assistRunning" class="text-xs" style="color: var(--lw-primary)">
+              {{ t('writer.assistGenerating') }}
+            </span>
+          </div>
           <textarea v-model="assistText" class="lw-input min-h-48 font-mono text-xs leading-5" />
           <div class="flex flex-wrap gap-2">
             <LwButton v-if="canEdit" size="sm" variant="secondary" @click="replaceSelection">

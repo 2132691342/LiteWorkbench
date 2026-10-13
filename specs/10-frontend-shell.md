@@ -29,7 +29,7 @@
 |---|---|
 | `views/` | 路由页：登录、仪表盘、工作台、创作台、提示词、文件、技能、知识库、日志、监控、设置、系统管理、组件库 |
 | `components/layout/` | 顶栏、侧栏、外壳 |
-| `components/ui/` | 基础件：`LwButton`、`LwCard`、`LwEmpty`、`LwSkeleton`、`LwErrorBar`、`LwTag`、`LwPageState`、`LwMarkdown`、`LwProgressBar` |
+| `components/ui/` | 基础件：`LwButton`、`LwCard`、`LwEmpty`、`LwSkeleton`、`LwErrorBar`、`LwTag`、`LwPageState`、`LwMarkdown`、`LwProgressBar`、`LwSegmented`（分段切换，全站统一） |
 | `components/charts/` | ECharts 封装（面积图、环形图、柱状图），色值经 `utils/theme.ts` 读令牌 |
 | `components/settings/` | 平台级配置面板：`ProviderPanel`、`ToolPanel` |
 | `stores/` | Pinia setup store |
@@ -47,12 +47,13 @@
 | `/force-password` | 强制改密（`pwdResetRequired = true` 时唯一可达页） | 登录 |
 | `/dashboard` | 仪表盘 | 登录 |
 | `/console` | 工作台（会话 + 运行时间线） | 登录 |
+| `/runs` | 运行记录（运行列表 + 详情时间线 + 回放） | 登录 |
 | `/writer` | 创作台（文档编辑 + 版本 + AI 辅助） | 登录 |
 | `/prompt` | 提示词库 | 登录 |
 | `/files` | 文件空间（含在线预览） | 登录 |
 | `/skills` | 技能 | 登录 |
 | `/kb` | 知识库 | 登录 |
-| `/logs` | 日志中心 | `monitor:log:list` |
+| `/logs` | 日志中心（本人视角；`monitor:log:global` 可切全局） | 登录 |
 | `/monitor` | 健康监控 | `monitor:health:list` |
 | `/settings` | 设置 | 登录 |
 | `/system/user` | 用户管理 | `system:user:list` |
@@ -136,16 +137,23 @@ await runStore.replay(runId)
   ├─ 中断按钮 → POST /run/abort/{runId} → 收到 run.end
   └─ 刷新页面 → 按 runId 拉事件回放
 
+运行记录
+  ├─ 列表：GET /run/page（按状态 / 会话 / 时间过滤，行显示状态 Tag、耗时、Token）
+  ├─ 详情：GET /run/detail/{runId} + GET /run/events/{runId}（时间线 + 工具卡 + 用量）
+  ├─ 回放：本地游标遍历事件（0.5x–4x + 立即），不重发请求
+  └─ 中断：非终态运行可 abort，状态变化就地刷新
+
 创作台
   ├─ 左列文档列表（关键字走 /doc/search，否则 /doc/page）
   ├─ 选中文档 → /doc/detail/{docId} 载入正文与类型
   ├─ 保存 → /doc/update（写版本 + 同步索引）→ 提示已保存
-  ├─ AI 辅助 → /doc/assist → 结果可插入末尾 / 替换选区 / 复制
+  ├─ AI 辅助 → /doc/assist/stream → 增量渲染，可中途停止，结果插入 / 替换选区 / 复制
   └─ 版本历史 → /doc/version/page → 回滚即再走一次保存
 
 日志中心
-  ├─ 进入即拉 /log/stats（近 24 小时）渲染概览卡与时间直方图
+  ├─ 进入即拉 /log/stats（近 24 小时）渲染概览卡与时间直方图，带视角标识
   ├─ 过滤：关键字 + 字段（message/logger/traceId）+ 级别 + logger + traceId + 时间预设
+  ├─ 全局视角（monitor:log:global）：增加 userId / runId 过滤，可反查任一用户与运行
   ├─ 查询 → /log/search → 结果行内高亮，点击展开异常栈
   └─ 复制 traceId / 按 traceId 钻取过滤
 ```

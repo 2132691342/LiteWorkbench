@@ -9,6 +9,7 @@ import LwDonutChart from '@/components/charts/LwDonutChart.vue'
 import LwButton from '@/components/ui/LwButton.vue'
 import LwCard from '@/components/ui/LwCard.vue'
 import LwPageState from '@/components/ui/LwPageState.vue'
+import LwSegmented from '@/components/ui/LwSegmented.vue'
 import { useMonitorStore } from '@/stores/monitor'
 import { useUserStore } from '@/stores/user'
 
@@ -22,12 +23,16 @@ const overview = computed(() => monitorStore.overview)
 const loading = computed(() => monitorStore.loading)
 const error = computed(() => monitorStore.error)
 
-/** 主图表视图：运行趋势 / Token 趋势 */
+/** 主图表视图：运行趋势 / Token 趋势，分段切换全站统一 LwSegmented */
 const view = ref<'runs' | 'tokens'>('runs')
-const views = [
-  { key: 'runs' as const, label: 'dashboard.viewRuns' },
-  { key: 'tokens' as const, label: 'dashboard.viewTokens' },
-]
+const viewOptions = computed(() => [
+  { value: 'runs', label: t('dashboard.viewRuns') },
+  { value: 'tokens', label: t('dashboard.viewTokens') },
+])
+
+function setView(value: string): void {
+  view.value = value === 'tokens' ? 'tokens' : 'runs'
+}
 
 /** 成功率 = 成功运行 / 运行总数，无运行时显示占位 */
 const successRate = computed(() => {
@@ -98,24 +103,7 @@ onMounted(load)
 
     <LwPageState :loading="loading" :error="error" :skeleton-rows="6" @retry="load">
       <div class="flex flex-col sm:flex-row justify-end gap-3">
-        <div
-          class="flex bg-white p-1 rounded-lg border lw-shadow-sm"
-          style="border-color: var(--lw-border)"
-        >
-          <button
-            v-for="item in views"
-            :key="item.key"
-            class="px-3 py-1.5 rounded-md text-xs font-bold transition-all duration-200"
-            :style="
-              view === item.key
-                ? 'background: var(--lw-surface-subtle); color: var(--lw-primary); box-shadow: var(--lw-shadow-sm)'
-                : 'color: var(--lw-ink-muted)'
-            "
-            @click="view = item.key"
-          >
-            {{ t(item.label) }}
-          </button>
-        </div>
+        <LwSegmented :model-value="view" :options="viewOptions" @update:model-value="setView" />
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">

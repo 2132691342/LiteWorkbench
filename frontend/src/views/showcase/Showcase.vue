@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LwAreaChart from '@/components/charts/LwAreaChart.vue'
 import LwButton from '@/components/ui/LwButton.vue'
 import LwCard from '@/components/ui/LwCard.vue'
+import LwSegmented from '@/components/ui/LwSegmented.vue'
 import LwEmpty from '@/components/ui/LwEmpty.vue'
 import LwErrorBar from '@/components/ui/LwErrorBar.vue'
 import LwPageState from '@/components/ui/LwPageState.vue'
@@ -14,6 +15,14 @@ const { t } = useI18n()
 
 const demoLoading = ref(false)
 const demoDone = ref(false)
+
+/** 分段切换样例 */
+const segmentedDemo = ref('all')
+const segmentedOptions = computed(() => [
+  { value: 'all', label: t('common.all') },
+  { value: 'enabled', label: t('common.enabled') },
+  { value: 'disabled', label: t('common.disabled'), count: 3 },
+])
 
 /** 按钮加载态演示：1.2s 后结束 */
 async function simulate(): Promise<void> {
@@ -60,6 +69,10 @@ const chartValues = [8, 16, 12, 24, 20, 32, 28, 40]
             <LwButton size="lg">{{ t('showcase.sizeLg') }}</LwButton>
             <LwButton :loading="demoLoading">{{ t('showcase.loading') }}</LwButton>
             <LwButton disabled>{{ t('showcase.disabled') }}</LwButton>
+          </div>
+          <div class="flex flex-col gap-2 pt-3 border-t" style="border-color: var(--lw-border)">
+            <span class="lw-label">{{ t('showcase.segmented') }}</span>
+            <LwSegmented v-model="segmentedDemo" :options="segmentedOptions" />
           </div>
           <p class="text-xs" style="color: var(--lw-ink-muted)">
             {{ t('showcase.buttonsHint') }}

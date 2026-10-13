@@ -121,7 +121,7 @@
 | `session_id` | varchar(40) PK | `SESS_` |
 | `user_id` | varchar(40) | 归属用户 |
 | `title` | varchar(128) | 会话标题 |
-| `provider_code` | varchar(24) | `openai` / `anthropic` / `ollama` |
+| `provider_code` | varchar(24) | 供应方码，与 `wb_provider.provider_code` 对应 |
 | `model_name` | varchar(64) | 模型名 |
 | `system_prompt` | text | 系统提示词 |
 | `message_count` | int | 消息数 |
@@ -230,13 +230,23 @@
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | `provider_id` | varchar(40) PK | `PROV_` |
-| `provider_code` | varchar(24) | `openai` / `anthropic` / `ollama`，全局唯一 |
+| `provider_code` | varchar(24) | 供应方码，全局唯一；预设 `openai` / `deepseek` / `doubao` / `grok` / `ollama` |
 | `provider_name` | varchar(64) | 展示名 |
-| `base_url` | varchar(512) | 端点 |
+| `base_url` | varchar(512) | 端点，默认值取预设（与 hutool-ai 各 `XxxConfig` 常量一致） |
 | `api_key_enc` | varchar(512) | 加密存储的密钥，`ollama` 可空 |
-| `default_model` | varchar(64) | 默认模型 |
+| `default_model` | varchar(64) | 默认模型，默认值取预设 |
 | `enabled` | boolean | 是否启用 |
 | 审计字段 | | |
+
+预设表（前端新建供应方时下拉选择，自动填充端点与默认模型；协议通道由 `provider_code` 判定：`ollama` 走 Ollama 协议，其余走 OpenAI 兼容协议）：
+
+| 预设 | base_url | default_model |
+|---|---|---|
+| `openai` | `https://api.openai.com/v1` | `gpt-4o` |
+| `deepseek` | `https://api.deepseek.com` | `deepseek-chat` |
+| `doubao` | `https://ark.cn-beijing.volces.com/api/v3` | `doubao-1.5-lite-32k-250115` |
+| `grok` | `https://api.x.ai/v1` | `grok-2-1212` |
+| `ollama` | `http://localhost:11434` | 由部署方填写 |
 
 ### 5.9 wb_kb
 
@@ -336,18 +346,23 @@
 
 ```sql
 CREATE TABLE IF NOT EXISTS lw_log (
-    log_id    string,
-    ts        bigint,
-    level     string,
-    logger    string,
-    thread    string,
-    trace_id  string,
-    message   text indexed stored,
-    exception text indexed stored
+    log_id     string,
+    ts         bigint,
+    level      string,
+    logger     string,
+    thread     string,
+    trace_id   string,
+    user_id    string,
+    session_id string,
+    run_id     string,
+    message    text indexed stored,
+    exception  text indexed stored
 ) charset_table='non_cont,cjk' morphology='icu_chinese'
 ```
 
-检索：`level` / `logger` / `trace_id` 等值过滤 + `ts` 范围过滤，关键字全文走 `message`（可用字段参数改判 `logger` / `trace_id`），按 `ts` 倒序分页；`/log/stats` 按级别计数与按小时直方图做分布概览。保留 30 天：应用定时任务每日执行 `DELETE FROM lw_log WHERE ts < 截止毫秒`（Manticore 无文档级 TTL）。
+`user_id` / `session_id` / `run_id` 由 Logback MDC 注入（匿名请求与系统线程为空字符串），是检索隔离与链路串联的过滤列。
+
+检索：`level` / `logger` / `trace_id` / `user_id` / `session_id` / `run_id` 等值过滤 + `ts` 范围过滤，关键字全文走 `message`（可用字段参数改判 `logger` / `trace_id`），按 `ts` 倒序分页；**视角隔离**：持有 `monitor:log:global` 的角色走全局检索，其余用户由服务端强制追加 `user_id = 自己`。`/log/stats` 与检索同视角，按级别计数与按小时直方图做分布概览。保留 30 天：应用定时任务每日执行 `DELETE FROM lw_log WHERE ts < 截止毫秒`（Manticore 无文档级 TTL）。
 
 ### 6.2 lw_msg（会话消息）
 

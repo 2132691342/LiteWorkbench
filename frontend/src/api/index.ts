@@ -3,9 +3,9 @@ import { ElMessage } from 'element-plus'
 import { i18n } from '@/locales'
 import type {
   ApiResult,
+  AssistEvent,
   ChatStreamREQ,
   DocAssistREQ,
-  DocAssistVO,
   DocREQ,
   DocSearchParams,
   DocVO,
@@ -33,6 +33,7 @@ import type {
   PageREQ,
   PageResult,
   PasswordREQ,
+  ProviderPresetVO,
   ProviderREQ,
   ProviderVO,
   PublicKeyVO,
@@ -273,7 +274,6 @@ export const docApi = {
     get<PageResult<DocVersionVO>>('/doc/version/page', { docId, page, size }),
   versionDetail: (versionId: string) => get<DocVersionVO>(`/doc/version/detail/${versionId}`),
   restore: (versionId: string) => post<void>(`/doc/version/restore/${versionId}`),
-  assist: (data: DocAssistREQ) => post<DocAssistVO>('/doc/assist', data, { timeout: 180000 }),
 }
 
 /* ===== 提示词 ===== */
@@ -292,6 +292,7 @@ export const promptApi = {
 
 export const providerApi = {
   list: () => get<ProviderVO[]>('/provider/list'),
+  presets: () => get<ProviderPresetVO[]>('/provider/presets'),
   create: (data: ProviderREQ) => post<string>('/provider/create', data),
   update: (data: ProviderREQ) => post<void>('/provider/update', data),
   remove: (providerId: string) => post<void>(`/provider/delete/${providerId}`),
@@ -380,6 +381,79 @@ export function openRunStream(body: ChatStreamREQ, handlers: RunStreamHandlers):
       if ((error as Error).name !== 'AbortError') {
         handlers.onError((error as Error).message)
         handlers.onEnd(false)
+      }
+    }
+  })()
+  return (reason?: string) => controller.abort(reason ?? 'abort')
+}
+
+/* ===== SSE 流式辅助写作 ===== */
+
+export interface AssistStreamHandlers {
+  onDelta: (text: string) => void
+  onEnd: (payload: AssistEvent) => void
+  onError: (message: string) => void
+}
+
+/**
+ * 以 fetch 发起流式辅助写作并解析 SSE 帧，返回中断函数。
+ * 断连即取消服务端模型调用；帧格式 assist.event，data 为 {type, ...载荷}。
+ */
+export function openAssistStream(body: DocAssistREQ, handlers: AssistStreamHandlers): (reason?: string) => void {
+  const controller = new AbortController()
+  const base = import.meta.env.VITE_API_BASE_URL ?? '/api/v1'
+  let finished = false
+  ;(async () => {
+    try {
+      const response = await fetch(`${base}/doc/assist/stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: getToken() },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      })
+      if (!response.ok || !response.body) {
+        finished = true
+        handlers.onError(t('api.connectFailed', { code: response.status }))
+        return
+      }
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder('utf-8')
+      let buffer = ''
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const frames = buffer.split('\n\n')
+        buffer = frames.pop() ?? ''
+        for (const frame of frames) {
+          const data = frame
+            .split('\n')
+            .filter((line) => line.startsWith('data:'))
+            .map((line) => line.slice(5).trim())
+            .join('')
+          if (!data) continue
+          try {
+            const event = JSON.parse(data) as AssistEvent
+            if (event.type === 'assist.delta') {
+              handlers.onDelta(event.text ?? '')
+            } else if (event.type === 'assist.end') {
+              finished = true
+              handlers.onEnd(event)
+            } else if (event.type === 'assist.error') {
+              finished = true
+              handlers.onError(event.message ?? t('api.requestFailed'))
+            }
+          } catch {
+            // 非 JSON 帧忽略
+          }
+        }
+      }
+      if (!finished) {
+        handlers.onError(t('api.streamInterrupted'))
+      }
+    } catch (error) {
+      if ((error as Error).name !== 'AbortError') {
+        handlers.onError((error as Error).message)
       }
     }
   })()

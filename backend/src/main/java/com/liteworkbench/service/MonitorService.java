@@ -1,12 +1,15 @@
 package com.liteworkbench.service;
 
+import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.thread.ExecutorBuilder;
 import cn.hutool.core.thread.ThreadUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
+import com.liteworkbench.common.LoginContext;
 import com.liteworkbench.common.PageResult;
 import com.liteworkbench.domain.constant.EventTypeEnum;
+import com.liteworkbench.domain.constant.PermConst;
 import com.liteworkbench.domain.constant.RedisKeyConst;
 import com.liteworkbench.domain.dto.LogSearchDTO;
 import com.liteworkbench.domain.constant.RunStatusEnum;
@@ -74,12 +77,17 @@ public class MonitorService {
             .setThreadFactory(ThreadUtil.newNamedThreadFactory("lw-probe", true))
             .build();
 
-    /** Manticore 日志检索，按时间倒序分页；索引不可用时降级为空结果 */
+    /**
+     * Manticore 日志检索，按时间倒序分页；索引不可用时降级为空结果。
+     * 视角在服务端判定：全局角色（monitor:log:global）可按入参反查，其余用户强制锁定自己。
+     */
     public PageResult<LogDocVO> searchLogs(String keyword, String field, String level,
-                                           String logger, String traceId,
+                                           String logger, String traceId, String userId, String runId,
                                            long from, long to, long page, long size) {
+        String scopeUserId = resolveScopeUserId(userId);
         try {
-            LogSearchDTO result = logSearchMapper.search(keyword, field, level, logger, traceId, from, to, page, size);
+            LogSearchDTO result = logSearchMapper.search(keyword, field, level, logger, traceId,
+                    scopeUserId, runId, from, to, page, size);
             return PageResult.of(result.list(), result.total(), page, size);
         } catch (Exception e) {
             log.warn("[log.search] 检索失败，降级为空结果 {}", e.getMessage());
@@ -88,7 +96,7 @@ public class MonitorService {
     }
 
     /**
-     * 日志分布概览：级别计数 + 小时直方图，与检索共用时间范围。
+     * 日志分布概览：级别计数 + 小时直方图，与检索共用视角与时间范围。
      * 未传时间范围时默认近 24 小时；聚合异常降级为空结构，页面概览区显示占位。
      */
     public LogStatsVO logStats(long from, long to) {
@@ -96,10 +104,28 @@ public class MonitorService {
         long effectiveFrom = from > 0 ? from : now - DEFAULT_STATS_WINDOW_MS;
         long effectiveTo = to > 0 ? to : now;
         try {
-            return logSearchMapper.stats(effectiveFrom, effectiveTo);
+            LogStatsVO stats = logSearchMapper.stats(resolveScopeUserId(null), effectiveFrom, effectiveTo);
+            stats.setScope(globalLogScope() ? "global" : "self");
+            return stats;
         } catch (Exception e) {
             log.warn("[log.stats] 聚合失败，降级为空结构 {}", e.getMessage());
-            return new LogStatsVO();
+            LogStatsVO stats = new LogStatsVO();
+            stats.setScope(globalLogScope() ? "global" : "self");
+            return stats;
+        }
+    }
+
+    /** 日志视角判定：全局角色按入参反查（可空表示不过滤），其余用户强制锁定自己 */
+    private String resolveScopeUserId(String requestedUserId) {
+        return globalLogScope() ? StrUtil.nullToEmpty(requestedUserId) : LoginContext.userId();
+    }
+
+    /** 是否持有全局日志视角 */
+    private boolean globalLogScope() {
+        try {
+            return StpUtil.hasPermission(PermConst.MONITOR_LOG_GLOBAL);
+        } catch (Exception e) {
+            return false;
         }
     }
 

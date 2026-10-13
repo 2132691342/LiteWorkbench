@@ -309,10 +309,10 @@ public class DataInitializer implements ApplicationRunner {
                 .toList();
     }
 
-    /** 普通用户可用的菜单与操作点：工作台功能 + 自己数据的增删改 */
+    /** 普通用户可用的菜单与操作点：工作台功能 + 自己数据的增删改 + 本人视角的日志中心 */
     private static final List<String> USER_MENU_NAMES = List.of(
-            "menu.dashboard", "menu.console", "menu.files", "menu.skills", "menu.kb", "menu.settings",
-            "menu.showcase", "menu.writer", "menu.prompt",
+            "menu.dashboard", "menu.console", "menu.runs", "menu.files", "menu.skills", "menu.kb", "menu.settings",
+            "menu.showcase", "menu.writer", "menu.prompt", "menu.logs",
             "menu.writerList", "menu.writerCreate", "menu.writerUpdate", "menu.writerDelete", "menu.writerSearch",
             "menu.promptList", "menu.promptCreate", "menu.promptUpdate", "menu.promptDelete",
             "menu.filesDelete",
@@ -373,6 +373,7 @@ public class DataInitializer implements ApplicationRunner {
         seeds.add(new MenuSeed(45, 0, "menu.kb", menu, "/kb", "kb/KbCenter", "book", null, 45));
         seeds.add(new MenuSeed(46, 0, "menu.writer", menu, "/writer", "writer/WriterStudio", "edit", null, 35));
         seeds.add(new MenuSeed(47, 0, "menu.prompt", menu, "/prompt", "prompts/PromptLibrary", "magic", null, 36));
+        seeds.add(new MenuSeed(49, 0, "menu.runs", menu, "/runs", "runs/RunConsole", "history", null, 25));
         seeds.add(new MenuSeed(5, 0, "menu.logs", menu, "/logs", "logs/LogSearch", "document", "monitor:log:list", 50));
         seeds.add(new MenuSeed(6, 0, "menu.monitor", menu, "/monitor", "monitor/HealthPanel", "pulse", "monitor:health:list", 60));
         seeds.add(new MenuSeed(7, 0, "menu.showcase", menu, "/showcase", "showcase/Showcase", "palette", null, 70));
@@ -395,6 +396,8 @@ public class DataInitializer implements ApplicationRunner {
         seeds.add(new MenuSeed(33, 30, "menu.systemMenuDelete", button, null, null, null, "system:menu:delete", 3));
         // 监控页操作点
         seeds.add(new MenuSeed(50, 6, "menu.monitorPythonReprobe", button, null, null, null, "monitor:python:reprobe", 1));
+        // 日志中心操作点：全局视角开关，只授管理角色
+        seeds.add(new MenuSeed(51, 5, "menu.logsGlobal", button, null, null, null, "monitor:log:global", 1));
         // 技能页操作点
         seeds.add(new MenuSeed(59, 4, "menu.skillsList", button, null, null, null, "wb:skill:list", 0));
         seeds.add(new MenuSeed(60, 4, "menu.skillsCreate", button, null, null, null, "wb:skill:create", 1));

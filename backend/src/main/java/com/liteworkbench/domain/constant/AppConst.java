@@ -9,6 +9,8 @@ public interface AppConst {
     String HEADER_AUTHORIZATION = "Authorization";
     /** MDC 键：链路标识 */
     String MDC_TRACE_ID = "traceId";
+    /** MDC 键：用户 ID */
+    String MDC_USER_ID = "userId";
     /** MDC 键：会话 ID */
     String MDC_SESSION_ID = "sessionId";
     /** MDC 键：运行 ID */

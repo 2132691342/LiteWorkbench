@@ -6,16 +6,17 @@ import com.liteworkbench.common.LoginContext;
 import com.liteworkbench.common.PageResult;
 import com.liteworkbench.common.R;
 import com.liteworkbench.domain.constant.PermConst;
+import com.liteworkbench.domain.constant.RunConst;
 import com.liteworkbench.domain.dto.DocAssistREQ;
 import com.liteworkbench.domain.dto.DocREQ;
 import com.liteworkbench.domain.dto.PageREQ;
-import com.liteworkbench.domain.vo.DocAssistVO;
 import com.liteworkbench.domain.vo.DocVO;
 import com.liteworkbench.domain.vo.DocVersionVO;
 import com.liteworkbench.service.DocAssistService;
 import com.liteworkbench.service.DocService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /** 创作文档接口：文档 CRUD、版本回溯、全文检索与 AI 辅助写作 */
 @RestController
@@ -111,10 +113,12 @@ public class DocController {
         return R.ok();
     }
 
-    /** AI 辅助写作，同步返回模型文本 */
+    /** AI 辅助写作，SSE 单通道 assist.event，流式返回；断连即取消模型调用 */
     @SaCheckPermission(PermConst.WB_DOC_UPDATE)
-    @PostMapping("/assist")
-    public R<DocAssistVO> assist(@RequestBody @Valid DocAssistREQ req) {
-        return R.ok(docAssistService.assist(req));
+    @PostMapping(value = "/assist/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter assistStream(@RequestBody @Valid DocAssistREQ req) {
+        SseEmitter emitter = new SseEmitter(RunConst.SSE_TIMEOUT_MS);
+        docAssistService.assistStream(req, new SseDocAssistSink(emitter));
+        return emitter;
     }
 }

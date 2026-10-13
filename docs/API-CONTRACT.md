@@ -247,28 +247,31 @@ Content-Type: application/json
 
 ## 13. 模型供应方
 
-供应方为平台级定义（`wb_provider`），管理动作需供应方权限点，列表登录即可用（密钥脱敏）。
+供应方为平台级定义（`wb_provider`），管理动作需供应方权限点，列表登录即可用（密钥脱敏）。预设与 hutool-ai 对齐：`openai` / `deepseek` / `doubao` / `grok` / `ollama`。
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/api/v1/provider/list` | 列表，登录即可用，密钥字段脱敏 |
-| POST | `/api/v1/provider/create` | 新建，权限 `wb:provider:create` |
+| GET | `/api/v1/provider/presets` | 供应方预设（code / name / baseUrl / defaultModel），新建表单下拉用，权限 `wb:provider:list` |
+| POST | `/api/v1/provider/create` | 新建，权限 `wb:provider:create`；`providerCode` 取预设码，`baseUrl` / `defaultModel` 留空则取预设默认值 |
 | POST | `/api/v1/provider/update` | 更新，权限 `wb:provider:update` |
 | POST | `/api/v1/provider/delete/{providerId}` | 删除，权限 `wb:provider:delete` |
 | POST | `/api/v1/provider/test/{providerId}` | 连通性测试，权限 `wb:provider:update` |
 
-供应方配置变更后清除 `lw:cache:provider:{code}` 缓存，即时生效。
+供应方配置变更后清除 `lw:cache:provider:{code}` 缓存，即时生效。协议通道由 `providerCode` 判定：`ollama` 走 Ollama 协议，其余（含自定义兼容端点）走 OpenAI 兼容协议。
 
 ## 14. 日志与监控
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/v1/log/search` | Manticore 检索，参数 `keyword` `field` `level` `logger` `traceId` `from` `to` `page` `size`，返回 `PageResult<LogDocVO>`，权限 `monitor:log:list` |
-| GET | `/api/v1/log/stats` | 分布概览：级别计数 + 按小时时间直方图，参数 `from` `to`，权限 `monitor:log:list` |
+| GET | `/api/v1/log/search` | Manticore 检索，参数 `keyword` `field` `level` `logger` `traceId` `userId` `runId` `from` `to` `page` `size`，返回 `PageResult<LogDocVO>`，登录即可用 |
+| GET | `/api/v1/log/stats` | 分布概览：级别计数 + 按小时时间直方图，参数同检索，登录即可用 |
 | GET | `/api/v1/monitor/health` | 各组件健康状态，权限 `monitor:health:list` |
 | GET | `/api/v1/monitor/overview` | 仪表盘汇总指标，权限 `monitor:health:list` |
 | GET | `/api/v1/runtime/python` | Python 运行时探测结果，权限 `monitor:health:list` |
 | POST | `/api/v1/runtime/python/reprobe` | 重新探测 Python 运行时，权限 `monitor:python:reprobe` |
+
+**视角隔离**：日志中心对全体登录用户开放，但可见范围按角色收窄——持有 `monitor:log:global` 的角色（超级管理员 / 平台管理员）检索全局日志，可用 `userId` / `runId` 反查任一用户与运行；其余用户由服务端强制追加 `user_id = 自己`，只能看到自己触发的日志。响应体首部带 `scope: "global" | "self"`，前端据此展示视角标识（普通用户显示"仅本人日志"）。
 
 `log/search` 参数语义：
 
@@ -279,6 +282,8 @@ Content-Type: application/json
 | `level` | 级别等值：`INFO` / `WARN` / `ERROR` |
 | `logger` | Logger 名等值（如 `com.liteworkbench.service.RunService`） |
 | `traceId` | 链路标识等值，用于把一次请求的全部日志串成时间线 |
+| `userId` | 用户 ID 等值，仅全局视角生效（普通用户传了也无效，服务端强制覆盖为自己） |
+| `runId` | 运行 ID 等值，用于把一次运行的全部日志串成时间线 |
 | `from` / `to` | 时间范围，毫秒时间戳；两者都传才生效 |
 | `page` / `size` | 分页，按 `ts` 倒序 |
 
@@ -301,12 +306,22 @@ Content-Type: application/json
 | GET | `/api/v1/doc/version/page` | 版本列表，参数 `docId`，权限 `wb:doc:list` |
 | GET | `/api/v1/doc/version/detail/{versionId}` | 版本快照，权限 `wb:doc:list` |
 | POST | `/api/v1/doc/version/restore/{versionId}` | 回滚到指定版本，权限 `wb:doc:update`，`@Idempotent` |
-| POST | `/api/v1/doc/assist` | AI 辅助写作（续写 / 润色 / 摘要 / 扩写 / 翻译），非流式返回文本 |
+| POST | `/api/v1/doc/assist/stream` | AI 辅助写作（续写 / 润色 / 摘要 / 扩写 / 翻译），SSE 流式返回 |
 
 约定：
 
 - `doc/update` 每次调用：`version_no + 1`、写一条 `wb_doc_version` 快照、覆盖 `lw_doc` 文档，三者在同一事务内，索引写失败只告警不回滚。
-- `doc/assist` 入参：`docId`(可选) `action` `selection`(选中的正文) `instruction`(补充要求) `kbId`(可选引用知识库)；返回 `{ action, text, durationMs }`。内部经 `ModelCaller` 同步调用模型，不建 Run（不产生事件流），结果由前端决定插入或替换选区。
+- `doc/assist/stream` 入参：`docId`(可选) `action` `selection`(选中的正文) `instruction`(补充要求) `kbId`(可选引用知识库)。响应 `Content-Type: text/event-stream`，单一通道 `event: assist.event`，帧类型：
+
+| data.type | 载荷 | 时机 |
+|---|---|---|
+| `assist.start` | `{ action }` | 请求受理 |
+| `assist.delta` | `{ text }` | 增量文本（批内合帧后推送） |
+| `assist.end` | `{ text, durationMs }` | 终态，含全文，必达 |
+| `assist.error` | `{ code, message }` | 异常，必达 |
+
+- 辅助写作**不建 Run**（不写 `wb_run` / `wb_event`），用量与耗时打 `[doc.assist]` 日志；客户端断开连接即取消模型调用（与运行中断同一机制）。`assist.end` 与 `assist.error` 必有且仅有其一。
+- 增量按 120ms 合帧推送（`assist.delta`），终帧 `assist.end` 携带全文；辅助均为短任务，不设心跳，超时上限复用 SseEmitter 的 30 分钟。
 - 正文上限 200000 字，超出抛 `DOC_CONTENT_TOO_LONG`。
 
 ## 16. 提示词
@@ -350,4 +365,5 @@ GET 分页统一携带：
 | 统一信封 + HTTP 状态码双轨 | 前端可按 code 分支，网关可按状态码统计 | 两处语义需保持一致 |
 | SSE 而非 WebSocket | 单向流天然适配，自动重连，穿透代理好 | 无法实现客户端主动推消息 |
 | 动作式路径（`/delete/{id}`） | 与"只用 GET/POST"自洽，权限点可直接映射 URL | 资源语义弱化，靠文档对齐 |
-| AI 辅助写作走同步接口不建 Run | 结果短、需即时插入编辑器，落事件流反而增加回收成本 | 无法流式输出，长文辅助需等待 |
+| AI 辅助写作流式但不建 Run | 编辑器即时可读，断连即取消，零事件表开销 | 辅助用量不进运行统计，只留日志 |
+| 日志检索按角色分视角 | 普通用户可自查链路，管理员可全局排障 | 权限判定与过滤注入每页各一次 |

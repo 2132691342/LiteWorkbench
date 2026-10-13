@@ -288,6 +288,8 @@ public R<String> create(@RequestBody @Valid UserREQ req) { ... }
 - **级别只允许 `info` / `warn` / `error`**，禁止 `debug` / `trace`；排查需要的细节靠 `info` 打全字段，不靠调级别。
 - 使用 `slf4j` + `lombok.@Slf4j`（或 `@Log4j2`），禁止 `System.out` 与 `printStackTrace`。
 - 日志按天 + 按级别滚动，共三个文件：`liteworkbench.log`（全量 INFO+）、`liteworkbench-error.log`（WARN/ERROR 单独）、`liteworkbench-agent.log`（Agent 链路专用），保留 30 天；目录开发期默认 `logs/`，容器内用 `LITEWORKBENCH_LOG_DIR` 覆盖。
+- **每条日志必须携带链路标识（MDC）**：请求进入即注入 `traceId`；已登录请求注入 `userId`；运行期日志另注入 `sessionId` / `runId`。四者同时落 Logback pattern 与 Manticore `lw_log` 的过滤列，禁止业务代码手工拼接这些字段。
+- **日志检索按角色隔离**：持有 `monitor:log:global` 的角色（管理员）看全局日志；其余用户只能检索 `user_id = 自己` 的日志，约束由服务端强制注入，前端不做假设。
 - 业务日志同时异步投递到 Manticore，供页面检索。
 - 禁止打印密钥、Token、完整请求体中的敏感字段。
 
@@ -341,7 +343,11 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 | 状态 | 每个异步操作必须有 loading / error / empty 三态 |
 | 反馈 | 任何超过 300ms 的等待都要有骨架或 loading；任何状态变化都要有过渡动画或颜色变化 |
 | 密码 | 密码字段一律 `type="password"` 且提交前用 `utils/crypto.ts` 加密，禁止明文进 store 持久化 |
-| 路由 | 动态菜单由后端 `sys_menu` 下发，路由守卫校验登录态与权限标识 |
+| 路由 | 动态菜单由后端 `sys_menu` 下发，路由守卫校验登录态与权限标识，权限不足跳 `/403` |
+| 权限 | 按钮级权限用 `usePermission().hasPerm()` 或 `v-perm` 指令判断，权限码与后端 `PermConst` 严格一致 |
+| 分段切换 | 视图 / 时间 / 范围切换统一用 `components/ui/LwSegmented.vue`（五态），选中态浅紫底 + 主紫字 + 轻阴影，禁止各页自造 |
+| 对齐 | 同行控件等高（默认档 h-10），筛选区不混排尺寸；表单标签统一左对齐同宽 |
+| 错误页 | `403` / `404` / `500` 三个独立页面；无权限访问业务路由跳 `/403` 并说明所需权限 |
 
 ## 13. 注释规范
 
@@ -378,7 +384,8 @@ Agent 内核全部写在 `agent` 包内，不引任何 Agent 框架。
 |---|---|
 | 配置层复用 hutool-ai 的 `AIConfig` 契约：`ProviderAIConfig` 承载 `apiUrl` / `apiKey` / `model` / 连接与读超时 / 动态参数 | 一处配置，内核与同步路径共用 |
 | 同步文本路径（`ModelCaller`）优先走 hutool-ai 的原生服务，失败或空文本再回退自研客户端 | 复用现成实现，同时保证异常路径可用 |
-| 流式出站与工具调用自研：`agent/model` 的 `OpenAiCompatClient` / `AnthropicClient` / `OllamaClient` 共用 `HttpModelSupport` | 需要逐行剥协议前缀、累积工具调用增量、按 `usage` 入账，并且取消必须立即关闭连接 |
+| 供应方预设与 hutool-ai 对齐：`openai` / `deepseek` / `doubao` / `grok` 走 OpenAI 兼容通道，`ollama` 走本地通道；默认端点与默认模型取 hutool-ai `XxxConfig` 的常量，不自行发明；hutool-ai 未支持的协议（如 Anthropic）一律不做 | 依赖有什么用什么，前后端协议集合一处定义 |
+| 流式出站与工具调用自研：`agent/model` 的 `OpenAiCompatClient` / `OllamaClient` 共用 `HttpModelSupport` | 需要逐行剥协议前缀、累积工具调用增量、按 `usage` 入账，并且取消必须立即关闭连接 |
 | 工具调用请求体、消息模型、`usage` 与 `finish_reason` 解析全部自研 | 依赖只返回裸响应体，没有对应的 POJO |
 
 ### 15.2 Hutool 与 Sa-Token

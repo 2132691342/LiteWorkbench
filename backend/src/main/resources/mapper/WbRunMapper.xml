@@ -7,6 +7,9 @@
         <where>
             r.user_id = #{userId}
             <if test="req.sessionId != null and req.sessionId != ''">AND r.session_id = #{req.sessionId}</if>
+            <if test="req.state != null and req.state != ''">AND r.state = #{req.state}</if>
+            <if test="req.from != null">AND r.created_at &gt;= to_timestamp(#{req.from} / 1000.0)</if>
+            <if test="req.to != null">AND r.created_at &lt;= to_timestamp(#{req.to} / 1000.0)</if>
             <if test="req.keyword != null and req.keyword != ''">
                 AND r.prompt LIKE '%' || #{req.keyword} || '%'
             </if>

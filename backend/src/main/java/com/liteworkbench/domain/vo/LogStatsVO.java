@@ -8,6 +8,9 @@ import java.util.List;
 @Data
 public class LogStatsVO {
 
+    /** 检索视角：global（全局，管理员）/ self（仅本人） */
+    private String scope;
+
     /** 各级别计数，缺级别不补零 */
     private List<LevelCount> levels;
 

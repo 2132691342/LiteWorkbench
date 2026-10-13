@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ElMessageBox } from 'element-plus'
 import { ElMessage } from 'element-plus'
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LwButton from '@/components/ui/LwButton.vue'
 import LwCard from '@/components/ui/LwCard.vue'
@@ -9,13 +9,14 @@ import LwPageState from '@/components/ui/LwPageState.vue'
 import LwTag from '@/components/ui/LwTag.vue'
 import { providerApi } from '@/api'
 import { usePermission } from '@/composables/usePermission'
-import type { ProviderREQ, ProviderVO } from '@/types/api'
+import type { ProviderPresetVO, ProviderREQ, ProviderVO } from '@/types/api'
 
-/** 模型供应方管理：平台级配置，密钥脱敏展示，编辑留空表示不修改 */
+/** 模型供应方管理：平台级配置，预设与 hutool-ai 对齐，密钥脱敏展示，编辑留空表示不修改 */
 const { t } = useI18n()
 const { hasPerm } = usePermission()
 
 const list = ref<ProviderVO[]>([])
+const presets = ref<ProviderPresetVO[]>([])
 const loading = ref(false)
 const error = ref('')
 const dialogVisible = ref(false)
@@ -23,18 +24,34 @@ const submitting = ref(false)
 const testing = ref('')
 const form = ref<ProviderREQ>(emptyForm())
 
-/** 可选协议：与后端 ModelFactory 支持的三条路线一致 */
-const CODES = ['openai', 'anthropic', 'ollama']
+/** 预设选项：label 走 i18n，后端下发端点与默认模型 */
+const presetOptions = computed(() =>
+  presets.value.map((preset) => ({
+    value: preset.providerCode,
+    label: t(`settings.provider.preset_${preset.providerCode}`),
+  })))
 
 function emptyForm(): ProviderREQ {
   return { providerCode: 'openai', providerName: '', baseUrl: '', apiKey: '', defaultModel: '', enabled: true }
+}
+
+/** 选择预设即填充端点与默认模型，仍可手工调整 */
+function applyPreset(code: string): void {
+  form.value.providerCode = code
+  const preset = presets.value.find((item) => item.providerCode === code)
+  if (preset) {
+    form.value.baseUrl = preset.baseUrl ?? ''
+    form.value.defaultModel = preset.defaultModel ?? ''
+  }
 }
 
 async function load(): Promise<void> {
   loading.value = true
   error.value = ''
   try {
-    list.value = await providerApi.list()
+    const [items, presetList] = await Promise.all([providerApi.list(), providerApi.presets()])
+    list.value = items
+    presets.value = presetList
   } catch (err) {
     error.value = err instanceof Error ? err.message : ''
   } finally {
@@ -160,10 +177,23 @@ onMounted(load)
       width="460px"
     >
       <el-form label-position="top">
-        <el-form-item :label="t('settings.provider.code')">
-          <el-select v-model="form.providerCode" :disabled="Boolean(form.providerId)" class="w-full">
-            <el-option v-for="code in CODES" :key="code" :label="code" :value="code" />
+        <el-form-item :label="t('settings.provider.preset')">
+          <el-select
+            v-model="form.providerCode"
+            :disabled="Boolean(form.providerId)"
+            class="w-full"
+            @change="applyPreset"
+          >
+            <el-option
+              v-for="option in presetOptions"
+              :key="option.value"
+              :label="option.label"
+              :value="option.value"
+            />
           </el-select>
+          <div class="text-xs mt-1" style="color: var(--lw-ink-muted); line-height: 1.5">
+            {{ t('settings.provider.presetTip') }}
+          </div>
         </el-form-item>
         <el-form-item :label="t('settings.provider.name')">
           <el-input v-model="form.providerName" maxlength="64" />

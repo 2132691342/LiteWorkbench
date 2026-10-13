@@ -6,7 +6,6 @@ import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.crypto.digest.DigestUtil;
 import cn.hutool.crypto.symmetric.SymmetricCrypto;
-import com.liteworkbench.agent.model.AnthropicClient;
 import com.liteworkbench.agent.model.ModelClient;
 import com.liteworkbench.agent.model.OllamaClient;
 import com.liteworkbench.agent.model.OpenAiCompatClient;
@@ -16,6 +15,7 @@ import com.liteworkbench.common.BizException;
 import com.liteworkbench.common.ErrorCodeEnum;
 import com.liteworkbench.config.AgentProperties;
 import com.liteworkbench.config.SecurityProperties;
+import com.liteworkbench.domain.constant.ProviderPresetEnum;
 import com.liteworkbench.domain.constant.RedisKeyConst;
 import com.liteworkbench.domain.entity.WbProviderDO;
 import lombok.RequiredArgsConstructor;
@@ -36,7 +36,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-/** 按平台级供应方配置构建并缓存模型客户端，覆盖 OpenAI 兼容 / Anthropic / Ollama 三条通用协议 */
+/** 按平台级供应方配置构建并缓存模型客户端，协议集合与 hutool-ai 对齐：OpenAI 兼容族与 Ollama */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -54,9 +54,6 @@ public class ModelFactory {
     private static final int GCM_TAG_BITS = 128;
     /** 旧格式加密算法，仅用于解密兼容 */
     private static final String LEGACY_TRANSFORMATION = "AES/ECB/PKCS5Padding";
-
-    private static final String PROTOCOL_ANTHROPIC = "anthropic";
-    private static final String PROTOCOL_OLLAMA = "ollama";
 
     /** hutool-ai 内置的供应方码：命中即说明该协议有原生服务实现可复用 */
     private static final Set<String> HUTOOL_AI_CODES =
@@ -91,7 +88,7 @@ public class ModelFactory {
     /** 把供应方配置适配为 hutool-ai 的配置契约，内核与 hutool-ai 服务共用同一份 */
     public ProviderAIConfig aiConfig(WbProviderDO provider, String modelName) {
         ProviderAIConfig config = new ProviderAIConfig(provider.getProviderCode());
-        config.setApiUrl(provider.getBaseUrl());
+        config.setApiUrl(resolveBaseUrl(provider));
         config.setModel(modelName);
         if (StrUtil.isNotBlank(provider.getApiKeyEnc())) {
             config.setApiKey(decrypt(provider.getApiKeyEnc()));
@@ -146,7 +143,7 @@ public class ModelFactory {
         return provider;
     }
 
-    /** 模型名三级兜底：会话指定 > 供应方默认 > 全局默认 */
+    /** 模型名四级兜底：会话指定 > 供应方默认 > 预设默认 > 全局默认 */
     public String resolveModelName(WbProviderDO provider, String sessionModel) {
         if (StrUtil.isNotBlank(sessionModel)) {
             return sessionModel;
@@ -154,32 +151,35 @@ public class ModelFactory {
         if (StrUtil.isNotBlank(provider.getDefaultModel())) {
             return provider.getDefaultModel();
         }
+        ProviderPresetEnum preset = ProviderPresetEnum.ofCode(provider.getProviderCode());
+        if (Objects.nonNull(preset) && StrUtil.isNotBlank(preset.getDefaultModel())) {
+            return preset.getDefaultModel();
+        }
         return agentProperties.getModel().getDefaultName();
     }
 
-    /** 按协议构建客户端：openai / anthropic 必须配置密钥，ollama 免密钥 */
-    private ModelClient build(WbProviderDO provider, String modelName) {
-        ProviderAIConfig config = aiConfig(provider, modelName);
-        if (!PROTOCOL_OLLAMA.equals(resolveProtocol(provider)) && StrUtil.isBlank(config.getApiKey())) {
-            throw new BizException(ErrorCodeEnum.PROVIDER_NOT_CONFIGURED, provider.getProviderCode());
+    /** 端点兜底：供应方未配置时回落到预设默认值 */
+    public String resolveBaseUrl(WbProviderDO provider) {
+        if (StrUtil.isNotBlank(provider.getBaseUrl())) {
+            return provider.getBaseUrl();
         }
-        return switch (resolveProtocol(provider)) {
-            case PROTOCOL_ANTHROPIC -> new AnthropicClient(config);
-            case PROTOCOL_OLLAMA -> new OllamaClient(config);
-            default -> new OpenAiCompatClient(config);
-        };
+        ProviderPresetEnum preset = ProviderPresetEnum.ofCode(provider.getProviderCode());
+        return Objects.nonNull(preset) ? preset.getBaseUrl() : provider.getBaseUrl();
     }
 
-    /** 协议判定：编码命中 anthropic/ollama 关键字即用对应协议，其余一律按 OpenAI 兼容端点处理 */
+    /** 按协议构建客户端：OpenAI 兼容族必须配置密钥，ollama 免密钥 */
+    private ModelClient build(WbProviderDO provider, String modelName) {
+        ProviderAIConfig config = aiConfig(provider, modelName);
+        if (!ProviderPresetEnum.isOllama(provider.getProviderCode()) && StrUtil.isBlank(config.getApiKey())) {
+            throw new BizException(ErrorCodeEnum.PROVIDER_NOT_CONFIGURED, provider.getProviderCode());
+        }
+        return ProviderPresetEnum.isOllama(provider.getProviderCode())
+                ? new OllamaClient(config) : new OpenAiCompatClient(config);
+    }
+
+    /** 协议判定：编码命中 ollama 即走本地协议，其余一律按 OpenAI 兼容端点处理 */
     public String resolveProtocol(WbProviderDO provider) {
-        String code = StrUtil.nullToEmpty(provider.getProviderCode()).toLowerCase();
-        if (code.contains(PROTOCOL_ANTHROPIC) || code.contains("claude")) {
-            return PROTOCOL_ANTHROPIC;
-        }
-        if (code.contains(PROTOCOL_OLLAMA)) {
-            return PROTOCOL_OLLAMA;
-        }
-        return "openai";
+        return ProviderPresetEnum.isOllama(provider.getProviderCode()) ? "ollama" : "openai";
     }
 
     /** 密钥加密：AES/GCM，随机 IV 前置后 Base64 */

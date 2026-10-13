@@ -31,7 +31,8 @@
 |---|---|---|
 | `super_admin` | 超级管理员 | 全部菜单与权限点，内置不可删 |
 | `admin` | 平台管理员 | 系统管理与工作台全部功能 |
-| `user` | 普通用户 | 用户级功能：仪表盘、工作台、创作台、提示词、文件、技能、知识库、设置、组件库，以及自己数据的增删改权限点 |
+| `user` | 普通用户 | 用户级功能：仪表盘、工作台、运行记录、创作台、提示词、文件、技能、知识库、日志中心（本人视角）、设置、组件库，以及自己数据的增删改权限点 |
+| — | 自定义角色 | 按需勾选菜单与权限点；勾选 `monitor:log:global` 即获得全局日志视角 |
 
 - 内置角色码不可改不可删；支持新建自定义角色，按角色分配菜单与权限点。
 - 角色与菜单多对多（`sys_role_menu`），授权变更后立即清除相关用户权限缓存。
@@ -98,7 +99,9 @@ public class StpInterfaceImpl implements StpInterface {
 | 创作文档 | `wb:doc:list` / `create` / `update` / `delete` / `search` |
 | 提示词 | `wb:prompt:list` / `create` / `update` / `delete`（`list` 同时用于变量渲染） |
 | 供应方 | `wb:provider:list` / `create` / `update` / `delete`（`update` 同时用于连通性测试） |
-| 监控 | `monitor:health:list` / `monitor:log:list` / `monitor:python:reprobe` |
+| 监控 | `monitor:health:list` / `monitor:log:list` / `monitor:log:global` / `monitor:python:reprobe` |
+
+`monitor:log:list` 与 `monitor:log:global` 的区别：前者是日志中心入口（登录即可分配的按钮级权限），检索范围固定为本人；后者是**视角开关**，命中即全局检索（可按 `userId` / `runId` 反查），只授予管理角色。
 
 ## 关键流程
 

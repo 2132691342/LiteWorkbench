@@ -282,6 +282,15 @@ export interface ProviderREQ {
   enabled?: boolean
 }
 
+/** 供应方预设：与 hutool-ai 对齐的五个候选，新建表单下拉与默认值来源 */
+export interface ProviderPresetVO {
+  providerCode: string
+  baseUrl?: string
+  defaultModel?: string
+  protocol: 'openai' | 'ollama'
+  requiresKey: boolean
+}
+
 /* ===== 监控 ===== */
 
 export interface ComponentHealth {
@@ -328,6 +337,9 @@ export interface LogDocVO {
   logger?: string
   thread?: string
   traceId?: string
+  userId?: string
+  sessionId?: string
+  runId?: string
   message?: string
   exception?: string
 }
@@ -339,14 +351,19 @@ export interface LogSearchParams {
   level?: string
   logger?: string
   traceId?: string
+  /** 用户 ID 等值，仅全局视角（monitor:log:global）生效 */
+  userId?: string
+  /** 运行 ID 等值，用于串联一次运行的全部日志 */
+  runId?: string
   from?: number
   to?: number
   page?: number
   size?: number
 }
 
-/** 日志分布概览：级别计数与小时直方图 */
+/** 日志分布概览：级别计数与小时直方图；scope 为当前检索视角 */
 export interface LogStatsVO {
+  scope?: 'global' | 'self'
   levels?: { level: string; count: number }[]
   histogram?: { hour: number; count: number }[]
 }
@@ -418,6 +435,12 @@ export interface InvokeToolREQ {
 
 export interface SessionPageREQ extends PageREQ {
   sessionId?: string
+  /** 运行状态过滤，运行记录页使用 */
+  state?: string
+  /** 起始时间（毫秒），运行记录页使用 */
+  from?: number
+  /** 结束时间（毫秒），运行记录页使用 */
+  to?: number
 }
 
 /* ===== 创作文档 ===== */
@@ -470,10 +493,14 @@ export interface DocAssistREQ {
   kbId?: string
 }
 
-export interface DocAssistVO {
-  action: string
-  text: string
+/** 辅助写作 SSE 帧：type 与载荷同层，一次解析 */
+export interface AssistEvent {
+  type: 'assist.start' | 'assist.delta' | 'assist.end' | 'assist.error'
+  action?: string
+  text?: string
   durationMs?: number
+  code?: string
+  message?: string
 }
 
 export interface DocSearchParams extends PageREQ {

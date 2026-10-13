@@ -5,6 +5,7 @@ import ch.qos.logback.classic.spi.IThrowableProxy;
 import ch.qos.logback.classic.spi.ThrowableProxyUtil;
 import ch.qos.logback.core.AppenderBase;
 import com.liteworkbench.common.IdGenerator;
+import com.liteworkbench.domain.constant.AppConst;
 import com.liteworkbench.domain.constant.IdPrefixConst;
 import org.slf4j.MDC;
 
@@ -54,7 +55,10 @@ public class ManticoreLogAppender extends AppenderBase<ILoggingEvent> {
                     loggerName.length() > MAX_LOGGER_CHARS
                             ? loggerName.substring(loggerName.length() - MAX_LOGGER_CHARS) : loggerName,
                     event.getThreadName(),
-                    Objects.toString(MDC.get("traceId"), ""),
+                    Objects.toString(MDC.get(AppConst.MDC_TRACE_ID), ""),
+                    Objects.toString(MDC.get(AppConst.MDC_USER_ID), ""),
+                    Objects.toString(MDC.get(AppConst.MDC_SESSION_ID), ""),
+                    Objects.toString(MDC.get(AppConst.MDC_RUN_ID), ""),
                     message,
                     exception));
             failureCount = 0;

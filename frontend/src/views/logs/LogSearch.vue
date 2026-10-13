@@ -27,12 +27,17 @@ const histogram = ref<{ hour: number; count: number }[]>([])
 /** 时间字段同时接受 number（预设/钻取写入）与 el-date-picker 的 value-format="x" 字符串，请求前统一归一 */
 type TimeInput = number | string | undefined
 
+/** 检索视角：由服务端按角色判定，前端只做展示与过滤区显隐 */
+const scope = ref<'global' | 'self'>('self')
+
 const query = reactive({
   keyword: '',
   field: 'message',
   level: '',
   logger: '',
   traceId: '',
+  userId: '',
+  runId: '',
   from: undefined as TimeInput,
   to: undefined as TimeInput,
   page: 1,
@@ -166,6 +171,8 @@ async function search(): Promise<void> {
       level: query.level || undefined,
       logger: query.logger || undefined,
       traceId: query.traceId || undefined,
+      userId: query.userId || undefined,
+      runId: query.runId || undefined,
       from: toMillis(query.from),
       to: toMillis(query.to),
       page: query.page,
@@ -186,6 +193,7 @@ async function loadStats(): Promise<void> {
     const stats = await logApi.stats({ from: toMillis(query.from), to: toMillis(query.to) })
     levels.value = stats.levels ?? []
     histogram.value = stats.histogram ?? []
+    scope.value = stats.scope === 'global' ? 'global' : 'self'
   } catch {
     // 概览降级：不影响主检索，卡片显示占位
     levels.value = []
@@ -238,6 +246,22 @@ function filterByTrace(traceId: string): void {
   handleSearch()
 }
 
+/** 按 userId 钻取：全局视角下查看某用户的全部日志 */
+function filterByUser(userId: string): void {
+  if (!userId) return
+  query.userId = userId
+  query.page = 1
+  handleSearch()
+}
+
+/** 按 runId 钻取：把一次运行的全部日志串成时间线 */
+function filterByRun(runId: string): void {
+  if (!runId) return
+  query.runId = runId
+  query.page = 1
+  handleSearch()
+}
+
 function levelTone(level?: string): 'error' | 'warning' | 'primary' {
   if (level === 'ERROR') return 'error'
   if (level === 'WARN') return 'warning'
@@ -266,6 +290,11 @@ onBeforeUnmount(() => {
         <h2 class="lw-title">{{ t('logs.title') }}</h2>
         <p class="lw-subtitle mt-1">{{ t('logs.desc') }}</p>
       </div>
+      <el-tooltip :content="scope === 'global' ? t('logs.scopeTip_global') : t('logs.scopeTip_self')" placement="left">
+        <LwTag :tone="scope === 'global' ? 'secondary' : 'muted'">
+          {{ scope === 'global' ? t('logs.scope_global') : t('logs.scope_self') }}
+        </LwTag>
+      </el-tooltip>
     </div>
 
     <!-- 分布概览：级别计数卡 + 小时直方图，随过滤条件联动 -->
@@ -339,6 +368,23 @@ onBeforeUnmount(() => {
           @keyup.enter="handleSearch"
           @clear="handleSearch"
         />
+        <el-input
+          v-if="scope === 'global'"
+          v-model="query.userId"
+          :placeholder="t('logs.userIdPlaceholder')"
+          clearable
+          style="width: 220px"
+          @keyup.enter="handleSearch"
+          @clear="handleSearch"
+        />
+        <el-input
+          v-model="query.runId"
+          :placeholder="t('logs.runIdPlaceholder')"
+          clearable
+          style="width: 200px"
+          @keyup.enter="handleSearch"
+          @clear="handleSearch"
+        />
         <el-date-picker
           v-model="query.from"
           type="datetime"
@@ -407,13 +453,26 @@ onBeforeUnmount(() => {
                 <span>{{ t('logs.traceId') }}: {{ doc.traceId || '-' }}</span>
                 <span>{{ t('logs.logger') }}: {{ doc.logger }}</span>
                 <span>{{ t('logs.thread') }}: {{ doc.thread || '-' }}</span>
+                <span v-if="doc.userId">{{ t('logs.userId') }}: {{ doc.userId }}</span>
+                <span v-if="doc.runId">{{ t('logs.runId') }}: {{ doc.runId }}</span>
               </div>
-              <div class="flex items-center gap-2">
+              <div class="flex flex-wrap items-center gap-2">
                 <LwButton variant="secondary" size="sm" @click.stop="copyTraceId(doc.traceId ?? '')">
                   {{ copiedId === doc.traceId ? t('logs.copied') : t('logs.copyTraceId') }}
                 </LwButton>
                 <LwButton variant="ghost" size="sm" @click.stop="filterByTrace(doc.traceId ?? '')">
                   {{ t('logs.filterByTrace') }}
+                </LwButton>
+                <LwButton
+                  v-if="doc.userId && scope === 'global'"
+                  variant="ghost"
+                  size="sm"
+                  @click.stop="filterByUser(doc.userId)"
+                >
+                  {{ t('logs.filterByUser') }}
+                </LwButton>
+                <LwButton v-if="doc.runId" variant="ghost" size="sm" @click.stop="filterByRun(doc.runId)">
+                  {{ t('logs.filterByRun') }}
                 </LwButton>
               </div>
               <pre

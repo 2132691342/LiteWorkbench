@@ -58,6 +58,15 @@ public interface WbSessionMapper {
                     @Param("runDelta") int runDelta,
                     @Param("tokenDelta") long tokenDelta);
 
+    /** 更新标题，首轮对话自动命名用，仅归属用户可改 */
+    @Update("""
+            UPDATE wb_session SET title = #{title}, updated_at = now()
+            WHERE session_id = #{sessionId} AND user_id = #{userId} AND deleted = false
+            """)
+    int updateTitle(@Param("sessionId") String sessionId,
+                    @Param("userId") String userId,
+                    @Param("title") String title);
+
     /** 分页查询，仅返回归属用户的会话 */
     List<WbSessionDO> selectPage(@Param("req") SessionPageREQ req,
                                  @Param("userId") String userId,

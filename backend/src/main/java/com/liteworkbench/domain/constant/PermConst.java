@@ -26,6 +26,8 @@ public interface PermConst {
     // 监控与日志
     String MONITOR_HEALTH_LIST = "monitor:health:list";
     String MONITOR_LOG_LIST = "monitor:log:list";
+    /** 日志全局视角：命中即可检索全体用户日志并用 userId / runId 反查 */
+    String MONITOR_LOG_GLOBAL = "monitor:log:global";
     String MONITOR_PYTHON_REPROBE = "monitor:python:reprobe";
 
     // 工作台 · 工具

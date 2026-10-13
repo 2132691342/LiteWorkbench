@@ -1,6 +1,8 @@
 package com.liteworkbench.service;
 
+import cn.hutool.core.thread.ThreadUtil;
 import cn.hutool.core.util.StrUtil;
+import com.liteworkbench.agent.ModelCaller;
 import com.liteworkbench.common.BizException;
 import com.liteworkbench.common.ErrorCodeEnum;
 import com.liteworkbench.common.IdGenerator;
@@ -23,15 +25,23 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.ExecutorService;
 
-/** 会话：CRUD 与归属校验，用户只见自己的会话 */
+/** 会话：CRUD、归属校验与首轮自动命名，用户只见自己的会话 */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class SessionService {
 
+    /** 标题生成最大字数，超出截断 */
+    private static final int AUTO_TITLE_MAX_CHARS = 24;
+
     private final WbSessionMapper sessionMapper;
     private final MessageIndexMapper messageIndexMapper;
+    private final ModelCaller modelCaller;
+
+    /** 标题生成线程池：低频、静默、失败不影响对话 */
+    private final ExecutorService renameExecutor = ThreadUtil.newFixedExecutor(1, 4, "lw-title", true);
 
     /** 分页查询，仅返回归属用户的会话 */
     public PageResult<SessionVO> page(SessionPageREQ req, String userId) {
@@ -87,6 +97,46 @@ public class SessionService {
         sessionMapper.deleteById(userId, sessionId, userId);
         long removed = messageIndexMapper.deleteBySession(sessionId);
         log.info("[session.delete] sessionId={} userId={} messagesRemoved={}", sessionId, userId, removed);
+    }
+
+    /**
+     * 首轮对话自动命名：标题仍为默认值时异步调模型生成，失败静默保持默认标题。
+     * 走 hutool-ai 同步通道（ModelCaller），不建 Run、不落事件。
+     */
+    public void autoRenameIfDefault(WbSessionDO session, String prompt) {
+        if (!SessionConst.DEFAULT_TITLE.equals(session.getTitle())) {
+            return;
+        }
+        renameExecutor.submit(() -> {
+            try {
+                String title = modelCaller.completeQuietly(namingPrompt(prompt));
+                String clean = cleanTitle(title);
+                if (StrUtil.isBlank(clean)) {
+                    return;
+                }
+                sessionMapper.updateTitle(session.getSessionId(), session.getUserId(), clean);
+                log.info("[session.rename] sessionId={} title={}", session.getSessionId(), clean);
+            } catch (Exception e) {
+                log.warn("[session.rename] 失败 sessionId={} {}", session.getSessionId(), e.getMessage());
+            }
+        });
+    }
+
+    /** 命名提示词：只输出一行短标题，避免模型带引号与解释 */
+    private String namingPrompt(String prompt) {
+        String head = StrUtil.sub(StrUtil.nullToEmpty(prompt), 0, 400);
+        return "为下面这段用户输入起一个中文会话标题，不超过 16 个字，只输出标题本身，"
+                + "不要引号、不要标点、不要解释：\n" + head;
+    }
+
+    /** 标题清洗：去引号换行与多余空白，超长截断 */
+    private String cleanTitle(String title) {
+        if (StrUtil.isBlank(title)) {
+            return null;
+        }
+        String clean = title.replaceAll("[\\r\\n\"'“”‘’。，！？!?]", " ").trim();
+        clean = StrUtil.sub(clean, 0, AUTO_TITLE_MAX_CHARS);
+        return StrUtil.isBlank(clean) ? null : clean;
     }
 
     /** 会话消息列表，来自消息索引，(ts, messageId) 稳定升序 */

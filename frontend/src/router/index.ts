@@ -27,9 +27,19 @@ const staticRoutes: RouteRecordRaw[] = [
     children: [],
   },
   {
+    path: '/403',
+    name: 'forbidden',
+    component: () => import('@/views/error/Forbidden.vue'),
+  },
+  {
+    path: '/500',
+    name: 'server-error',
+    component: () => import('@/views/error/ServerError.vue'),
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
-    component: () => import('@/views/NotFound.vue'),
+    component: () => import('@/views/error/NotFound.vue'),
   },
 ]
 
@@ -113,7 +123,7 @@ router.beforeEach(async (to) => {
   }
   const perm = to.meta.perm
   if (typeof perm === 'string' && perm && !store.perms.includes(perm)) {
-    return { path: '/not-found', replace: true }
+    return { path: '/403', replace: true }
   }
   return true
 })

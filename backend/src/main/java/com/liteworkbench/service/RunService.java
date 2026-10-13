@@ -123,6 +123,8 @@ public class RunService {
             ActiveRun run = new ActiveRun(runId, userId, session.getSessionId(), sink);
             active.put(runId, run);
             dispatch(run, context);
+            // 首轮对话自动命名会话：异步、静默，失败不影响对话
+            sessionService.autoRenameIfDefault(session, req.getContent());
             log.info("[run.start] userId={} sessionId={} runId={} model={}",
                     userId, session.getSessionId(), runId, modelName);
             return runId;

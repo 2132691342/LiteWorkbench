@@ -18,7 +18,7 @@ Agent **无状态**：上下文不存在 Agent 里，每次运行由工作台从
 | `RunHandle` | 运行句柄：`cancel()` 协作式取消，`isCancelled()` 查询，`completion()` 拿终态 |
 | `AgentMemory` | 上下文组装与确定性压缩（不调模型）：协议配对修复、Token 估算、切点选择 |
 | `AgentProperties` | 迭代上限、上下文窗口、预留 token、超时、历史条数 |
-| `agent/model/*Client` | 三协议出站：OpenAI 兼容 / Anthropic / Ollama；`ModelFactory` 按 LRU（容量 64）缓存实例 |
+| `agent/model/*Client` | 协议出站：OpenAI 兼容（OpenAI / DeepSeek / Doubao / Grok 与任意兼容端点）/ Ollama；`ModelFactory` 按 LRU（容量 64）缓存实例，预设与 hutool-ai 对齐 |
 | `agent/tool/ToolRegistry` | 工具注册表：`register` 时编译参数 Schema，`specs(Predicate)` 取给模型的工具清单，`invoke` 前校验参数 |
 | `agent/tool/WorkbenchTools` | 内置工具集：`python_exec`、`file_read`、`file_write`、`http_get`、`kb_search` |
 | `agent/spi/ToolGate` | 工具启停端口：由 `service` 侧实现，禁用工具不下发给模型 |

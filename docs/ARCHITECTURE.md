@@ -50,7 +50,7 @@
 | `service` | `SessionService` / `ProviderService` / `SkillService` / `FileService` / `ToolService` | 会话、供应方、技能、文件与工具的业务编排 |
 | `service` | `KbService` | 知识库 CRUD、归属校验、级联清理（文档原件 + 分块索引） |
 | `service` | `DocService` | 创作文档 CRUD、版本快照、全文索引同步、版本回滚 |
-| `service` | `DocAssistService` | AI 辅助写作：动作模板 + 选区 + 可选知识库片段 → 同步调用模型返回文本 |
+| `service` | `DocAssistService` | AI 辅助写作：动作模板 + 选区 + 可选知识库片段 → 流式调用模型经 SSE 推送（建轻量 Run，记用量不落事件） |
 | `service` | `PromptService` | 提示词模板 CRUD、内置只读保护、变量渲染 |
 | `service` | `KbDocService` | 文档上传（MinIO + MQ 派发）、状态查询、分块检索、文档删除 |
 | `service` | `KbTextChunker` | 文档分块：按目标长度切分并保留相邻重叠 |
@@ -61,8 +61,8 @@
 | `agent` | `AgentKernelRuntime` | `AgentRuntime` 实现：装配 `AgentLoop` 与工具集，把内核事件写入订阅者 |
 | `agent` | `AgentEventAdapter` | 把内核 `AgentEvent` 归一化为工作台 `RunEventDTO` 并分配 `seq` |
 | `agent` | `ModelFactory` | 按供应方构建并缓存 `ModelClient`，解密密钥，三级模型名兜底 |
-| `agent` | `model/*Client` | 三协议出站：`OpenAiCompatClient` / `AnthropicClient` / `OllamaClient`，共用 SSE 解析与取消 |
-| `agent` | `ModelCaller` | 模型同步调用，供 AI 辅助写作复用，不建 Run |
+| `agent` | `model/*Client` | 协议出站：`OpenAiCompatClient`（覆盖 OpenAI / DeepSeek / Doubao / Grok 与任意兼容端点）/ `OllamaClient`，共用 SSE 解析与取消；供应方预设与 hutool-ai 对齐 |
+| `agent` | `ModelCaller` | 模型同步调用（优先 hutool-ai 原生服务），供供应方连通性测试与会话自动命名复用，不建 Run |
 | `agent` | `WorkbenchTools` | 内置工具集：`python_exec`、`file_read`、`file_write`、`http_get`、`kb_search` |
 | `agent` | `AgentMemory` | 上下文组装与确定性压缩（不调模型）：配对修复、Token 估算、切点选择 |
 | `runtime` | `LocalPythonRuntime` | Python 解释器探测、脚本落盘、进程执行、超时与进程树终止 |
@@ -108,12 +108,13 @@ POST /api/v1/auth/login  { username, password(密文), keyId }
 
 ```
 请求进入
-  ├─ TraceFilter：注入 traceId
+  ├─ TraceFilter：注入 traceId 到 MDC
   ├─ SaToken 拦截器：
   │    ├─ 未登录 → 401 UNAUTHORIZED
   │    ├─ @SaCheckPermission 不通过 → 403 FORBIDDEN
-  │    └─ 通过 → 把 LoginUser 放入 LoginContext
+  │    └─ 通过 → 把 LoginUser 放入 LoginContext，并把 userId 注入 MDC
   ├─ Controller → Service（userId 取 LoginContext）
+  ├─ 运行期：RunService 把 sessionId / runId 临时注入 MDC（打点后可读）
   └─ finally 清理 LoginContext 与 MDC
 ```
 
@@ -171,7 +172,7 @@ POST /api/v1/chat/stream
 | `AGENT_END` | `run.end` | — |
 | `AGENT_ERROR` | `run.error` | — |
 
-三协议出站的差异（OpenAI 的 `data:` SSE、Anthropic 的命名事件、Ollama 的 NDJSON）在 `model` 包内被拉平为同一组内核事件，`AgentEventAdapter` 只认内核事件，因此前端与模型协议彻底解耦。
+出站协议的差异（OpenAI 兼容的 `data:` SSE、Ollama 的 NDJSON）在 `model` 包内被拉平为同一组内核事件，`AgentEventAdapter` 只认内核事件，因此前端与模型协议彻底解耦。
 
 三条硬规则：
 
@@ -212,10 +213,13 @@ POST 写接口（带 @Idempotent）
 
 ```
 业务代码 log.info
+  → Logback MDC（traceId / userId / sessionId / runId 由框架注入，业务不手拼）
   → Logback AsyncAppender
       ├─ RollingFileAppender（按天 + 按级别）
-      └─ ManticoreLogAppender → MQ → LogConsumer → Manticore
+      └─ ManticoreLogAppender → MQ lw.log → LogConsumer → Manticore lw_log
 ```
+
+MDC 注入点三处：`TraceFilter` 注入 `traceId`；Sa-Token 拦截器在鉴权通过后注入 `userId`；`RunService` 在运行编排期间注入 `sessionId` / `runId`。ManticoreLogAppender 原样读取四个键落 `lw_log` 的过滤列（匿名请求与系统线程允许为空）。
 
 MQ 不可用时降级为跳过索引，不阻塞主流程。
 
@@ -252,12 +256,16 @@ POST /api/v1/doc/update（正文 + 标题）
   ├─ 3 更新 wb_doc 正文与纯文本
   └─ 4 覆盖写 Manticore lw_doc（失败只告警，PG 为准）
 
-POST /api/v1/doc/assist（action + selection + instruction + kbId?）
-  ├─ 1 按 action 选内置动作模板（续写/润色/摘要/扩写/翻译）
-  ├─ 2 可选：kbId 存在时 kb_search 取 3 段片段拼进上下文  DocAssistService
-  ├─ 3 ModelFactory 取模型同步调用，返回纯文本
-  └─ 4 前端决定插入 / 替换选区
+POST /api/v1/doc/assist/stream（action + selection + instruction + kbId?，SSE）
+  ├─ 1 按 action 选内置动作模板（续写/润色/摘要/扩写/翻译）  DocAssistService
+  ├─ 2 可选：kbId 存在时 kb_search 取 3 段片段拼进上下文
+  ├─ 3 ModelFactory 取模型流式调用（独立 lw-assist 线程池，请求线程只派发）：
+  │     ├─ 增量 → SSE 帧 assist.delta（120ms 合帧）
+  │     └─ 终态 → assist.end（含全文与耗时）；异常 → assist.error
+  └─ 4 前端边收边增量渲染，结束后决定插入 / 替换选区
 ```
+
+辅助写作**不建 Run**：不写 `wb_run`、不落 `wb_event`，产物只推 SSE，用量与耗时打 `[doc.assist]` 日志。代价是辅助过程的用量不进运行统计，换来的是零生命周期开销与简单的中断语义（关闭连接即取消模型调用）。
 
 创作文档是唯一"PG 与 Manticore 双写"的资产：PG 保证编辑事务，Manticore 提供全站检索，索引落后时以 PG 为准并可由文档列表页触发重建。
 
@@ -270,15 +278,19 @@ POST /api/v1/doc/assist（action + selection + instruction + kbId?）
       └─ ManticoreLogAppender → MQ lw.log → LogConsumer → Manticore lw_log
 
 GET /api/v1/log/search（keyword / level / logger / traceId / field / from / to）
-  → LogSearchMapper：等值过滤（level / logger / traceId）+ ts 范围 + 全文匹配
+  → 视角判定：持有 monitor:log:global 走全局；否则强制 user_id = 当前用户
+  → LogSearchMapper：等值过滤（level / logger / traceId / user_id）+ ts 范围 + 全文匹配
   → 按 ts 倒序分页，返回 PageResult<LogDocVO>
 
 GET /api/v1/log/stats（from / to）
+  → 与检索同一视角与过滤条件
   → 级别分布计数 + 按小时粒度的时间直方图（Manticore 分组聚合）
   → 前端渲染日志中心顶部的概览卡与柱状图
 ```
 
-检索字段分工：`message` 是唯一全文列（ICU 中文分词），`level` / `logger` / `trace_id` / `ts` 是过滤列。关键字默认匹配 `message`，可用 `field` 参数改判 `logger` 或 `trace_id`；`traceId` 精确命中用于把一次请求的全部日志串成时间线。MQ 不可用时降级为跳过索引，不阻塞主流程；Manticore 检索异常时降级为空结果并告警，日志原文仍在滚动文件里可查。
+检索字段分工：`message` 是唯一全文列（ICU 中文分词），`level` / `logger` / `trace_id` / `user_id` / `session_id` / `run_id` / `ts` 是过滤列。关键字默认匹配 `message`，可用 `field` 参数改判 `logger` 或 `trace_id`；`traceId` 精确命中用于把一次请求的全部日志串成时间线，`userId` / `runId` 精确命中用于串起一个用户或一次运行的全部日志。
+
+**视角隔离**：管理员（`monitor:log:global`）可看全局日志并可按 `userId` 反查；普通用户检索时服务端强制追加 `user_id = 自己` 的条件，看得到自己的运行链路、看不到别人的。MQ 不可用时降级为跳过索引，不阻塞主流程；Manticore 检索异常时降级为空结果并告警，日志原文仍在滚动文件里可查。
 
 ## 6. 并发与性能
 
@@ -308,7 +320,9 @@ GET /api/v1/log/stats（from / to）
 | Sa-Token 而非自研 JWT | 注解鉴权、会话管理、踢人下线开箱即用 | 登录态强依赖 Redis |
 | 归一一次事件 | 前端与模型协议解耦，换协议不动前端 | 新增内核事件需同步适配表 |
 | 自研内核而非引 Agent 框架 | 依赖面极小（只有 hutool-ai），循环与工具完全可控，可单测 | ReAct 循环、工具 Schema、上下文压缩都要自己维护 |
+| 供应方协议与 hutool-ai 对齐 | 配置契约、默认端点、默认模型全部复用依赖，前后端协议集合一处定义 | 只能支持 hutool-ai 已对接的厂商 |
 | 日志双写（文件 + Manticore） | 既有原文又有检索 | 写入路径变长，靠 MQ 削峰 |
+| 日志检索按角色隔离 | 普通用户只看到自己的链路，管理员看全局 | 每页多一次权限判定与过滤注入 |
 | 消息存 Manticore 不存 PG | 全文检索免费获得，写路径短，与日志同一套设施 | 消息资产依赖 Manticore 持久化，容量规划要算上它 |
 | 知识检索用关键词全文（Manticore + ICU 分词） | 零额外依赖、零 embedding 成本，中文按词典切分，短查询够用 | 无语义召回，同义改写查不到 |
 | 不做可视化编排画布 | 创作主路径是"对话 + 文档"，省掉图校验与画布执行器的长期维护 | 固定多步批量流程需拆成多次对话完成 |
@@ -321,7 +335,7 @@ GET /api/v1/log/stats（from / to）
 
 | 依赖 | 取用什么 | 由本项目自己实现 |
 |---|---|---|
-| hutool-ai | 供应方配置契约与同步文本补全 | 流式出站（`agent/model/*Client`）、请求体构造、响应解析、工具调用下发与增量累积、usage 汇总 |
+| hutool-ai | 供应方配置契约（`AIConfig`）、各厂商默认端点与默认模型、同步文本补全 | 流式出站（`agent/model/*Client`）、请求体构造、响应解析、工具调用下发与增量累积、usage 汇总；未对接的协议不做 |
 | Hutool | 字符串 / 集合 / 日期 / JSON / 加解密 / HTTP 工具类 | 业务 ID 生成（`IdGenerator` 走 ULID，Hutool 不提供） |
 | Sa-Token | 登录态、`@SaCheckPermission` 权限注解 | 权限点来源与缓存（`config/StpInterfaceImpl`）、菜单种子对账 |
 | MyBatis | SQL 映射与事务 | 归属隔离条件、批量写入与聚合 SQL 的取舍（注解优先、复杂 SQL 落 XML） |

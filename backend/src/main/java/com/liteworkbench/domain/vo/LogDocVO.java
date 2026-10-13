@@ -24,6 +24,12 @@ public class LogDocVO implements Serializable {
     private String thread;
     /** 链路标识 */
     private String traceId;
+    /** 用户 ID，匿名请求为空 */
+    private String userId;
+    /** 会话 ID，非运行日志为空 */
+    private String sessionId;
+    /** 运行 ID，非运行日志为空 */
+    private String runId;
     /** 正文 */
     private String message;
     /** 异常堆栈 */

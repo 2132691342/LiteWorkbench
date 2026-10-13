@@ -28,6 +28,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.regex.Pattern;
 
 /** 平台日志 Manticore 表访问：写入即检索，保留期由应用定时清理 */
 @Slf4j
@@ -37,18 +38,30 @@ public class LogSearchMapper {
 
     private static final String TABLE = "lw_log";
 
+    /** 用户 ID 过滤白名单：SQL 拼接前必须过该校验（全局视角的管理员入参不可信） */
+    private static final Pattern USER_ID_PATTERN = Pattern.compile("[A-Za-z0-9_]{1,64}");
+
     private static final String DDL = """
             CREATE TABLE IF NOT EXISTS lw_log (
-                log_id    string,
-                ts        bigint,
-                level     string,
-                logger    string,
-                thread    string,
-                trace_id  string,
-                message   text indexed stored,
-                exception text indexed stored
+                log_id     string,
+                ts         bigint,
+                level      string,
+                logger     string,
+                thread     string,
+                trace_id   string,
+                user_id    string,
+                session_id string,
+                run_id     string,
+                message    text indexed stored,
+                exception  text indexed stored
             ) charset_table='non_cont,cjk' morphology='icu_chinese'
             """;
+
+    /** 存量表升级：链路标识列逐条补齐，列已存在时该语句失败可忽略，最终由复验 SELECT 兜底 */
+    private static final List<String> UPGRADE_DDL = List.of(
+            "ALTER TABLE lw_log ADD COLUMN user_id string",
+            "ALTER TABLE lw_log ADD COLUMN session_id string",
+            "ALTER TABLE lw_log ADD COLUMN run_id string");
 
     private final IndexApi indexApi;
     private final SearchApi searchApi;
@@ -59,7 +72,15 @@ public class LogSearchMapper {
     public boolean ensureTable() {
         try {
             cliExecutor.execute(DDL);
-            utilsApi.sql(StrUtil.format("SELECT log_id FROM {} WHERE level = '__probe__' LIMIT 1", TABLE), false);
+            for (String sql : UPGRADE_DDL) {
+                try {
+                    cliExecutor.execute(sql);
+                } catch (Exception ignored) {
+                    // 列已存在时语句失败，属预期
+                }
+            }
+            utilsApi.sql(StrUtil.format(
+                    "SELECT log_id, user_id, run_id FROM {} WHERE level = '__probe__' LIMIT 1", TABLE), false);
             log.info("[log.table] 表就绪 {}", TABLE);
             return true;
         } catch (Exception e) {
@@ -92,15 +113,18 @@ public class LogSearchMapper {
         }
     }
 
-    /** 检索日志，按 ts 倒序分页；Manticore 不可用或语法异常时降级为空结果 */
+    /**
+     * 检索日志，按 ts 倒序分页；Manticore 不可用或语法异常时降级为空结果。
+     * userId / runId 由服务端视角判定后传入：普通用户固定为自己，全局视角可为空或反查目标。
+     */
     public LogSearchDTO search(String keyword, String field, String level,
-                               String logger, String traceId,
+                               String logger, String traceId, String userId, String runId,
                                long from, long to, long page, long size) {
         long offset = Math.max(page - 1, 0) * Math.max(size, 1);
         try {
             SearchResponse response = searchApi.search(new SearchRequest()
                     .table(TABLE)
-                    .query(logQuery(keyword, field, level, logger, traceId, from, to))
+                    .query(logQuery(keyword, field, level, logger, traceId, userId, runId, from, to))
                     .sort(List.of(Map.of("ts", "desc")))
                     .limit((int) Math.max(1, Math.min(size, 500)))
                     .offset((int) Math.max(0, offset)));
@@ -112,19 +136,20 @@ public class LogSearchMapper {
     }
 
     /**
-     * 分布概览：级别计数 + 按小时直方图，与检索共用时间范围过滤。
+     * 分布概览：级别计数 + 按小时直方图，与检索共用视角与时间范围过滤。
      * 聚合走 /sql 的 GROUP BY（只读 SELECT），不拉结果集回内存再数；异常由调用方降级。
      */
-    public LogStatsVO stats(long from, long to) {
+    public LogStatsVO stats(String userId, long from, long to) {
         LogStatsVO stats = new LogStatsVO();
-        stats.setLevels(levelCounts(from, to));
-        stats.setHistogram(hourHistogram(from, to));
+        stats.setLevels(levelCounts(userId, from, to));
+        stats.setHistogram(hourHistogram(userId, from, to));
         return stats;
     }
 
-    /** 日志过滤查询：等值过滤（level / logger / traceId）可选，ts 范围可选，关键字按 field 改判匹配列 */
+    /** 日志过滤查询：等值过滤（level / logger / traceId / user_id / run_id）可选，ts 范围可选，关键字按 field 改判匹配列 */
     private static SearchQuery logQuery(String keyword, String field, String level,
-                                        String logger, String traceId, long from, long to) {
+                                        String logger, String traceId, String userId, String runId,
+                                        long from, long to) {
         BoolFilter bool = new BoolFilter();
         if (StrUtil.isNotBlank(level)) {
             bool.addMustItem(new QueryFilter().equalsDef(Map.of("level", level.toUpperCase())));
@@ -134,6 +159,12 @@ public class LogSearchMapper {
         }
         if (StrUtil.isNotBlank(traceId)) {
             bool.addMustItem(new QueryFilter().equalsDef(Map.of("trace_id", traceId)));
+        }
+        if (StrUtil.isNotBlank(userId)) {
+            bool.addMustItem(new QueryFilter().equalsDef(Map.of("user_id", userId)));
+        }
+        if (StrUtil.isNotBlank(runId)) {
+            bool.addMustItem(new QueryFilter().equalsDef(Map.of("run_id", runId)));
         }
         if (from > 0 && to > 0) {
             bool.addMustItem(new QueryFilter().range(Map.of("ts", Map.of("gte", from, "lte", to))));
@@ -153,13 +184,21 @@ public class LogSearchMapper {
         return new SearchQuery().bool(bool);
     }
 
+    /** 视角过滤 SQL 片段：userId 必须通过白名单校验才允许拼接，非法入参退化为不过滤 */
+    private static String userClause(String userId) {
+        if (StrUtil.isBlank(userId) || !USER_ID_PATTERN.matcher(userId).matches()) {
+            return "";
+        }
+        return " AND user_id = '" + userId + "'";
+    }
+
     /** 级别计数：SELECT level, COUNT(*) GROUP BY level（Manticore 不支持 COUNT(1)） */
-    private List<LogStatsVO.LevelCount> levelCounts(long from, long to) {
+    private List<LogStatsVO.LevelCount> levelCounts(String userId, long from, long to) {
         String sql = StrUtil.format("""
                 SELECT level, COUNT(*) AS cnt FROM {}
-                WHERE ts >= {} AND ts <= {}
+                WHERE ts >= {} AND ts <= {}{}
                 GROUP BY level
-                """, TABLE, from, to);
+                """, TABLE, from, to, userClause(userId));
         List<LogStatsVO.LevelCount> result = new ArrayList<>();
         for (Map<String, Object> row : groupRows(sql)) {
             Object level = row.get("level");
@@ -174,14 +213,14 @@ public class LogSearchMapper {
     }
 
     /** 小时直方图：DIV 整数除分桶（`/` 在 Manticore 是浮点除，桶起点会漂移），桶起点毫秒时间戳升序，上限 168 桶（7 天） */
-    private List<LogStatsVO.HourCount> hourHistogram(long from, long to) {
+    private List<LogStatsVO.HourCount> hourHistogram(String userId, long from, long to) {
         String sql = StrUtil.format("""
                 SELECT ts DIV 3600000 AS hour_bucket, COUNT(*) AS cnt FROM {}
-                WHERE ts >= {} AND ts <= {}
+                WHERE ts >= {} AND ts <= {}{}
                 GROUP BY hour_bucket
                 ORDER BY hour_bucket ASC
                 LIMIT 168
-                """, TABLE, from, to);
+                """, TABLE, from, to, userClause(userId));
         List<LogStatsVO.HourCount> result = new ArrayList<>();
         for (Map<String, Object> row : groupRows(sql)) {
             Object bucket = row.get("hour_bucket");
@@ -258,6 +297,9 @@ public class LogSearchMapper {
         doc.put("logger", StrUtil.nullToEmpty(message.logger()));
         doc.put("thread", StrUtil.nullToEmpty(message.thread()));
         doc.put("trace_id", StrUtil.nullToEmpty(message.traceId()));
+        doc.put("user_id", StrUtil.nullToEmpty(message.userId()));
+        doc.put("session_id", StrUtil.nullToEmpty(message.sessionId()));
+        doc.put("run_id", StrUtil.nullToEmpty(message.runId()));
         doc.put("message", StrUtil.nullToEmpty(message.message()));
         if (StrUtil.isNotBlank(message.exception())) {
             doc.put("exception", message.exception());
@@ -281,6 +323,9 @@ public class LogSearchMapper {
             vo.setLogger(ManticoreSupport.text(doc, "logger"));
             vo.setThread(ManticoreSupport.text(doc, "thread"));
             vo.setTraceId(ManticoreSupport.text(doc, "trace_id"));
+            vo.setUserId(ManticoreSupport.text(doc, "user_id"));
+            vo.setSessionId(ManticoreSupport.text(doc, "session_id"));
+            vo.setRunId(ManticoreSupport.text(doc, "run_id"));
             vo.setMessage(ManticoreSupport.text(doc, "message"));
             vo.setException(ManticoreSupport.text(doc, "exception"));
             result.add(vo);
