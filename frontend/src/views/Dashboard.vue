@@ -76,8 +76,8 @@ const toolValues = computed(() => Object.values(overview.value?.toolDistribution
 const subtitle = computed(() => t('dashboard.subtitle', { name: userStore.nickname || '-' }))
 
 function formatTokens(value: number): string {
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
-  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`
+  if (value >= 1_000_000) return t('dashboard.unitMillion', { n: (value / 1_000_000).toFixed(1) })
+  if (value >= 1_000) return t('dashboard.unitThousand', { n: (value / 1_000).toFixed(1) })
   return String(value)
 }
 

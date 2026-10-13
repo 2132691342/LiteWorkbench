@@ -200,7 +200,7 @@ function formatDuration(ms?: number): string {
 
 function tokenSummary(run: RunVO): string {
   const tokens = (run.inputTokens ?? 0) + (run.outputTokens ?? 0)
-  return tokens > 0 ? `${tokens} tok` : '-'
+  return tokens > 0 ? t('runs.tokenSummary', { n: tokens }) : '-'
 }
 
 function truncate(text?: string, limit = 4000): string {
@@ -487,7 +487,7 @@ void loadRuns()
                   </div>
                   <div v-else class="tl-model">
                     {{ t('runs.modelRound') }} {{ block.round }} · {{ formatDuration(block.durationMs) }} ·
-                    {{ block.tokens }} tok
+                    {{ t('runs.tokenSummary', { n: block.tokens ?? 0 }) }}
                   </div>
                 </div>
               </template>

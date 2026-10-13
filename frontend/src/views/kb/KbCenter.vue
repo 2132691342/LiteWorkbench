@@ -210,9 +210,9 @@ async function removeDoc(doc: KbDocVO): Promise<void> {
 
 function formatSize(value?: number): string {
   if (!value) return '-'
-  if (value < 1024) return `${value} B`
-  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`
-  return `${(value / 1024 / 1024).toFixed(1)} MB`
+  if (value < 1024) return t('kb.sizeB', { n: value })
+  if (value < 1024 * 1024) return t('kb.sizeKB', { n: (value / 1024).toFixed(1) })
+  return t('kb.sizeMB', { n: (value / 1024 / 1024).toFixed(1) })
 }
 
 /* ===== 分块检索 ===== */
