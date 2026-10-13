@@ -1,0 +1,7 @@
+# 本地开发覆盖：把 Manticore HTTP JSON API 9308 发布到宿主机，供本机运行的 Spring Boot 直连
+# 仅本地开发使用，不参与服务器部署
+services:
+  manticore:
+    ports:
+      - "9306:9306"
+      - "9308:9308"

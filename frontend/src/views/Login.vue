@@ -8,7 +8,7 @@ import LwErrorBar from '@/components/ui/LwErrorBar.vue'
 import { useUserStore } from '@/stores/user'
 import { fetchPublicKey } from '@/utils/crypto'
 
-/** 登录页：居中单卡（DESIGN.md §12.3），进入即预热公钥，失败内联提示不降级明文 */
+/** 登录页：左品牌 hero + 右凭证卡（DESIGN.md §12.3，案例规范级布局），进入即预热公钥，失败内联提示不降级明文 */
 const { t } = useI18n()
 const router = useRouter()
 const route = useRoute()
@@ -36,7 +36,7 @@ async function loadPublicKey(): Promise<void> {
 
 onMounted(loadPublicKey)
 
-/** 品牌卡三条能力说明，文案走 i18n */
+/** 品牌区三条能力说明，文案走 i18n；图标为线性描边，与设计规范的图标纪律一致 */
 const features = computed(() => [
   {
     title: t('login.featureObserve'),
@@ -97,29 +97,68 @@ async function handleSubmit(): Promise<void> {
 </script>
 
 <template>
-  <div class="min-h-full flex items-center justify-center p-6" style="background-color: var(--lw-surface)">
-    <div class="w-full max-w-[400px] flex flex-col gap-6">
-      <!-- 品牌区：方块图标 + 产品名 + 一句定位 -->
-      <div class="flex flex-col items-center text-center gap-3">
-        <div
-          class="w-12 h-12 rounded-card flex items-center justify-center shadow-sm"
-          style="background: var(--lw-secondary)"
-        >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-               stroke-linecap="round" stroke-linejoin="round" style="color: #ffffff">
-            <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
-            <line x1="3" x2="21" y1="9" y2="9" />
-            <line x1="9" x2="9" y1="21" y2="9" />
-          </svg>
-        </div>
-        <div>
-          <h1 class="text-2xl font-bold tracking-tight" style="color: var(--lw-ink)">{{ t('app.title') }}</h1>
-          <p class="text-xs mt-1" style="color: var(--lw-ink-muted)">{{ t('login.welcomeDesc') }}</p>
-        </div>
-      </div>
+  <div class="min-h-full flex items-center justify-center p-6 relative overflow-hidden" style="background-color: var(--lw-surface)">
+    <!-- 案例规范：两团紫色弥散光斑，低透明度不抢内容 -->
+    <div class="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] rounded-full blur-[100px] opacity-20 pointer-events-none"
+         style="background-color: var(--lw-secondary)" />
+    <div class="absolute bottom-[-10%] right-[-10%] w-[400px] h-[400px] rounded-full blur-[100px] opacity-20 pointer-events-none"
+         style="background-color: var(--lw-surface-subtle)" />
 
-      <!-- 凭证表单卡 -->
-      <section class="lw-card p-6 flex flex-col gap-5">
+    <div class="w-full max-w-[1080px] flex flex-col lg:flex-row items-center gap-10 lg:gap-16 relative z-10">
+      <!-- 品牌 hero：徽标 pill + 双色标题 + 定位描述 + 三条能力 -->
+      <section class="flex-1 flex flex-col items-center lg:items-start text-center lg:text-left">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-card flex items-center justify-center lw-shadow-sm transition-transform duration-200 hover:scale-105"
+               style="background: var(--lw-secondary)">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" style="color: #ffffff">
+              <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+              <line x1="3" x2="21" y1="9" y2="9" />
+              <line x1="9" x2="9" y1="21" y2="9" />
+            </svg>
+          </div>
+          <span class="text-2xl font-bold tracking-tight" style="color: var(--lw-ink)">{{ t('app.title') }}</span>
+        </div>
+
+        <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border mt-8 text-xs font-bold transition-all duration-200 hover:lw-shadow-sm"
+             style="background: var(--lw-surface-raised); border-color: var(--lw-border); color: var(--lw-secondary)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+          </svg>
+          <span>{{ t('login.badge') }}</span>
+        </div>
+
+        <h1 class="text-4xl lg:text-5xl font-extrabold tracking-tight mt-6 leading-tight" style="color: var(--lw-ink)">
+          {{ t('login.heroTitle1') }}<br />
+          <span style="color: var(--lw-secondary)">{{ t('login.heroTitle2') }}</span>
+        </h1>
+
+        <p class="text-base mt-5 leading-relaxed max-w-[480px]" style="color: var(--lw-ink-muted)">
+          {{ t('login.heroDesc') }}
+        </p>
+
+        <div class="hidden lg:flex flex-col gap-3 mt-10 w-full max-w-[460px]">
+          <div v-for="feature in features" :key="feature.title"
+               class="flex items-start gap-3 p-3 rounded-card border transition-all duration-200 hover:-translate-y-0.5 hover:lw-shadow-md"
+               style="background: var(--lw-surface-raised); border-color: var(--lw-border)">
+            <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+                 style="background: var(--lw-primary-tint); color: var(--lw-primary)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round">
+                <path :d="feature.icon" />
+              </svg>
+            </div>
+            <div class="text-left">
+              <h3 class="font-bold text-sm" style="color: var(--lw-ink)">{{ feature.title }}</h3>
+              <p class="text-xs mt-0.5 leading-relaxed" style="color: var(--lw-ink-muted)">{{ feature.desc }}</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 凭证卡：欢迎语 + 登录名 + 密码 + 五态登录按钮 + 安全提示 -->
+      <section class="w-full max-w-[400px] lw-card p-6 flex flex-col gap-5">
         <div>
           <h2 class="text-lg font-bold tracking-tight" style="color: var(--lw-ink)">{{ t('login.welcome') }}</h2>
           <p class="text-xs mt-1" style="color: var(--lw-ink-muted)">{{ t('login.title') }}</p>
@@ -130,7 +169,7 @@ async function handleSubmit(): Promise<void> {
         <form class="flex flex-col gap-4" @submit.prevent="handleSubmit">
           <label class="flex flex-col gap-1.5">
             <span class="lw-label">{{ t('login.username') }}</span>
-            <div class="flex items-center h-10 px-3 rounded-control border transition-all duration-200 focus-within:shadow-sm"
+            <div class="flex items-center h-10 px-3 rounded-control border transition-all duration-200 focus-within:border-lw-primary focus-within:lw-shadow-sm"
                  style="border-color: var(--lw-border)">
               <el-icon :size="15" style="color: var(--lw-ink-muted)"><User /></el-icon>
               <input
@@ -144,7 +183,7 @@ async function handleSubmit(): Promise<void> {
 
           <label class="flex flex-col gap-1.5">
             <span class="lw-label">{{ t('login.password') }}</span>
-            <div class="flex items-center h-10 px-3 rounded-control border transition-all duration-200 focus-within:shadow-sm"
+            <div class="flex items-center h-10 px-3 rounded-control border transition-all duration-200 focus-within:border-lw-primary focus-within:lw-shadow-sm"
                  style="border-color: var(--lw-border)">
               <el-icon :size="15" style="color: var(--lw-ink-muted)"><Lock /></el-icon>
               <input
@@ -162,7 +201,7 @@ async function handleSubmit(): Promise<void> {
               >
                 <button
                   type="button"
-                  class="p-1 rounded-md transition-colors hover:bg-black/5 focus:outline-none"
+                  class="p-1 rounded-md transition-all duration-200 hover:bg-black/5 active:scale-90 focus:outline-none"
                   :aria-label="showPassword ? t('login.hidePassword') : t('login.showPassword')"
                   @click="showPassword = !showPassword"
                 >
@@ -194,27 +233,6 @@ async function handleSubmit(): Promise<void> {
           <span>{{ t('login.securityTip') }}</span>
         </p>
       </section>
-
-      <!-- 能力说明：三张小卡，登录页唯一的信息补充 -->
-      <div class="grid grid-cols-3 gap-3">
-        <div
-          v-for="feature in features"
-          :key="feature.title"
-          class="p-3 rounded-card border text-left flex flex-col gap-2 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
-          style="background: var(--lw-surface-raised); border-color: var(--lw-border)"
-        >
-          <div
-            class="w-8 h-8 rounded-lg flex items-center justify-center"
-            style="background: var(--lw-primary-tint); color: var(--lw-primary)"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path :d="feature.icon" />
-            </svg>
-          </div>
-          <h3 class="font-bold text-xs" style="color: var(--lw-ink)">{{ feature.title }}</h3>
-          <p class="text-[10px] leading-relaxed" style="color: var(--lw-ink-muted)">{{ feature.desc }}</p>
-        </div>
-      </div>
     </div>
   </div>
 </template>

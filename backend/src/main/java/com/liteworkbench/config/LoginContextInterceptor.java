@@ -22,10 +22,12 @@ public class LoginContextInterceptor implements HandlerInterceptor {
         LoginUser user = LoginContext.get();
         if (Objects.nonNull(user)) {
             MDC.put(AppConst.MDC_USER_ID, user.getUserId());
-        }
-        if (Objects.nonNull(user) && Boolean.TRUE.equals(user.getPwdResetRequired())
-                && !allowed(request.getRequestURI())) {
-            throw new BizException(ErrorCodeEnum.PASSWORD_RESET_REQUIRED);
+            if (Boolean.TRUE.equals(user.getPwdResetRequired()) && !allowed(request.getRequestURI())) {
+                // preHandle 抛异常时 Spring 不调用本拦截器的 afterCompletion，先自行清理线程上下文再抛，防线程复用串号
+                LoginContext.clear();
+                MDC.remove(AppConst.MDC_USER_ID);
+                throw new BizException(ErrorCodeEnum.PASSWORD_RESET_REQUIRED);
+            }
         }
         return true;
     }

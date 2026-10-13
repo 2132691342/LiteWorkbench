@@ -124,6 +124,10 @@ export default {
   login: {
     title: '登录工作台',
     subtitle: '多角色 · 多菜单权限',
+    badge: '企业级个人 AI 创作工作台',
+    heroTitle1: '让 Agent 替你干活，',
+    heroTitle2: '把创作沉淀成资产',
+    heroDesc: '会话、运行、事件三层可观测，工具调用全程可见；提示词、知识库与文档版本，让每一次 AI 协作都留下可复用的产出。',
     username: '登录名',
     usernamePlaceholder: '请输入登录名',
     password: '密码',

@@ -57,19 +57,26 @@ public class LogSearchMapper {
             ) charset_table='non_cont,cjk' morphology='icu_chinese'
             """;
 
-    /** 存量表升级：链路标识列逐条补齐，列已存在时该语句失败可忽略，最终由复验 SELECT 兜底 */
+    /** 存量表升级：链路标识列与异常列逐条补齐，列已存在时该语句失败可忽略，最终由复验 SELECT 兜底 */
     private static final List<String> UPGRADE_DDL = List.of(
             "ALTER TABLE lw_log ADD COLUMN user_id string",
             "ALTER TABLE lw_log ADD COLUMN session_id string",
-            "ALTER TABLE lw_log ADD COLUMN run_id string");
+            "ALTER TABLE lw_log ADD COLUMN run_id string",
+            "ALTER TABLE lw_log ADD COLUMN exception text indexed stored");
 
     private final IndexApi indexApi;
     private final SearchApi searchApi;
     private final UtilsApi utilsApi;
     private final ManticoreCliExecutor cliExecutor;
 
+    /** 表就绪标记：未就绪时写入路径先自保建表，杜绝 /insert 隐式建出缺列结构 */
+    private volatile boolean tableReady;
+
     /** 幂等建表：/cli 执行后必须用属性过滤 SELECT 校验（/cli 对失败语句也回显成功，且 /insert 会建出错结构表） */
-    public boolean ensureTable() {
+    public synchronized boolean ensureTable() {
+        if (tableReady) {
+            return true;
+        }
         try {
             cliExecutor.execute(DDL);
             for (String sql : UPGRADE_DDL) {
@@ -83,6 +90,7 @@ public class LogSearchMapper {
             utilsApi.sql(StrUtil.format(
                     "SELECT log_id, user_id, session_id, run_id, message, exception FROM {} WHERE level = '__probe__' LIMIT 1",
                     TABLE), false);
+            tableReady = true;
             log.info("[log.table] 表就绪 {}", TABLE);
             return true;
         } catch (Exception e) {
@@ -93,11 +101,26 @@ public class LogSearchMapper {
 
     /** 写入日志文档，失败仅告警不抛异常（调用方在 MQ 消费线程） */
     public void add(LogPublisher.LogMessage message) {
+        if (!tableReady && !ensureTable()) {
+            return;
+        }
         try {
             indexApi.insert(new InsertDocumentRequest()
                     .table(TABLE)
                     .doc(docOf(message)));
         } catch (Exception e) {
+            // 结构被历史数据污染时补一次对账再重试，仍失败仅告警
+            if (ensureTable()) {
+                try {
+                    indexApi.insert(new InsertDocumentRequest()
+                            .table(TABLE)
+                            .doc(docOf(message)));
+                    return;
+                } catch (Exception retry) {
+                    log.warn("[log.insert] 重试写入失败 logId={} {}", message.logId(), retry.getMessage());
+                    return;
+                }
+            }
             log.warn("[log.insert] 写入失败 logId={} {}", message.logId(), e.getMessage());
         }
     }

@@ -227,9 +227,12 @@ public class RunService {
         settleAborted(run);
     }
 
-    /** 冲刷所有活动运行的批缓冲 */
+    /** 冲刷所有活动运行的批缓冲；已终态运行由收尾路径负责最终冲刷，跳过避免空转 */
     private void flushAll() {
         for (ActiveRun run : active.values()) {
+            if (run.settled.get()) {
+                continue;
+            }
             try {
                 MDC.put(AppConst.MDC_SESSION_ID, run.sessionId);
                 MDC.put(AppConst.MDC_RUN_ID, run.runId);
@@ -243,8 +246,15 @@ public class RunService {
         }
     }
 
-    /** 冲刷单个运行：先落库再推送，落库失败不中断输出 */
+    /** 冲刷单个运行：先落库再推送，落库失败不中断输出；持运行监视器保证与收尾最终冲刷串行，不丢帧 */
     private void flush(ActiveRun run) {
+        synchronized (run) {
+            flushLocked(run);
+        }
+    }
+
+    /** 冲刷本体：持运行监视器调用，与 offer / drain 及收尾路径互斥 */
+    private void flushLocked(ActiveRun run) {
         List<RunEventDTO> batch = run.drain();
         if (batch.isEmpty()) {
             return;
@@ -311,6 +321,8 @@ public class RunService {
 
     /** 成功收尾：取消标志优先，中断与完成竞争时终态记 aborted */
     private void settleSuccess(ActiveRun run) {
+        // 先冲刷推送攒批内事件再置终态： settled 后 push 不再放行，短任务会在首帧冲刷前完成
+        flush(run);
         if (!run.settled.compareAndSet(false, true)) {
             return;
         }
@@ -318,7 +330,6 @@ public class RunService {
             finishAborted(run);
             return;
         }
-        flush(run);
         String stopReason = run.exceeded.get()
                 ? StopReasonEnum.MAX_ITERS.getCode() : StopReasonEnum.COMPLETED.getCode();
         WbRunDO dbRun = runMapper.selectById(run.runId);
@@ -340,6 +351,8 @@ public class RunService {
 
     /** 失败收尾：取消标志优先，取消导致的异常按中断收敛 */
     private void settleError(ActiveRun run, Throwable error) {
+        // 先冲刷推送攒批内事件再置终态，理由同 settleSuccess
+        flush(run);
         if (!run.settled.compareAndSet(false, true)) {
             return;
         }
@@ -348,7 +361,6 @@ public class RunService {
             return;
         }
         log.error("[run.failed] runId={} error={}", run.runId, error.getMessage(), error);
-        flush(run);
         WbRunDO dbRun = runMapper.selectById(run.runId);
         if (Objects.nonNull(dbRun)) {
             settleTerminal(dbRun, RunStatusEnum.FAILED.getCode(), StopReasonEnum.ERROR.getCode(),
@@ -364,6 +376,8 @@ public class RunService {
 
     /** 中断收尾：取消请求或通道关闭触发 */
     private void settleAborted(ActiveRun run) {
+        // 先冲刷推送攒批内事件再置终态，理由同 settleSuccess
+        flush(run);
         if (!run.settled.compareAndSet(false, true)) {
             return;
         }

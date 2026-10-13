@@ -124,6 +124,10 @@ export default {
   login: {
     title: 'Sign in',
     subtitle: 'Multi-role · Fine-grained permissions',
+    badge: 'Enterprise-grade personal AI creation workbench',
+    heroTitle1: 'Let the agent do the work,',
+    heroTitle2: 'turn creation into assets',
+    heroDesc: 'Three-layer observability across sessions, runs and events with every tool call visible; prompts, knowledge bases and document versions keep every AI collaboration reusable.',
     username: 'Username',
     usernamePlaceholder: 'Enter your username',
     password: 'Password',
