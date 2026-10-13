@@ -138,6 +138,7 @@ MQ 不可用时跳过索引，只留文件，不阻塞业务线程。
 ## 约束
 
 - 禁止打印密钥、令牌、完整请求体。
+- Appender 读取链路字段必须走事件快照（`ILoggingEvent.getMDCPropertyMap()`）：Appender 挂在 AsyncAppender 下，异步线程的 ThreadLocal MDC 为空，直接 `MDC.get` 会全部落空。
 - 正文按原文入索引，不做二次截断；异常堆栈单独成列。
 - 索引创建必须幂等（`CREATE TABLE IF NOT EXISTS`)；升级新增列时用 `ALTER TABLE ... ADD COLUMN` 幂等补齐后复验。
 - `trace_id` 与响应信封的 `requestId` 必须一致。

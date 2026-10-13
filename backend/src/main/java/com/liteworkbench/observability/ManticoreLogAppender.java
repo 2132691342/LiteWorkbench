@@ -7,8 +7,8 @@ import ch.qos.logback.core.AppenderBase;
 import com.liteworkbench.common.IdGenerator;
 import com.liteworkbench.domain.constant.AppConst;
 import com.liteworkbench.domain.constant.IdPrefixConst;
-import org.slf4j.MDC;
 
+import java.util.Map;
 import java.util.Objects;
 
 /** Manticore 日志 Appender：组装文档后交 LogPublisher 异步入索引，失败不阻塞业务线程 */
@@ -48,6 +48,8 @@ public class ManticoreLogAppender extends AppenderBase<ILoggingEvent> {
             }
             String loggerName = Objects.toString(event.getLoggerName(), "");
             String exception = renderException(event.getThrowableProxy());
+            // 链路标识取自事件快照：本 Appender 跑在 AsyncAppender 的异步线程里，ThreadLocal 的 MDC 为空
+            Map<String, String> mdc = event.getMDCPropertyMap();
             target.publish(new LogPublisher.LogMessage(
                     IdGenerator.generate(IdPrefixConst.LOG),
                     event.getTimeStamp(),
@@ -55,10 +57,10 @@ public class ManticoreLogAppender extends AppenderBase<ILoggingEvent> {
                     loggerName.length() > MAX_LOGGER_CHARS
                             ? loggerName.substring(loggerName.length() - MAX_LOGGER_CHARS) : loggerName,
                     event.getThreadName(),
-                    Objects.toString(MDC.get(AppConst.MDC_TRACE_ID), ""),
-                    Objects.toString(MDC.get(AppConst.MDC_USER_ID), ""),
-                    Objects.toString(MDC.get(AppConst.MDC_SESSION_ID), ""),
-                    Objects.toString(MDC.get(AppConst.MDC_RUN_ID), ""),
+                    mdcValue(mdc, AppConst.MDC_TRACE_ID),
+                    mdcValue(mdc, AppConst.MDC_USER_ID),
+                    mdcValue(mdc, AppConst.MDC_SESSION_ID),
+                    mdcValue(mdc, AppConst.MDC_RUN_ID),
                     message,
                     exception));
             failureCount = 0;
@@ -70,6 +72,11 @@ public class ManticoreLogAppender extends AppenderBase<ILoggingEvent> {
                 addWarn("日志投递失败 " + failureCount + " 次：" + e.getMessage());
             }
         }
+    }
+
+    /** MDC 快照取值，缺失返回空串 */
+    private static String mdcValue(Map<String, String> mdc, String key) {
+        return Objects.toString(mdc.get(key), "");
     }
 
     /** 异常堆栈渲染，超长截断 */
