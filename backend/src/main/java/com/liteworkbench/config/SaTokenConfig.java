@@ -18,13 +18,15 @@ public class SaTokenConfig implements WebMvcConfigurer {
             "/actuator/health/**",
     };
 
-    /** 注册登录校验与上下文拦截器 */
+    /** 注册登录校验、上下文注入与接口兜底拦截器；顺序即执行顺序，未登录先拦再判接口是否存在 */
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(new SaInterceptor(handle -> StpUtil.checkLogin()))
                 .addPathPatterns("/api/**")
                 .excludePathPatterns(WHITE_LIST);
         registry.addInterceptor(new LoginContextInterceptor())
+                .addPathPatterns("/api/**");
+        registry.addInterceptor(new ApiPathInterceptor())
                 .addPathPatterns("/api/**");
     }
 }
