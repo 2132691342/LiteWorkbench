@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Hide, View } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -15,6 +16,8 @@ const userStore = useUserStore()
 const form = reactive({ oldPassword: '', newPassword: '', confirmPassword: '' })
 const loading = ref(false)
 const errorMessage = ref('')
+/** 口令框共用显隐开关，与强制改密页保持一致 */
+const showPassword = ref(false)
 
 /** 打开时重置表单与错误 */
 watch(visible, (value) => {
@@ -28,6 +31,10 @@ watch(visible, (value) => {
 
 async function submit(): Promise<void> {
   errorMessage.value = ''
+  if (!form.oldPassword || !form.newPassword) {
+    errorMessage.value = t('settings.passwordRequired')
+    return
+  }
   if (form.newPassword !== form.confirmPassword) {
     errorMessage.value = t('settings.passwordMismatch')
     return
@@ -60,16 +67,25 @@ async function submit(): Promise<void> {
     <form class="flex flex-col gap-4" @submit.prevent="submit">
       <label class="flex flex-col gap-1.5">
         <span class="lw-label">{{ t('settings.oldPassword') }}</span>
-        <input v-model="form.oldPassword" type="password" class="lw-input" autocomplete="current-password" />
+        <input v-model="form.oldPassword" :type="showPassword ? 'text' : 'password'" class="lw-input" autocomplete="current-password" />
       </label>
       <label class="flex flex-col gap-1.5">
         <span class="lw-label">{{ t('settings.newPassword') }}</span>
-        <input v-model="form.newPassword" type="password" class="lw-input" autocomplete="new-password" />
+        <input v-model="form.newPassword" :type="showPassword ? 'text' : 'password'" class="lw-input" autocomplete="new-password" />
       </label>
       <label class="flex flex-col gap-1.5">
         <span class="lw-label">{{ t('settings.confirmPassword') }}</span>
-        <input v-model="form.confirmPassword" type="password" class="lw-input" autocomplete="new-password" />
+        <input v-model="form.confirmPassword" :type="showPassword ? 'text' : 'password'" class="lw-input" autocomplete="new-password" />
       </label>
+      <button
+        type="button"
+        class="self-start inline-flex items-center gap-1.5 text-xs font-medium transition-opacity hover:opacity-80"
+        style="color: var(--lw-ink-muted)"
+        @click="showPassword = !showPassword"
+      >
+        <el-icon :size="14"><component :is="showPassword ? Hide : View" /></el-icon>
+        {{ showPassword ? t('login.hidePassword') : t('login.showPassword') }}
+      </button>
       <p v-if="errorMessage" class="text-xs px-3 py-2 rounded-control" style="color: var(--lw-error-ink); background: var(--lw-error-tint)">
         {{ errorMessage }}
       </p>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Lock, User } from '@element-plus/icons-vue'
+import { Hide, Lock, User, View } from '@element-plus/icons-vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -20,6 +20,7 @@ const loading = ref(false)
 const errorMessage = ref('')
 const keyReady = ref(false)
 const keyError = ref(false)
+const showPassword = ref(false)
 
 /** 公钥预热：安全组件取不到时不降级明文，内联错误条 + 重试 */
 async function loadPublicKey(): Promise<void> {
@@ -54,12 +55,22 @@ const features = computed(() => [
   },
 ])
 
+/** 回跳地址只接受站内绝对路径，防止被伪造成外部地址 */
+function safeRedirect(): string {
+  const raw = route.query.redirect as string | undefined
+  return raw && raw.startsWith('/') && !raw.startsWith('//') ? raw : '/dashboard'
+}
+
 /** 提交登录，成功后回到来源页或仪表盘 */
 async function handleSubmit(): Promise<void> {
   if (loading.value) return
   errorMessage.value = ''
-  if (!form.username || !form.password) {
-    errorMessage.value = t('common.failed')
+  if (!form.username) {
+    errorMessage.value = t('login.usernameRequired')
+    return
+  }
+  if (!form.password) {
+    errorMessage.value = t('login.passwordRequired')
     return
   }
   loading.value = true
@@ -76,8 +87,7 @@ async function handleSubmit(): Promise<void> {
       router.push('/force-password')
       return
     }
-    const redirect = (route.query.redirect as string) || '/dashboard'
-    router.push(redirect)
+    router.push(safeRedirect())
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : t('common.failed')
   } finally {
@@ -139,12 +149,28 @@ async function handleSubmit(): Promise<void> {
               <el-icon :size="15" style="color: var(--lw-ink-muted)"><Lock /></el-icon>
               <input
                 v-model="form.password"
-                type="password"
+                :type="showPassword ? 'text' : 'password'"
                 class="w-full px-2 bg-transparent outline-none text-sm"
                 :placeholder="t('login.passwordPlaceholder')"
                 autocomplete="current-password"
                 @keydown.enter.prevent="handleSubmit"
               />
+              <el-tooltip
+                :content="showPassword ? t('login.hidePassword') : t('login.showPassword')"
+                placement="top"
+                :open-delay="300"
+              >
+                <button
+                  type="button"
+                  class="p-1 rounded-md transition-colors hover:bg-black/5 focus:outline-none"
+                  :aria-label="showPassword ? t('login.hidePassword') : t('login.showPassword')"
+                  @click="showPassword = !showPassword"
+                >
+                  <el-icon :size="15" style="color: var(--lw-ink-muted)">
+                    <component :is="showPassword ? Hide : View" />
+                  </el-icon>
+                </button>
+              </el-tooltip>
             </div>
           </label>
 

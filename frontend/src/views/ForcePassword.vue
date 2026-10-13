@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Hide, View } from '@element-plus/icons-vue'
 import { computed, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -15,6 +16,8 @@ const userStore = useUserStore()
 const form = reactive({ oldPassword: '', newPassword: '', confirmPassword: '' })
 const loading = ref(false)
 const errorMessage = ref('')
+/** 三个口令框共用一个显隐开关，避免逐框加眼睛图标把表单撑乱 */
+const showPassword = ref(false)
 
 /** 强度提示：长度与字母数字组合 */
 const strength = computed(() => {
@@ -77,12 +80,12 @@ async function handleSubmit(): Promise<void> {
       <form class="flex flex-col gap-4" @submit.prevent="handleSubmit">
         <label class="flex flex-col gap-1.5">
           <span class="lw-label">{{ t('settings.oldPassword') }}</span>
-          <input v-model="form.oldPassword" type="password" autocomplete="current-password"
+          <input v-model="form.oldPassword" :type="showPassword ? 'text' : 'password'" autocomplete="current-password"
                  class="lw-input" :placeholder="t('settings.oldPassword')" />
         </label>
         <label class="flex flex-col gap-1.5">
           <span class="lw-label">{{ t('settings.newPassword') }}</span>
-          <input v-model="form.newPassword" type="password" autocomplete="new-password"
+          <input v-model="form.newPassword" :type="showPassword ? 'text' : 'password'" autocomplete="new-password"
                  class="lw-input" :placeholder="t('forcePassword.newPlaceholder')" />
           <span class="flex items-center gap-1.5 mt-1">
             <span v-for="index in 3" :key="index" class="h-1 flex-1 rounded-full transition-all duration-200"
@@ -91,9 +94,19 @@ async function handleSubmit(): Promise<void> {
         </label>
         <label class="flex flex-col gap-1.5">
           <span class="lw-label">{{ t('settings.confirmPassword') }}</span>
-          <input v-model="form.confirmPassword" type="password" autocomplete="new-password"
+          <input v-model="form.confirmPassword" :type="showPassword ? 'text' : 'password'" autocomplete="new-password"
                  class="lw-input" :placeholder="t('settings.confirmPassword')" />
         </label>
+
+        <button
+          type="button"
+          class="self-start inline-flex items-center gap-1.5 text-xs font-medium transition-opacity hover:opacity-80"
+          style="color: var(--lw-ink-muted)"
+          @click="showPassword = !showPassword"
+        >
+          <el-icon :size="14"><component :is="showPassword ? Hide : View" /></el-icon>
+          {{ showPassword ? t('login.hidePassword') : t('login.showPassword') }}
+        </button>
 
         <p v-if="errorMessage" class="text-xs font-medium px-3 py-2 rounded-control"
            style="color: var(--lw-error-ink); background: var(--lw-error-tint)">
@@ -101,7 +114,7 @@ async function handleSubmit(): Promise<void> {
         </p>
 
         <LwButton native-type="submit" size="lg" block :loading="loading">
-          {{ loading ? t('common.save') : t('forcePassword.submit') }}
+          {{ loading ? t('forcePassword.submitting') : t('forcePassword.submit') }}
         </LwButton>
       </form>
     </div>

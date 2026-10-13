@@ -55,6 +55,8 @@ export default defineConfig({
     // 输入框锁定 h-10（40px）：与 LwButton md、el-input、LwSegmented 同高，同行控件天然对齐
     'lw-input':
       'w-full h-10 px-3 rounded-control border border-lw-border bg-transparent text-sm text-lw-ink outline-none transition-all duration-200 focus:border-lw-primary',
+    // 表格统一圆角内收，避免直角贴着卡片边框；表头 / 行高主题见 styles/index.css
+    'lw-table': 'w-full overflow-hidden rounded-control',
     'lw-center': 'flex items-center justify-center',
   },
 })
