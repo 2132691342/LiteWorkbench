@@ -297,10 +297,11 @@ UnoCSS 主题只映射令牌，组件禁止硬编码色值：颜色 `lw-<别名>
 
 ## 9. 菜单与标签渲染
 
-- 侧栏目录展开/收起 200ms 旋转箭头；选中项 `--lw-primary` 文字 + `--lw-secondary-selected` 底；悬停黑色 5% 叠加。
+- 侧栏目录展开/收起 200ms 旋转箭头，子项容器按 `grid-template-rows: 0fr → 1fr` 过渡（`--lw-ease-out`），比 max-height 平滑且不抖动；选中项 `--lw-primary` 文字 + `--lw-secondary-selected` 底；悬停黑色 5% 叠加。
 - 目录下子项左缩进 36px、行高 36px；目录行高 40px。
 - 图标只允许线性描边风格（stroke 2、圆角端点、24×24 viewBox），禁止混用实心图标集。
 - 菜单标签的 i18n 渲染与降级规则见 [specs/07-frontend.md](specs/07-frontend.md)，本节只定视觉。
+- 数字与等宽文本（指标值、耗时、Token、ID）一律 `font-variant-numeric: tabular-nums`：流式刷新时字宽不变，不左右跳动。
 
 ## 10. 焦点与可访问性
 
