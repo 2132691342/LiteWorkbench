@@ -36,7 +36,7 @@ watch(
     <transition name="lw-slide">
       <aside
         v-if="appStore.sidebarOpen"
-        class="fixed inset-y-0 left-0 z-40 lg:hidden flex flex-col shadow-lg"
+        class="fixed inset-y-0 left-0 z-40 lg:hidden flex flex-col lw-shadow-md"
         style="width: var(--lw-sidebar-w); background-color: var(--lw-surface-raised)"
       >
         <TheSideMenu />

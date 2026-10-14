@@ -28,6 +28,10 @@
 | `trigger_words` | 逗号分隔，最多 20 个（服务层校验，超出抛 `PARAM_INVALID`），字段本身不超过 512 字 |
 | `enabled` | 关闭则不参与匹配；新建默认 true |
 
+**内置技能**：`SkillService.BUILTIN_SKILLS` 内置 5 个种子（`outline_first` 先纲后文 / `fact_cite` 取证引用 / `polish_pass` 三遍润色 / `data_brief` 数据简报 / `doc_digest` 长文摘要），正文是操作手册而不是提示词。用户创建时与启动期补种写入，按 `(userId, skill_code)` 全量判重（含已删行，Mapper `selectAnyIdByCode`）——用户改过的以用户为准，删过的不会在下次启动复活。内置技能与自建技能同模型、同表、同装配路径，不引入平台级"不可删"语义。
+
+`wb_skill.builtin` 标记平台种子（启动补种时置位）。内置技能可改可删，页面列出"内置"标签与「恢复默认」入口：`POST /skill/restore/{skillId}` 只回写种子内容字段（`restoreBuiltin`），**保留用户的启用状态**，非内置技能拒绝恢复。
+
 ### 文件：元数据与对象分离
 
 | 项 | 规则 |

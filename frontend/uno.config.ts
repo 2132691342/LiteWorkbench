@@ -52,9 +52,10 @@ export default defineConfig({
     'lw-title': 'text-2xl font-bold tracking-tight text-lw-ink',
     'lw-subtitle': 'text-sm text-lw-muted',
     'lw-label': 'text-xs font-bold text-lw-muted',
-    // 输入框锁定 h-10（40px）：与 LwButton md、el-input、LwSegmented 同高，同行控件天然对齐
+    // 输入框锁定 h-10（40px）：与 LwButton md、el-input、LwSegmented 同高，同行控件天然对齐；
+    // 边框用强调紫而非浅灰——白底上浅灰 1px 几乎不可见
     'lw-input':
-      'w-full h-10 px-3 rounded-control border border-lw-border bg-transparent text-sm text-lw-ink outline-none transition-all duration-200 focus:border-lw-primary',
+      'w-full h-10 px-3 rounded-control border border-lw-borderStrong bg-transparent text-sm text-lw-ink outline-none transition-all duration-200 focus:border-lw-primary',
     // 表格统一圆角内收，避免直角贴着卡片边框；表头 / 行高主题见 styles/index.css
     'lw-table': 'w-full overflow-hidden rounded-control',
     'lw-center': 'flex items-center justify-center',

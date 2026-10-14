@@ -234,6 +234,7 @@ export const skillApi = {
   create: (data: SkillREQ) => post<string>('/skill/create', data),
   update: (data: SkillREQ) => post<void>('/skill/update', data),
   remove: (skillId: string) => post<void>(`/skill/delete/${skillId}`),
+  restore: (skillId: string) => post<void>(`/skill/restore/${skillId}`),
 }
 
 /* ===== 文件 ===== */

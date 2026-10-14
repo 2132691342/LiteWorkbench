@@ -316,6 +316,7 @@ data: {"runId":"RUN_..","sessionId":"SESS_..","seq":42,"eventType":"text.delta",
 | POST | `/skill/create` | `SkillREQ` → `R<String>` | `wb:skill:create` | `skill:create` |
 | POST | `/skill/update` | `SkillREQ` → `R<Void>`（全量更新） | `wb:skill:update` | `skill:update` |
 | POST | `/skill/delete/{skillId}` | — → `R<Void>` | `wb:skill:delete` | `skill:delete` |
+| POST | `/skill/restore/{skillId}` | — → `R<Void>`（仅内置技能，恢复为种子版本并保留启用状态） | `wb:skill:update` | `skill:restore` |
 
 ## 11. 文件
 

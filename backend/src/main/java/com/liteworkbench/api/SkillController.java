@@ -56,4 +56,13 @@ public class SkillController {
         skillService.delete(skillId, LoginContext.userId());
         return R.ok();
     }
+
+    /** 恢复内置技能为种子版本：仅内置技能可恢复，保留用户自己的启用状态 */
+    @SaCheckPermission(PermConst.WB_SKILL_UPDATE)
+    @Idempotent(prefix = "skill:restore")
+    @PostMapping("/restore/{skillId}")
+    public R<Void> restore(@PathVariable String skillId) {
+        skillService.restoreBuiltin(skillId, LoginContext.userId());
+        return R.ok();
+    }
 }

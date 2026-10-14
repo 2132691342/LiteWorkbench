@@ -180,6 +180,7 @@ CREATE TABLE IF NOT EXISTS wb_skill (
     remark        varchar(512)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uk_wb_skill_code ON wb_skill (user_id, skill_code) WHERE deleted = false;
+ALTER TABLE wb_skill ADD COLUMN IF NOT EXISTS builtin boolean NOT NULL DEFAULT false;
 
 -- 文件对象
 CREATE TABLE IF NOT EXISTS wb_file (

@@ -3,7 +3,7 @@ import * as echarts from 'echarts'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { chartAxis, chartTooltip, token } from '@/utils/theme'
 
-/** 面积图：主序列走品牌主色，渐变填充与网格按 DESIGN.md 约定 */
+/** 面积图：序列色按 primary / secondary / accent 三档取令牌，渐变填充与网格按 DESIGN.md 约定 */
 const props = withDefaults(
   defineProps<{
     categories: string[]
@@ -11,15 +11,20 @@ const props = withDefaults(
     name?: string
     height?: number
     secondary?: boolean
+    accent?: boolean
   }>(),
-  { name: 'value', height: 300, secondary: false },
+  { name: 'value', height: 300, secondary: false, accent: false },
 )
 
 const container = ref<HTMLDivElement | null>(null)
 let chart: echarts.ECharts | null = null
 
 function buildOption(): echarts.EChartsOption {
-  const color = props.secondary ? token('--lw-secondary') : token('--lw-primary')
+  const color = props.accent
+    ? token('--lw-accent-soft')
+    : props.secondary
+      ? token('--lw-secondary')
+      : token('--lw-primary')
   return {
     grid: { left: 40, right: 16, top: 16, bottom: 28 },
     tooltip: { trigger: 'axis', ...chartTooltip() },

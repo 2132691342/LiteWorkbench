@@ -93,7 +93,7 @@ TraceFilter（最高优先级）           traceId 入 MDC 并回写响应头
 POST /api/v1/chat/stream（SSE，produces text/event-stream）
   ├─ 1 会话归属校验 + Redis 会话运行锁（setIfAbsent，TTL = SSE 超时 + 60s）      SessionService / RunService
   ├─ 2 建 Run（queued → running）+ 用户消息写 Manticore lw_msg；
-  │     系统提示 = 技能展开 + 长期记忆（记忆放末尾），历史取最近 40 条并经 AgentMemory 压缩
+  │     系统提示 = 平台提示 + 会话补充 + 技能展开 + 长期记忆（记忆放末尾），历史取最近 40 条并经 AgentMemory 压缩
   ├─ 3 活动实例登记进进程内运行注册表，内核任务提交到 lwRunExecutor               AgentKernelRuntime
   ├─ 4 内核循环（模型流式出站；工具执行走 lwToolExecutor）
   │     ├─ 内核事件 → AgentEventAdapter 归一 + seq 递增

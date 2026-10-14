@@ -276,7 +276,7 @@ onMounted(async () => {
             <div
               v-for="run in runStore.runs"
               :key="run.runId"
-              class="px-2 py-1.5 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm"
+              class="px-2 py-1.5 rounded-lg border cursor-pointer transition-all duration-200 hover:lw-shadow-sm"
               :style="{
                 'border-color': run.runId === runStore.replayRunId ? 'var(--lw-primary)' : 'var(--lw-border)',
                 background: run.runId === runStore.replayRunId ? 'var(--lw-primary-tint)' : 'transparent',
@@ -384,8 +384,8 @@ onMounted(async () => {
       <footer class="p-6 pt-4 shrink-0 flex flex-col gap-2 max-w-3xl mx-auto w-full">
         <LwErrorBar v-if="streamError" :message="streamError" />
         <div
-          class="flex items-end gap-3 p-3 rounded-xl border transition-all duration-200 focus-within:shadow-md"
-          style="background: var(--lw-surface-raised); border-color: var(--lw-border)"
+          class="lw-field flex items-end gap-3 p-3 rounded-xl border transition-all duration-200 focus-within:lw-shadow-md"
+          style="background: var(--lw-surface-raised); border-color: var(--lw-border-strong)"
         >
           <textarea
             v-model="draft"

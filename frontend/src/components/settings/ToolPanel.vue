@@ -88,7 +88,7 @@ onMounted(load)
         <div
           v-for="item in list"
           :key="item.toolId"
-          class="px-3 py-2.5 rounded-lg border flex flex-wrap items-center gap-3 transition-all duration-200 hover:shadow-sm"
+          class="px-3 py-2.5 rounded-lg border flex flex-wrap items-center gap-3 transition-all duration-200 hover:lw-shadow-sm"
           style="border-color: var(--lw-border)"
         >
           <div class="flex-1 min-w-0">

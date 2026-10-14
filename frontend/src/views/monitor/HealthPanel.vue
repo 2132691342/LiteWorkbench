@@ -90,7 +90,7 @@ onMounted(load)
           <div
             v-for="item in items"
             :key="item.name"
-            class="p-4 rounded-card border flex items-center justify-between gap-3 transition-all duration-200 hover:shadow-md"
+            class="p-4 rounded-card border flex items-center justify-between gap-3 transition-all duration-200 hover:lw-shadow-md"
             style="border-color: var(--lw-border)"
           >
             <div class="min-w-0">

@@ -45,6 +45,7 @@ public class UserService {
     private final MenuService menuService;
     private final SecretCodec secretCodec;
     private final LoginUserAssembler loginUserAssembler;
+    private final SkillService skillService;
 
     public PageResult<UserVO> page(UserPageREQ req) {
         long total = sysUserMapper.countPage(req);
@@ -88,6 +89,7 @@ public class UserService {
         if (CollUtil.isNotEmpty(req.getRoleIds())) {
             sysUserMapper.insertUserRoles(user.getUserId(), req.getRoleIds(), operatorId);
         }
+        skillService.seedBuiltinForUser(user.getUserId());
         log.info("[user.create] userId={} username={}", user.getUserId(), user.getUsername());
         return user.getUserId();
     }

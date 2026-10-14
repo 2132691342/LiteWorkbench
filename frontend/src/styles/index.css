@@ -207,6 +207,8 @@ body {
 .lw-segmented {
   display: inline-flex;
   align-items: center;
+  flex: none;
+  max-width: 100%;
   gap: 2px;
   height: 40px;
   padding: 3px;
@@ -217,13 +219,15 @@ body {
 }
 
 .lw-segmented.is-equal .lw-segmented__item {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   justify-content: center;
 }
 
 .lw-segmented__item {
   display: inline-flex;
   align-items: center;
+  flex: none;
   gap: 6px;
   height: 32px;
   padding: 0 12px;
@@ -232,6 +236,7 @@ body {
   background: transparent;
   color: var(--lw-ink-muted);
   font-size: 12px;
+  white-space: nowrap;
   font-weight: 700;
   cursor: pointer;
   transition: all var(--lw-dur-fast) var(--lw-ease);
@@ -496,6 +501,33 @@ body {
   box-shadow: none;
 }
 
+/* ===== Element Plus 输入与下拉：默认档统一 40px，与 LwButton md 档同高同圆角 =====
+   之前输入 32px / 按钮 40px 混排在同一筛选行，是「按钮没对齐」的根因。
+   边框取 --lw-border-strong（辅助紫）而非 --lw-border（浅灰）：白底上浅灰 1px 几乎不可见，
+   用户找不到输入框；卡片分隔才用浅灰，输入类控件必须一眼可辨 */
+.el-input:not(.el-input--small) .el-input__wrapper,
+.el-select:not(.el-select--small) .el-select__wrapper {
+  min-height: 40px;
+}
+
+.el-input__wrapper,
+.el-select__wrapper,
+.el-textarea__inner {
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px var(--lw-border-strong) inset;
+}
+
+.el-input__wrapper:hover,
+.el-select__wrapper:hover,
+.el-textarea__inner:hover {
+  box-shadow: 0 0 0 1px var(--lw-secondary) inset;
+}
+
+.el-input__wrapper.is-focus,
+.el-select__wrapper.is-focused {
+  box-shadow: 0 0 0 1px var(--lw-primary) inset;
+}
+
 .el-dialog {
   border-radius: 12px;
 }
@@ -684,14 +716,63 @@ body {
 }
 
 /* ===== 路由与内容过渡 ===== */
+/* 淡入上浮：入场用 --lw-ease-out，位移只取 4px，不干扰阅读 */
 .lw-fade-enter-active,
 .lw-fade-leave-active {
-  transition: opacity var(--lw-dur) var(--lw-ease);
+  transition: opacity var(--lw-dur) var(--lw-ease), transform var(--lw-dur) var(--lw-ease-out);
 }
 
 .lw-fade-enter-from,
 .lw-fade-leave-to {
   opacity: 0;
+  transform: translateY(4px);
+}
+
+/* 等宽数字：指标、耗时、Token 与计数变化时字宽不变，不左右跳动 */
+.font-mono,
+.lw-table {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== 原生输入字段：外层包装负责边框与圆角，内层必须透明，否则浏览器默认边框画出第二道深色线 ===== */
+.lw-field input,
+.lw-field textarea {
+  border: none;
+  outline: none;
+  background: transparent;
+  height: 100%;
+  color: var(--lw-ink);
+}
+
+.lw-field input::placeholder,
+.lw-field textarea::placeholder {
+  color: var(--lw-ink-disabled);
+}
+
+/* 纯图标按钮的焦点环：不用原生 outline:none 一禁了之 */
+.lw-icon-btn {
+  border: none;
+  background: transparent;
+}
+
+.lw-icon-btn:focus-visible {
+  outline: 2px solid var(--lw-primary);
+  outline-offset: 2px;
+}
+
+/* 侧栏目录展开动画：grid 行高过渡，比 max-height 平滑且不抖动 */
+.lw-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--lw-dur) var(--lw-ease-out);
+}
+
+.lw-collapse.is-open {
+  grid-template-rows: 1fr;
+}
+
+.lw-collapse > div {
+  overflow: hidden;
 }
 
 /* ===== 滚动条 ===== */

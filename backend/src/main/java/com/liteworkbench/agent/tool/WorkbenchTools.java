@@ -67,7 +67,9 @@ public class WorkbenchTools {
 
     /** 执行 Python 脚本 */
     @AgentTool(name = "python_exec", risk = ToolRiskEnum.CONFIRM, parallelSafe = false,
-            description = "执行一段 Python 代码并返回标准输出；报错时返回完整 traceback，可据此修正后重试")
+            description = "执行一段 Python 代码并返回标准输出。脚本无交互输入，结果只经 stdout 返回，"
+                    + "需要的数据务必 print 出来；报错时返回完整 traceback，可据此修正后重试；"
+                    + "单次上限 300 秒，长任务拆成多次调用")
     public String pythonExec(
             @AgentToolParam(name = "code", description = "要执行的 Python 源码") String code,
             @AgentToolParam(name = "timeoutSeconds", description = "超时秒数，默认 60，上限 300",
@@ -108,7 +110,8 @@ public class WorkbenchTools {
 
     /** 写入工作区内文件 */
     @AgentTool(name = "file_write", risk = ToolRiskEnum.CONFIRM, parallelSafe = false,
-            description = "把文本写入工作区文件，父目录自动创建，覆盖同名文件")
+            description = "把文本写入工作区文件：父目录自动创建，同名文件整体覆盖（不是追加）。"
+                    + "写大文件时一次写全量内容，不要分多次写同一文件")
     public String fileWrite(
             @AgentToolParam(name = "path", description = "相对工作区根目录的路径") String path,
             @AgentToolParam(name = "content", description = "要写入的文本内容") String content) {
@@ -180,8 +183,9 @@ public class WorkbenchTools {
 
     /** 检索当前用户知识库 */
     @AgentTool(name = "kb_search", risk = ToolRiskEnum.SAFE,
-            description = "检索当前用户知识库，返回与关键词最相关的原文片段（带文档名与块序号），"
-                    + "回答引用用户资料时先用它取证")
+            description = "检索当前用户知识库，返回与关键词最相关的原文片段（带文档名与块序号）。"
+                    + "回答引用用户资料前必须先用它取证；首次检索命中率低时，换同义词或更具体的词重试，"
+                    + "不要凭一次空结果断言\"资料里没有\"")
     public String kbSearch(
             @AgentToolParam(name = "keyword", description = "检索关键词") String keyword,
             @AgentToolParam(name = "kbId", description = "限定知识库 ID，不传则跨全部知识库", required = false)

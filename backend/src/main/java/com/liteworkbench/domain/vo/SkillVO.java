@@ -19,6 +19,8 @@ public class SkillVO implements Serializable {
     private String content;
     private String triggerWords;
     private Boolean enabled;
+    /** 平台内置技能：可改可删，可一键恢复默认 */
+    private Boolean builtin;
     /** 创建时间，毫秒时间戳 */
     private Long createdAt;
     /** 更新时间，毫秒时间戳 */

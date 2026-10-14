@@ -11,6 +11,7 @@ import LwCard from '@/components/ui/LwCard.vue'
 import LwMetricCard from '@/components/ui/LwMetricCard.vue'
 import LwPageState from '@/components/ui/LwPageState.vue'
 import LwSegmented from '@/components/ui/LwSegmented.vue'
+import LwTag from '@/components/ui/LwTag.vue'
 import { useMonitorStore } from '@/stores/monitor'
 import { useUserStore } from '@/stores/user'
 
@@ -150,9 +151,7 @@ onMounted(load)
         :desc="t('dashboard.trendDesc')"
       >
         <template #actions>
-          <span class="px-2 py-1 rounded-tag text-xs font-bold bg-lw-primaryTint text-lw-primary">
-            {{ t('dashboard.rangeRecent') }}
-          </span>
+          <LwTag tone="primary">{{ t('dashboard.rangeRecent') }}</LwTag>
         </template>
         <transition name="lw-fade" mode="out-in">
           <LwAreaChart

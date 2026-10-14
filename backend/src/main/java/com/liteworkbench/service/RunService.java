@@ -17,6 +17,7 @@ import com.liteworkbench.common.LoginContext;
 import com.liteworkbench.common.PageResult;
 import com.liteworkbench.common.TimeUtil;
 import com.liteworkbench.config.AgentProperties;
+import com.liteworkbench.domain.constant.AgentConst;
 import com.liteworkbench.domain.constant.AppConst;
 import com.liteworkbench.domain.constant.EventTypeEnum;
 import com.liteworkbench.domain.constant.IdPrefixConst;
@@ -146,14 +147,17 @@ public class RunService {
         }
     }
 
-    /** 系统提示装配：平台提示 + 技能展开 + 长期记忆，记忆放末尾——最近约束最容易被模型遵守 */
+    /** 系统提示装配：平台提示 + 会话补充 + 技能展开 + 长期记忆，记忆放末尾——最近约束最容易被模型遵守 */
     private String composeSystemPrompt(String userId, String sessionPrompt, String userInput) {
-        String base = skillService.assembleSystemPrompt(userId, sessionPrompt, userInput);
+        String base = StrUtil.isBlank(sessionPrompt)
+                ? AgentConst.PLATFORM_SYSTEM_PROMPT
+                : AgentConst.PLATFORM_SYSTEM_PROMPT + "\n\n[会话补充指令] 以下是本会话的自定义要求，冲突时以其为准：\n" + sessionPrompt;
+        String assembled = skillService.assembleSystemPrompt(userId, base, userInput);
         String memory = memoryPort.promptBlock(userId);
         if (StrUtil.isBlank(memory)) {
-            return base;
+            return assembled;
         }
-        return StrUtil.nullToEmpty(base) + "\n\n[用户长期记忆] 以下为该用户已沉淀的偏好与事实，"
+        return assembled + "\n\n[用户长期记忆] 以下为该用户已沉淀的偏好与事实，"
                 + "与本轮任务相关时必须遵守：\n" + memory;
     }
 

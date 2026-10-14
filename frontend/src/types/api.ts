@@ -327,6 +327,8 @@ export interface SkillVO {
   content?: string
   triggerWords?: string
   enabled: boolean
+  /** 平台内置技能：可改可删，可一键恢复默认 */
+  builtin?: boolean
   createdAt?: number
   updatedAt?: number
 }

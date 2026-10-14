@@ -7,6 +7,7 @@ import type { MenuVO } from '@/types/api'
 import { menuLabel } from '@/utils/menu'
 import { roleLabel } from '@/utils/role'
 import { menuIcon } from './icons'
+import { ArrowRight } from '@element-plus/icons-vue'
 
 /** 侧栏菜单主体：菜单树渲染 + 目录展开 + 选中态 + 底部品牌卡片，桌面侧栏与移动抽屉共用 */
 const { t } = useI18n()
@@ -73,27 +74,29 @@ function handleClick(menu: MenuVO): void {
           <el-icon :size="16"><component :is="menuIcon(menu.icon)" /></el-icon>
           <span class="text-sm">{{ menuLabel(menu.menuName) }}</span>
           <el-icon :size="12" class="ml-auto transition-transform duration-200" :class="{ 'rotate-90': isExpanded(menu) }">
-            <component :is="menuIcon('list')" />
+            <ArrowRight />
           </el-icon>
         </div>
 
-        <template v-if="menu.children?.length && isExpanded(menu)">
-          <router-link
-            v-for="child in menu.children.filter((item) => item.menuType !== 'button' && item.visible)"
-            :key="child.menuId"
-            :to="child.routePath ?? '/'"
-            class="h-9 rounded-lg flex items-center pl-9 pr-3 gap-2 text-sm transition-all duration-200 hover:bg-black/5"
-            :style="
-              isActive(child)
-                ? 'color: var(--lw-primary); font-weight: 600; background: var(--lw-secondary-selected)'
-                : 'color: var(--lw-ink)'
-            "
-          >
-            {{ menuLabel(child.menuName) }}
-          </router-link>
-        </template>
+        <div v-if="menu.children?.length" class="lw-collapse" :class="{ 'is-open': isExpanded(menu) }">
+          <div class="flex flex-col gap-1 pb-1">
+            <router-link
+              v-for="child in menu.children.filter((item) => item.menuType !== 'button' && item.visible)"
+              :key="child.menuId"
+              :to="child.routePath ?? '/'"
+              class="h-9 rounded-lg flex items-center pl-9 pr-3 gap-2 text-sm transition-all duration-200 hover:bg-black/5"
+              :style="
+                isActive(child)
+                  ? 'color: var(--lw-primary); font-weight: 600; background: var(--lw-secondary-selected)'
+                  : 'color: var(--lw-ink)'
+              "
+            >
+              {{ menuLabel(child.menuName) }}
+            </router-link>
+          </div>
+        </div>
 
-        <!-- 叶子分支必须显式排除带子节点的目录：v-else-if 挂在子菜单模板块上，目录收起时会二次渲染出同名条目 -->
+        <!-- 叶子分支必须显式排除带子节点的目录：v-else-if 挂在折叠容器上，目录收起时仍占位但不可见，不会二次渲染同名条目 -->
         <router-link
           v-else-if="!menu.children?.length && menu.routePath"
           :to="menu.routePath"

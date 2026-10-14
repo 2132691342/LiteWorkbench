@@ -200,7 +200,7 @@ onMounted(() => {
     <LwCard>
       <LwSkeleton v-if="loading" :rows="6" />
       <LwErrorBar v-else-if="error" :message="error" @retry="load" />
-      <LwEmpty v-else-if="!list.length" />
+      <LwEmpty v-else-if="!list.length" :description="t('common.empty')" />
       <template v-else>
         <el-table :data="list" style="width: 100%">
           <el-table-column :label="t('system.user.username')" prop="username" min-width="140" />

@@ -126,7 +126,7 @@ onMounted(load)
     <LwCard>
       <LwSkeleton v-if="loading" :rows="8" />
       <LwErrorBar v-else-if="error" :message="error" @retry="load" />
-      <LwEmpty v-else-if="!tree.length" />
+      <LwEmpty v-else-if="!tree.length" :description="t('common.empty')" />
       <el-table v-else :data="tree" row-key="menuId" default-expand-all style="width: 100%">
         <el-table-column :label="t('system.menu.menuName')" min-width="200">
           <template #default="{ row }">{{ menuLabel(row.menuName) }}</template>

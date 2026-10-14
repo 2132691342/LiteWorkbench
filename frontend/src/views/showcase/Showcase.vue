@@ -13,8 +13,18 @@ import LwTag from '@/components/ui/LwTag.vue'
 /** 组件库：设计规范的可视化样例，五态与三态可直接比对 */
 const { t } = useI18n()
 
-const demoLoading = ref(false)
-const demoDone = ref(false)
+/** 色值从令牌实时读取，令牌调整后样例页不会展示陈旧值 */
+const tokenHex = (name: string): string =>
+  getComputedStyle(document.documentElement).getPropertyValue(name).trim().toUpperCase()
+
+const primaryHex = ref('')
+const secondaryHex = ref('')
+const surfaceHex = ref('')
+const accentHex = ref('')
+
+/** 三态互斥：一次只呈现 loading / empty / error 中的一种，刷新在两态间轮转 */
+const demoState = ref<'loading' | 'empty' | 'error'>('loading')
+const demoRound = ref(0)
 
 const segmentedDemo = ref('all')
 const segmentedOptions = computed(() => [
@@ -24,15 +34,16 @@ const segmentedOptions = computed(() => [
 ])
 
 async function simulate(): Promise<void> {
-  demoLoading.value = true
-  demoDone.value = false
+  demoState.value = 'loading'
   await new Promise((resolve) => setTimeout(resolve, 1200))
-  demoLoading.value = false
-  demoDone.value = true
+  demoState.value = demoRound.value++ % 2 === 0 ? 'empty' : 'error'
 }
 
 onMounted(() => {
-  demoLoading.value = true
+  primaryHex.value = tokenHex('--lw-primary')
+  secondaryHex.value = tokenHex('--lw-secondary')
+  surfaceHex.value = tokenHex('--lw-surface-subtle')
+  accentHex.value = tokenHex('--lw-accent-soft')
   void simulate()
 })
 
@@ -81,19 +92,19 @@ const chartValues = [8, 16, 12, 24, 20, 32, 28, 40]
         <div class="flex flex-col gap-4">
           <div class="flex gap-4">
             <div class="flex-1 space-y-2">
-              <div class="h-16 rounded-lg flex items-center justify-center font-bold text-sm shadow-sm" style="background: var(--lw-primary); color: var(--lw-on-primary)">
+              <div class="h-16 rounded-lg flex items-center justify-center font-bold text-sm lw-shadow-sm" style="background: var(--lw-primary); color: var(--lw-on-primary)">
                 {{ t('showcase.tagPrimary') }}
               </div>
               <div class="flex justify-between text-xs font-mono" style="color: var(--lw-ink-muted)">
-                <span>#6A51A3</span><span>Primary</span>
+                <span>{{ primaryHex }}</span><span>Primary</span>
               </div>
             </div>
             <div class="flex-1 space-y-2">
-              <div class="h-16 rounded-lg flex items-center justify-center font-bold text-sm shadow-sm" style="background: var(--lw-secondary); color: var(--lw-on-primary)">
+              <div class="h-16 rounded-lg flex items-center justify-center font-bold text-sm lw-shadow-sm" style="background: var(--lw-secondary); color: var(--lw-on-secondary)">
                 {{ t('showcase.tagSecondary') }}
               </div>
               <div class="flex justify-between text-xs font-mono" style="color: var(--lw-ink-muted)">
-                <span>#9E9AC8</span><span>Secondary</span>
+                <span>{{ secondaryHex }}</span><span>Secondary</span>
               </div>
             </div>
           </div>
@@ -107,21 +118,23 @@ const chartValues = [8, 16, 12, 24, 20, 32, 28, 40]
           </div>
           <div class="p-3 rounded-lg border text-xs flex items-center justify-between" style="background: var(--lw-surface); border-color: var(--lw-border)">
             <span class="font-bold">{{ t('showcase.surfaceLabel') }}</span>
-            <span class="font-mono" style="color: var(--lw-ink-muted)">#F2F0F7 / #CBC9E2</span>
+            <span class="font-mono" style="color: var(--lw-ink-muted)">{{ surfaceHex }} / {{ accentHex }}</span>
           </div>
         </div>
       </LwCard>
 
       <LwCard :title="t('showcase.states')" :desc="t('showcase.statesDesc')">
         <div class="flex flex-col gap-4">
-          <LwPageState :loading="demoLoading" :skeleton-rows="3" />
+          <LwPageState :loading="demoState === 'loading'" :skeleton-rows="3" />
 
-          <LwErrorBar v-if="!demoLoading" :message="t('showcase.demoError')" @retry="simulate" />
+          <LwErrorBar v-if="demoState === 'error'" :message="t('showcase.demoError')" @retry="simulate" />
 
-          <LwEmpty v-if="!demoLoading" :description="t('showcase.demoEmpty')" />
+          <LwEmpty v-if="demoState === 'empty'" :description="t('showcase.demoEmpty')" />
 
-          <div v-if="!demoLoading" class="flex justify-center">
-            <LwButton variant="ghost" size="sm" @click="simulate">{{ t('common.refresh') }}</LwButton>
+          <div class="flex justify-center">
+            <LwButton variant="ghost" size="sm" :loading="demoState === 'loading'" @click="simulate">
+              {{ t('common.refresh') }}
+            </LwButton>
           </div>
         </div>
       </LwCard>

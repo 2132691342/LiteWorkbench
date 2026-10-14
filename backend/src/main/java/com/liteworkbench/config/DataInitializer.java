@@ -18,6 +18,7 @@ import com.liteworkbench.mapper.SysRoleMapper;
 import com.liteworkbench.mapper.SysUserMapper;
 import com.liteworkbench.mapper.WbProviderMapper;
 import com.liteworkbench.service.PromptService;
+import com.liteworkbench.service.SkillService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
@@ -46,6 +47,7 @@ public class DataInitializer implements ApplicationRunner {
     private final SysMenuMapper sysMenuMapper;
     private final WbProviderMapper providerMapper;
     private final PromptService promptService;
+    private final SkillService skillService;
     private final AuthProperties authProperties;
 
     /** 启动时补齐种子数据 */
@@ -60,6 +62,7 @@ public class DataInitializer implements ApplicationRunner {
         initProviders();
         grantNewMenusToAdminRoles();
         initBuiltinPrompts();
+        seedBuiltinSkills();
         log.info("[data.init] cost={}ms", System.currentTimeMillis() - start);
     }
 
@@ -360,6 +363,17 @@ public class DataInitializer implements ApplicationRunner {
             promptService.initBuiltin(BUILTIN_PROMPTS);
         } catch (Exception e) {
             log.error("[data.init.prompt] 内置提示词初始化失败，已跳过 {}", e.getMessage());
+        }
+    }
+
+    /** 存量用户补种内置技能：可降级数据，失败只记 error，不阻断启动 */
+    private void seedBuiltinSkills() {
+        try {
+            for (String userId : sysUserMapper.selectAllUserIds()) {
+                skillService.seedBuiltinForUser(userId);
+            }
+        } catch (Exception e) {
+            log.error("[data.init.skill] 内置技能补种失败，已跳过 {}", e.getMessage());
         }
     }
 

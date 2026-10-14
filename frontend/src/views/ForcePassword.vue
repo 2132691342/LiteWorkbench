@@ -100,7 +100,7 @@ async function handleSubmit(): Promise<void> {
 
         <button
           type="button"
-          class="self-start inline-flex items-center gap-1.5 text-xs font-medium transition-opacity hover:opacity-80"
+          class="self-start inline-flex items-center gap-1.5 text-xs font-medium border-none bg-transparent transition-opacity hover:opacity-80"
           style="color: var(--lw-ink-muted)"
           @click="showPassword = !showPassword"
         >

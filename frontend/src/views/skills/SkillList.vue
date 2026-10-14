@@ -93,6 +93,16 @@ async function remove(item: SkillVO): Promise<void> {
   await load()
 }
 
+/** 恢复内置技能为种子版本：保留用户自己的启用状态 */
+async function restore(item: SkillVO): Promise<void> {
+  await ElMessageBox.confirm(t('skills.confirmRestore', { name: item.skillName }), t('skills.restore'), {
+    type: 'warning',
+  })
+  await skillApi.restore(item.skillId)
+  ElMessage.success(t('common.success'))
+  await load()
+}
+
 function search(): void {
   page.value = 1
   void load()
@@ -125,13 +135,20 @@ onMounted(load)
       </LwButton>
     </div>
     <LwCard>
-      <div class="flex gap-2 mb-4 max-w-md">
-        <el-input v-model="keyword" :placeholder="t('common.search')" clearable @keyup.enter="search" />
-        <LwButton variant="secondary" @click="search">{{ t('common.search') }}</LwButton>
+      <div class="flex flex-wrap items-center gap-2 mb-4">
+        <el-input v-model="keyword" class="flex-1 min-w-40" :placeholder="t('common.search')" clearable @keyup.enter="search" />
+        <LwButton variant="secondary" class="shrink-0" @click="search">{{ t('common.search') }}</LwButton>
       </div>
       <LwPageState :loading="loading" :error="error" :empty="!skills.length" @retry="load">
         <el-table :data="skills" class="lw-table">
-          <el-table-column :label="t('skills.skillCode')" prop="skillCode" width="160" />
+          <el-table-column :label="t('skills.skillCode')" width="190">
+            <template #default="{ row }">
+              <span class="inline-flex items-center gap-1.5">
+                <span>{{ row.skillCode }}</span>
+                <LwTag v-if="row.builtin" tone="secondary">{{ t('skills.builtin') }}</LwTag>
+              </span>
+            </template>
+          </el-table-column>
           <el-table-column :label="t('skills.skillName')" prop="skillName" min-width="140" />
           <el-table-column :label="t('skills.summary')" prop="summary" min-width="200" show-overflow-tooltip />
           <el-table-column :label="t('skills.triggerWords')" prop="triggerWords" min-width="160" show-overflow-tooltip />
@@ -149,6 +166,9 @@ onMounted(load)
             <template #default="{ row }">
               <LwButton v-if="hasPerm('wb:skill:update')" variant="text" size="sm" @click="openEdit(row)">
                 {{ t('common.edit') }}
+              </LwButton>
+              <LwButton v-if="row.builtin && hasPerm('wb:skill:update')" variant="text" size="sm" @click="restore(row)">
+                {{ t('skills.restore') }}
               </LwButton>
               <LwButton v-if="hasPerm('wb:skill:delete')" variant="text" size="sm" @click="remove(row)">
                 {{ t('common.delete') }}

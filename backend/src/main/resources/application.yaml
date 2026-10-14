@@ -11,7 +11,7 @@ spring:
     name: lite-workbench
   autoconfigure:
     exclude:
-      # 基础镜像的 JDK 是 17-ea，cgroup 探测返回 null 会让系统指标绑定器抛 NPE 直接炸掉启动：
+      # 基础镜像的 JDK 是 17-ea（早期访问构建），cgroup 探测返回 null 会让系统指标绑定器抛 NPE 直接炸掉启动：
       # SystemMetricsAutoConfiguration 读主机 CPU / 文件描述符，TomcatMetricsAutoConfiguration 在
       # 启动事件里读容器指标。单容器里这两类指标没有观测价值，平台健康与用量由 MonitorService 提供
       - org.springframework.boot.actuate.autoconfigure.metrics.SystemMetricsAutoConfiguration

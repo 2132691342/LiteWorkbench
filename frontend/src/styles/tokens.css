@@ -62,6 +62,8 @@
   --lw-dur-fast: 120ms;
   --lw-dur: 200ms;
   --lw-dur-slow: 300ms;
+  /* 入场专用缓动：末段减速更长，用于淡入上浮；状态切换仍用 --lw-ease */
+  --lw-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --lw-ease: cubic-bezier(0.4, 0, 0.2, 1);
 
   /* 布局尺寸 */

@@ -23,13 +23,28 @@ LiteWorkbench 解决两件事：**Agent 跑起来之后看不见它在干什么*
 | 提示词库 | 内置模板 + 自定义模板，`{{变量}}` 渲染，一键应用到会话 |
 | 知识库 | 原件存 MinIO，分块存 Manticore，页面检索与 Agent 工具共用同一份索引 |
 | 工具系统 | Python 执行、文件读写、HTTP 请求、知识库检索、任务规划、记忆读写、子任务委派，均带超时与输出裁剪 |
-| 技能 | 两段式：摘要常驻提示词，命中触发词才展开正文，节省上下文 |
+| 技能 | 两段式：摘要常驻提示词，命中触发词才展开正文，节省上下文；内置 5 个操作手册（先纲后文 / 取证引用 / 三遍润色 / 数据简报 / 长文摘要），可改可删可一键恢复默认 |
 | 长期记忆 | Agent 跨会话记住的偏好与事实，按键覆盖，自动注入后续对话 |
 | 文件空间 | MinIO 对象存储，按用户隔离前缀，支持在线预览与预签名下载 |
 | 日志中心 | 应用日志汇聚 Manticore（traceId / userId / sessionId / runId 全链路标识），管理员看全局、普通用户看本人，带分布概览与时间直方图 |
 | 健康监控 | 数据库、Redis、Manticore、MinIO、RabbitMQ、Python 运行时逐项探测 |
 | 仪表盘 | 运行量、Token 消耗、工具调用分布的可视化统计 |
 | 组件库 | 设计规范的可视化样例：五态按钮、语义色、异步三态、图表 |
+
+### 明确不做
+
+产品边界靠"不做什么"划清。以下各项不做，理由与替代路径一并固定，避免后续被单点需求带偏。
+
+| 不做 | 不做的理由 | 替代 |
+|---|---|---|
+| 可视化编排画布 | 创作场景是"对话 + 文档"，线性步骤用一次对话即可表达；画布要背上执行器、图校验与版本迁移的长期成本 | 一次对话 + `task_plan` 行式清单 |
+| 多智能体团队编排 | 编排复杂度与收益不成正比，且难以观测 | 一级子任务委派 `task_delegate`（默认停用） |
+| 向量与 embedding 检索 | 一套全文设施已覆盖消息 / 知识块 / 日志 / 创作文档四处检索，引入向量要新增模型与重建流程 | Manticore 全文检索（pgvector 扩展已就位，暂不建向量列） |
+| 断点续跑（Checkpoint 恢复） | 恢复语义要持久化模型上下文与工具副作用，边界难以收敛 | 事件流回放（只读、不重跑）+ 重新发起运行 |
+| 运行内交互式审批 | 单用户工作台，挂起等待会占住运行线程且难 recover | 页面手工调用 `confirm` 级工具需 `confirmed: true`；Agent 内由平台级启停与风险分级兜底 |
+| MCP / 插件市场 | 工具面由平台统一收口更好治理 | 内置 9 个工具 + `wb_tool` 平台级启停 |
+| 多租户 | 定位是个人工作台，租户模型会拖累全部查询 | 共享库 + `user_id` 行级隔离 |
+| 桌面端与裸机部署 | 只支持容器运行环境 | 单容器镜像，中间件另行编排 |
 
 ## 2. 设计取舍
 
@@ -46,6 +61,8 @@ LiteWorkbench 解决两件事：**Agent 跑起来之后看不见它在干什么*
 | 不做可视化编排画布 | 创作场景是"对话 + 文档"，线性步骤用一次对话表达，不为小众需求背上画布执行器与图校验的长期维护成本 | 固定多步流程需要拆成多次对话 |
 | 不做微前端拆分 | 单仓单实例，路由由后端菜单驱动已足够 | 多团队并行交付时需再拆分 |
 | 主键 = 业务前缀 + ULID | ID 自带类型信息，可分布式生成，字典序近似时间序 | 比雪花 ID 长，索引体积略大 |
+| 不做运行级预算闸门（token / 成本 / 调用次数上限） | 单用户自托管，成本不外溢，闸门的调参成本高于收益 | 由 `loop.max-iters`、`loop.repeat-guard` 与工具超时三道兜底，超界即中止并落 `run.exceed` |
+| 回放只读、不做断点续跑 | 事件流已是唯一事实来源，回放零副作用 | 恢复需重新发起运行，已消耗 token 不退 |
 
 ## 3. 技术栈
 
@@ -60,7 +77,7 @@ LiteWorkbench 解决两件事：**Agent 跑起来之后看不见它在干什么*
 | 认证 | Sa-Token | 1.42.0 | 登录、权限注解、会话管理 |
 | ID | ulid-creator | 5.1.0 | ULID 生成 |
 | 数据库 | PostgreSQL（pgvector 镜像） | 16 | 业务数据；pgvector 扩展已就位，当前不建向量列 |
-| 检索 | Manticore | 25.0.0 | 消息 / 知识块 / 日志 / 创作文档全文检索 |
+| 检索 | Manticore | 25.0.0（服务端）/ 10.2.0（Java SDK） | 消息 / 知识块 / 日志 / 创作文档全文检索 |
 | 对象存储 | MinIO | 8.5.17（SDK） | 文件空间与知识库原件 |
 | 消息 | RabbitMQ | 4 | 日志投递与知识库解析任务 |
 | 前端 | Vue / TypeScript / Vite | 3.4.34 / 5.4.5 / 5.2.12 | — |
@@ -97,12 +114,12 @@ LiteWorkbench/
 │       ├── observability/       日志汇聚与健康指标
 │       └── common/              统一响应、异常、分页、ULID、登录上下文、加解密
 │   └── src/main/resources/
-│       ├── mapper/*.xml         仅动态 SQL 与长 SQL；单表增删改查走注解
+│       ├── mapper/*.xml         仅动态 SQL 与长 SQL；单表增删改查走注解，Manticore 与检索类查询走 Java 实现不落 XML
 │       ├── db/schema.sql        建表与索引，启动期幂等执行
 │       ├── application.yaml     全部外部化配置的默认值
 │       └── logback-spring.xml   日志滚动与落盘策略
 ├── frontend/                    前端
-│   └── src/{api,views,components,stores,composables,directives,styles,locales,router,types,utils}
+│   └── src/{api,views,components,stores,composables,directives,plugins,styles,locales,router,types,utils}
 ├── docs/                        项目级事实：架构、数据模型、接口契约、错误码、部署、开发
 ├── specs/                       子系统设计：一篇一个域，讲怎么实现与为什么
 └── deploy/                      容器与编排（Dockerfile、应用编排、中间件编排、发布脚本）
@@ -142,7 +159,7 @@ npm run dev      # http://localhost:5173，已把 /api 代理到 8080
 npm run build    # 产物在 frontend/dist
 ```
 
-生产环境由应用容器直接托管前端产物，对外端口 `24399`。
+生产环境由应用容器直接托管前端产物；容器内固定 `8080`，对外宿主端口在 `deploy/deploy-app.sh` 单点定义（默认 `24399`）。
 
 ### 5.4 初始账号
 
@@ -159,7 +176,7 @@ npm run build    # 产物在 frontend/dist
 | 文档 | 回答什么 |
 |---|---|
 | [AGENTS.md](AGENTS.md) | 工程强制规范：分层依赖、包与命名、API / ID / 字段 / 日志 / 配置约定、不变量、测试约定 |
-| [DESIGN.md](DESIGN.md) | 前端视觉与交互规范：设计令牌、按钮五态、异步三态、页面范式、禁止清单 |
+| [DESIGN.md](DESIGN.md) | 前端视觉与交互规范：设计令牌、按钮五态、异步三态、页面范式、案例对照与验收、禁止清单 |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 总体架构：分层与依赖方向、跨模块主链路、对外依赖边界、并发与性能 |
 | [docs/DATA-MODEL.md](docs/DATA-MODEL.md) | 数据模型：PG 表结构与索引、Manticore 检索表、Redis 键、ID 与审计字段 |
 | [docs/API-CONTRACT.md](docs/API-CONTRACT.md) | 接口契约：响应信封、各资源接口、SSE 帧结构、分页约定 |

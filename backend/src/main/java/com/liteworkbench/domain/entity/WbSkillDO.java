@@ -35,6 +35,8 @@ public class WbSkillDO implements Serializable {
     /** 触发词，逗号分隔 */
     private String triggerWords;
     private Boolean enabled;
+    /** 平台内置技能种子：用户可改可删，可一键恢复为内置版本 */
+    private Boolean builtin;
     private String createdBy;
     private LocalDateTime createdAt;
     private String updatedBy;

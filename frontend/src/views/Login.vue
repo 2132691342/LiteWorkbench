@@ -108,7 +108,7 @@ async function handleSubmit(): Promise<void> {
           <div class="w-12 h-12 rounded-card flex items-center justify-center lw-shadow-sm transition-transform duration-200 hover:scale-105"
                style="background: var(--lw-secondary)">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                 stroke-linecap="round" stroke-linejoin="round" style="color: var(--lw-on-primary)">
+                 stroke-linecap="round" stroke-linejoin="round" style="color: var(--lw-on-secondary)">
               <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
               <line x1="3" x2="21" y1="9" y2="9" />
               <line x1="9" x2="9" y1="21" y2="9" />
@@ -165,8 +165,8 @@ async function handleSubmit(): Promise<void> {
         <form class="flex flex-col gap-4" @submit.prevent="handleSubmit">
           <label class="flex flex-col gap-1.5">
             <span class="lw-label">{{ t('login.username') }}</span>
-            <div class="flex items-center h-10 px-3 rounded-control border transition-all duration-200 focus-within:border-lw-primary focus-within:lw-shadow-sm"
-                 style="border-color: var(--lw-border)">
+            <div           class="lw-field flex items-center h-10 px-3 rounded-control border transition-all duration-200 focus-within:border-lw-primary focus-within:lw-shadow-sm"
+                 style="border-color: var(--lw-border-strong)">
               <el-icon :size="15" style="color: var(--lw-ink-muted)"><User /></el-icon>
               <input
                 v-model="form.username"
@@ -179,8 +179,8 @@ async function handleSubmit(): Promise<void> {
 
           <label class="flex flex-col gap-1.5">
             <span class="lw-label">{{ t('login.password') }}</span>
-            <div class="flex items-center h-10 px-3 rounded-control border transition-all duration-200 focus-within:border-lw-primary focus-within:lw-shadow-sm"
-                 style="border-color: var(--lw-border)">
+            <div           class="lw-field flex items-center h-10 px-3 rounded-control border transition-all duration-200 focus-within:border-lw-primary focus-within:lw-shadow-sm"
+                 style="border-color: var(--lw-border-strong)">
               <el-icon :size="15" style="color: var(--lw-ink-muted)"><Lock /></el-icon>
               <input
                 v-model="form.password"
@@ -197,7 +197,7 @@ async function handleSubmit(): Promise<void> {
               >
                 <button
                   type="button"
-                  class="p-1 rounded-md transition-all duration-200 hover:bg-black/5 active:scale-90 focus:outline-none"
+                  class="lw-icon-btn p-1 rounded-md transition-all duration-200 hover:bg-black/5 active:scale-90"
                   :aria-label="showPassword ? t('login.hidePassword') : t('login.showPassword')"
                   @click="showPassword = !showPassword"
                 >

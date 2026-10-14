@@ -11,9 +11,10 @@ const props = withDefaults(
     name?: string
     height?: number
     secondary?: boolean
+    accent?: boolean
     clickable?: boolean
   }>(),
-  { name: 'value', height: 300, secondary: false, clickable: false },
+  { name: 'value', height: 300, secondary: false, accent: false, clickable: false },
 )
 
 const emit = defineEmits<{ (e: 'bucket-click', index: number): void }>()
@@ -32,7 +33,11 @@ function bindClick(): void {
 }
 
 function buildOption(): echarts.EChartsOption {
-  const color = props.secondary ? token('--lw-secondary') : token('--lw-primary')
+  const color = props.accent
+    ? token('--lw-accent-soft')
+    : props.secondary
+      ? token('--lw-secondary')
+      : token('--lw-primary')
   return {
     grid: { left: 40, right: 16, top: 16, bottom: 28 },
     tooltip: { trigger: 'axis', ...chartTooltip() },

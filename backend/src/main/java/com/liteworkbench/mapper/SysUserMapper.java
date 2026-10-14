@@ -86,6 +86,10 @@ public interface SysUserMapper {
             """)
     SysUserDO selectByUsername(@Param("username") String username);
 
+    /** 全部未删除用户 ID，内置技能补种用 */
+    @Select("SELECT user_id FROM sys_user WHERE deleted = false")
+    List<String> selectAllUserIds();
+
     /** 分页查询 */
     List<SysUserDO> selectPage(@Param("req") UserPageREQ req,
                                @Param("offset") long offset,

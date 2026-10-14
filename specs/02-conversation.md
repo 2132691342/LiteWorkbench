@@ -111,7 +111,7 @@ POST /chat/stream（入口带 @RateLimit(20/分钟/用户) 与 @Idempotent(ttl=3
   ├─ 2 抢 Redis 锁 lw:lock:run:{sessionId}，失败抛 SESSION_BUSY
   ├─ 3 解析供应方：会话指定则 loadProvider，否则 resolveDefaultProvider；再解析模型名（四级兜底）
   ├─ 4 落 wb_run(queued) 与用户消息（lw_msg），置 running，会话计数 +1
-  ├─ 5 装配系统提示：平台提示 + 技能展开（specs/03）+ 长期记忆（追加在末尾）
+  ├─ 5 装配系统提示：平台提示 + 会话补充 + 技能展开（specs/03）+ 长期记忆（追加在末尾）
   ├─ 6 建 RunContext（含最近 history.limit 条历史，排除本轮 runId），AgentRuntime.start()
   │     → 句柄存活动运行表；事件经 RunSink 进待推送缓冲
   │     → 推送 16ms 合帧、落库 200ms 批量（specs/01）

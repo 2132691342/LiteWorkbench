@@ -64,27 +64,68 @@ async function submit(): Promise<void> {
 <template>
   <el-dialog v-model="visible" :title="t('app.changePassword')" width="420px" append-to-body>
     <form class="flex flex-col gap-4" @submit.prevent="submit">
+      <!-- 显隐开关内嵌进输入框：裸 <button> 会被浏览器画出默认灰框，且独立开关与字段脱节 -->
       <label class="flex flex-col gap-1.5">
         <span class="lw-label">{{ t('settings.oldPassword') }}</span>
-        <input v-model="form.oldPassword" :type="showPassword ? 'text' : 'password'" class="lw-input" autocomplete="current-password" />
+        <div
+          class="lw-field flex items-center h-10 px-3 rounded-control border transition-all duration-200 focus-within:border-lw-primary focus-within:lw-shadow-sm"
+          style="border-color: var(--lw-border-strong)"
+        >
+          <input
+            v-model="form.oldPassword" :type="showPassword ? 'text' : 'password'"
+            class="w-full px-2 bg-transparent text-sm" :placeholder="t('settings.fieldPlaceholder')"
+            autocomplete="current-password"
+          >
+          <button
+            type="button" class="lw-icon-btn p-1 rounded-md shrink-0 transition-all duration-200 hover:bg-black/5 active:scale-90"
+            :aria-label="showPassword ? t('login.hidePassword') : t('login.showPassword')"
+            @click="showPassword = !showPassword"
+          >
+            <el-icon :size="14" style="color: var(--lw-ink-muted)"><component :is="showPassword ? Hide : View" /></el-icon>
+          </button>
+        </div>
       </label>
       <label class="flex flex-col gap-1.5">
         <span class="lw-label">{{ t('settings.newPassword') }}</span>
-        <input v-model="form.newPassword" :type="showPassword ? 'text' : 'password'" class="lw-input" autocomplete="new-password" />
+        <div
+          class="lw-field flex items-center h-10 px-3 rounded-control border transition-all duration-200 focus-within:border-lw-primary focus-within:lw-shadow-sm"
+          style="border-color: var(--lw-border-strong)"
+        >
+          <input
+            v-model="form.newPassword" :type="showPassword ? 'text' : 'password'"
+            class="w-full px-2 bg-transparent text-sm" :placeholder="t('settings.fieldPlaceholder')"
+            autocomplete="new-password" minlength="8"
+          >
+          <button
+            type="button" class="lw-icon-btn p-1 rounded-md shrink-0 transition-all duration-200 hover:bg-black/5 active:scale-90"
+            :aria-label="showPassword ? t('login.hidePassword') : t('login.showPassword')"
+            @click="showPassword = !showPassword"
+          >
+            <el-icon :size="14" style="color: var(--lw-ink-muted)"><component :is="showPassword ? Hide : View" /></el-icon>
+          </button>
+        </div>
+        <span class="text-xs" style="color: var(--lw-ink-muted)">{{ t('settings.passwordRule') }}</span>
       </label>
       <label class="flex flex-col gap-1.5">
         <span class="lw-label">{{ t('settings.confirmPassword') }}</span>
-        <input v-model="form.confirmPassword" :type="showPassword ? 'text' : 'password'" class="lw-input" autocomplete="new-password" />
+        <div
+          class="lw-field flex items-center h-10 px-3 rounded-control border transition-all duration-200 focus-within:border-lw-primary focus-within:lw-shadow-sm"
+          style="border-color: var(--lw-border-strong)"
+        >
+          <input
+            v-model="form.confirmPassword" :type="showPassword ? 'text' : 'password'"
+            class="w-full px-2 bg-transparent text-sm" :placeholder="t('settings.fieldPlaceholder')"
+            autocomplete="new-password" minlength="8"
+          >
+          <button
+            type="button" class="lw-icon-btn p-1 rounded-md shrink-0 transition-all duration-200 hover:bg-black/5 active:scale-90"
+            :aria-label="showPassword ? t('login.hidePassword') : t('login.showPassword')"
+            @click="showPassword = !showPassword"
+          >
+            <el-icon :size="14" style="color: var(--lw-ink-muted)"><component :is="showPassword ? Hide : View" /></el-icon>
+          </button>
+        </div>
       </label>
-      <button
-        type="button"
-        class="self-start inline-flex items-center gap-1.5 text-xs font-medium transition-opacity hover:opacity-80"
-        style="color: var(--lw-ink-muted)"
-        @click="showPassword = !showPassword"
-      >
-        <el-icon :size="14"><component :is="showPassword ? Hide : View" /></el-icon>
-        {{ showPassword ? t('login.hidePassword') : t('login.showPassword') }}
-      </button>
       <p v-if="errorMessage" class="text-xs px-3 py-2 rounded-control" style="color: var(--lw-error-ink); background: var(--lw-error-tint)">
         {{ errorMessage }}
       </p>

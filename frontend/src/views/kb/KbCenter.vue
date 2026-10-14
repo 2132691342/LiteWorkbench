@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Plus, RefreshRight, Search, Upload } from '@element-plus/icons-vue'
+import { Folder, Plus, RefreshRight, Search, Upload } from '@element-plus/icons-vue'
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -314,14 +314,23 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4 items-start">
-      <LwPageState :loading="kbLoading" :error="kbError" :empty="!kbList.length" @retry="loadKbs">
-        <div class="flex flex-col gap-2">
+      <LwPageState :loading="kbLoading" :error="kbError" @retry="loadKbs">
+        <!-- 窄列空态用行内提示而非整块 LwEmpty：280px 侧列里大图标空态只会显得空洞 -->
+        <div
+          v-if="!kbList.length"
+          class="rounded-card border p-4 flex items-center gap-2 text-xs leading-relaxed"
+          style="border-color: var(--lw-border); color: var(--lw-ink-muted)"
+        >
+          <el-icon :size="14" class="shrink-0"><Folder /></el-icon>
+          <span>{{ t('kb.listEmpty') }}</span>
+        </div>
+        <div v-else class="flex flex-col gap-2">
           <div
             v-for="kb in kbList"
             :key="kb.kbId"
-            class="text-left rounded-card border p-4 transition-all duration-200 cursor-pointer hover:-translate-y-0.5 hover:shadow-md"
+            class="text-left rounded-card border p-4 transition-all duration-200 cursor-pointer hover:-translate-y-0.5 hover:lw-shadow-md"
             :class="kb.kbId === selectedKbId
-              ? 'border-[var(--lw-primary)] bg-[var(--lw-secondary-selected)] shadow-sm'
+              ? 'border-[var(--lw-primary)] bg-[var(--lw-secondary-selected)] lw-shadow-sm'
               : 'border-[var(--lw-border)] bg-[var(--lw-surface)]'"
             role="button"
             tabindex="0"
@@ -371,15 +380,15 @@ onBeforeUnmount(() => {
               @change="onFileChosen"
             >
           </template>
-          <div class="flex gap-2 mb-4 max-w-lg">
-            <el-input v-model="docKeyword" :placeholder="t('common.search')" clearable @keyup.enter="searchDocs" />
-            <el-select v-model="docStateFilter" clearable class="w-32" :placeholder="t('kb.state')" @change="searchDocs">
+          <div class="flex flex-wrap items-center gap-2 mb-4">
+            <el-input v-model="docKeyword" class="flex-1 min-w-40" :placeholder="t('common.search')" clearable @keyup.enter="searchDocs" />
+            <el-select v-model="docStateFilter" clearable class="w-32 shrink-0" :placeholder="t('kb.state')" @change="searchDocs">
               <el-option
                 v-for="state in DOC_STATES" :key="state" :value="state"
                 :label="t(`kb.state_${state}`)"
               />
             </el-select>
-            <LwButton variant="secondary" @click="searchDocs">{{ t('common.search') }}</LwButton>
+            <LwButton variant="secondary" class="shrink-0" @click="searchDocs">{{ t('common.search') }}</LwButton>
           </div>
           <LwPageState :loading="docLoading" :error="docError" :empty="!docs.length" @retry="loadDocs">
             <el-table :data="docs" class="lw-table">
@@ -433,18 +442,18 @@ onBeforeUnmount(() => {
         </LwCard>
 
         <LwCard :title="t('kb.searchTitle')">
-          <div class="flex gap-2 mb-4 max-w-xl">
-            <el-select v-model="searchScope" class="w-44" :placeholder="t('kb.scopeAll')">
+          <div class="flex flex-wrap items-center gap-2 mb-4">
+            <el-select v-model="searchScope" class="w-44 shrink-0" :placeholder="t('kb.scopeAll')">
               <el-option :label="t('kb.scopeAll')" value="" />
               <el-option
                 v-for="kb in kbList" :key="kb.kbId" :label="kb.kbName" :value="kb.kbId"
               />
             </el-select>
             <el-input
-              v-model="searchKeyword" :placeholder="t('kb.searchPlaceholder')" clearable
+              v-model="searchKeyword" class="flex-1 min-w-40" :placeholder="t('kb.searchPlaceholder')" clearable
               data-test="kb-search-input" @keyup.enter="searchPage = 1; doSearch()"
             />
-            <LwButton data-test="kb-search" :loading="searchLoading" @click="searchPage = 1; doSearch()">
+            <LwButton class="shrink-0" data-test="kb-search" :loading="searchLoading" @click="searchPage = 1; doSearch()">
               <template #icon><el-icon><Search /></el-icon></template>
               {{ t('common.search') }}
             </LwButton>
