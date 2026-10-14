@@ -11,7 +11,6 @@ public class BizException extends RuntimeException {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    /** 错误码 */
     private final ErrorCodeEnum errorCode;
 
     public BizException(ErrorCodeEnum errorCode) {

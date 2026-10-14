@@ -12,14 +12,11 @@ public class ProviderPresetVO implements Serializable {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    /** 供应方码 */
     private String providerCode;
-    /** 默认端点 */
     private String baseUrl;
     /** 默认模型，Ollama 为空 */
     private String defaultModel;
     /** 协议通道：openai（兼容族）/ ollama */
     private String protocol;
-    /** 是否需要密钥 */
     private Boolean requiresKey;
 }

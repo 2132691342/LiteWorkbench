@@ -7,17 +7,14 @@ export const useAppStore = defineStore('app', () => {
   const sidebarOpen = ref(false)
   const locale = ref(localStorage.getItem('lw-locale') ?? 'zh-CN')
 
-  /** 切换桌面侧栏折叠 */
   function toggleSidebar(): void {
     sidebarCollapsed.value = !sidebarCollapsed.value
   }
 
-  /** 打开移动端抽屉 */
   function openSidebar(): void {
     sidebarOpen.value = true
   }
 
-  /** 收起移动端抽屉 */
   function closeSidebar(): void {
     sidebarOpen.value = false
   }

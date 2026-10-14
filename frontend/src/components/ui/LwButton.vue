@@ -3,17 +3,12 @@ import { computed } from 'vue'
 
 /** 全站唯一按钮：五态由 .lw-btn 系列样式实现，hover 放大 / pressed 缩小 / loading 锁宽且保持主色底 */
 interface Props {
-  /** 变体：主/次/幽灵/危险/文字 */
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'text'
-  /** 尺寸 */
   size?: 'sm' | 'md' | 'lg'
-  /** 加载态：锁定宽度、屏蔽点击、显示旋转指示器，不落原生 disabled 以保持配色 */
+  /** 加载态：锁宽、屏蔽点击、显示旋转指示器，不落原生 disabled 以保持配色 */
   loading?: boolean
-  /** 禁用态 */
   disabled?: boolean
-  /** 占满父容器宽度 */
   block?: boolean
-  /** 原生 type */
   nativeType?: 'button' | 'submit' | 'reset'
 }
 

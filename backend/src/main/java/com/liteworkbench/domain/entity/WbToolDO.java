@@ -25,7 +25,6 @@ public class WbToolDO implements Serializable {
     private String toolId;
     /** 调用名，全局唯一 */
     private String toolName;
-    /** 展示名 */
     private String toolLabel;
     /** 类别 runtime / file / network */
     private String category;

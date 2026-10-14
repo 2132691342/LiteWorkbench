@@ -16,7 +16,6 @@ export const useSessionStore = defineStore('session', () => {
     () => list.value.find((item) => item.sessionId === activeSessionId.value) ?? null,
   )
 
-  /** 拉取会话列表（骨架屏态由 loading 驱动） */
   async function loadList(): Promise<void> {
     loading.value = true
     error.value = ''
@@ -30,7 +29,6 @@ export const useSessionStore = defineStore('session', () => {
     }
   }
 
-  /** 新建会话并设为当前会话 */
   async function create(title: string): Promise<string> {
     const sessionId = await sessionApi.create({ title })
     list.value = [{ sessionId, title }, ...list.value] as SessionVO[]
@@ -39,7 +37,6 @@ export const useSessionStore = defineStore('session', () => {
     return sessionId
   }
 
-  /** 更新标题 / 模型等元信息 */
   async function update(payload: SessionREQ): Promise<void> {
     await sessionApi.update(payload)
     if (payload.sessionId) {
@@ -47,7 +44,6 @@ export const useSessionStore = defineStore('session', () => {
     }
   }
 
-  /** 删除会话并从列表移除 */
   async function remove(sessionId: string): Promise<void> {
     await sessionApi.remove(sessionId)
     list.value = list.value.filter((item) => item.sessionId !== sessionId)
@@ -73,7 +69,6 @@ export const useSessionStore = defineStore('session', () => {
     }
   }
 
-  /** 重新拉取单个会话详情，回填列表 */
   async function refreshDetail(sessionId: string): Promise<void> {
     try {
       const detail = await sessionApi.detail(sessionId)

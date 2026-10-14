@@ -13,10 +13,8 @@ public @interface AgentToolParam {
     /** 参数名，模型可见 */
     String name();
 
-    /** 参数说明 */
     String description() default "";
 
-    /** 是否必填 */
     boolean required() default true;
 
     /** JSON Schema 类型，留空则按参数 Java 类型推断 */

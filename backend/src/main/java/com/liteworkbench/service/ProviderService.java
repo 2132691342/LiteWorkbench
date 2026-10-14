@@ -105,7 +105,6 @@ public class ProviderService {
         modelFactory.evictProvider(exists.getProviderCode());
     }
 
-    /** 删除供应方 */
     public void delete(String providerId, String userId) {
         WbProviderDO provider = require(providerId);
         providerMapper.deleteById(providerId, userId);

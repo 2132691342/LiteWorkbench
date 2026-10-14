@@ -1,7 +1,6 @@
 package com.liteworkbench.service;
 
 import cn.hutool.core.date.LocalDateTimeUtil;
-import cn.hutool.core.thread.ThreadUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import com.liteworkbench.agent.AgentRuntime;
@@ -10,6 +9,7 @@ import com.liteworkbench.agent.RunContext;
 import com.liteworkbench.agent.RunHandle;
 import com.liteworkbench.agent.model.ModelTypes.Msg;
 import com.liteworkbench.agent.model.ModelTypes.Role;
+import com.liteworkbench.agent.spi.MemoryPort;
 import com.liteworkbench.common.BizException;
 import com.liteworkbench.common.ErrorCodeEnum;
 import com.liteworkbench.common.IdGenerator;
@@ -42,6 +42,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -52,13 +53,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** 运行主链路：SSE 流式对话、事件攒批落库、取消与回放 */
+/** 运行主链路：SSE 流式对话、推送与落库双节拍、取消与回放 */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -66,11 +64,11 @@ public class RunService {
 
     /** 回放单页事件上限 */
     private static final long REPLAY_PAGE_SIZE = 500L;
-    /** 攒批冲刷间隔，与 RunConst 的批内时间阈值一致 */
-    private static final long FLUSH_INTERVAL_MS = RunConst.EVENT_BATCH_INTERVAL_MS;
 
     private final AgentRuntime agentRuntime;
     private final ModelFactory modelFactory;
+    /** 长期记忆：装配系统提示时注入，只读不写 */
+    private final MemoryPort memoryPort;
     private final AgentProperties agentProperties;
     private final SessionService sessionService;
     private final SkillService skillService;
@@ -79,18 +77,15 @@ public class RunService {
     private final MessageIndexMapper messageIndexMapper;
     private final WbSessionMapper sessionMapper;
     private final StringRedisTemplate redisTemplate;
+    /** SSE 心跳与事件攒批冲刷的统一调度器，线程资源跟随容器生命周期回收 */
+    private final ThreadPoolTaskScheduler scheduler;
 
     /** 进行中的运行：runId -> 活动实例 */
     private final Map<String, ActiveRun> active = new ConcurrentHashMap<>();
-    /** SSE 心跳调度器 */
-    private final ScheduledExecutorService heartbeatExecutor =
-            Executors.newSingleThreadScheduledExecutor(ThreadUtil.newNamedThreadFactory("lw-sse-heartbeat", true));
-    /** 事件攒批冲刷调度器 */
-    private final ScheduledExecutorService flushExecutor =
-            Executors.newSingleThreadScheduledExecutor(ThreadUtil.newNamedThreadFactory("lw-sse-flush", true));
-    /** 冲刷任务只登记一次 */
-    private final AtomicBoolean flushScheduled = new AtomicBoolean(false);
-
+    /** 推送节拍器：16ms 一帧，只有存在运行时才注册 */
+    private final EventLoop pushLoop = new EventLoop();
+    /** 落库节拍器：200ms 一批，与推送解耦，DB 写入不拖慢首字延迟 */
+    private final EventLoop persistLoop = new EventLoop();
     /** 流式对话：锁会话 → 落运行与用户消息 → 启动内核（攒批落库 + 推送）→ 终态收尾 */
     public String chatStream(ChatStreamREQ req, RunSink sink) {
         String userId = LoginContext.userId();
@@ -103,11 +98,9 @@ public class RunService {
             throw new BizException(ErrorCodeEnum.SESSION_BUSY);
         }
         String runId = IdGenerator.generate(IdPrefixConst.RUN);
-        // 编排期日志携带会话与运行标识，与 agent 后台线程、冲刷/心跳任务同口径
         MDC.put(AppConst.MDC_SESSION_ID, session.getSessionId());
         MDC.put(AppConst.MDC_RUN_ID, runId);
         try {
-            // 会话未指定供应方时取默认可用供应方，全新环境不会因缺配置直接失败
             var provider = StrUtil.isNotBlank(session.getProviderCode())
                     ? modelFactory.loadProvider(session.getProviderCode())
                     : modelFactory.resolveDefaultProvider();
@@ -119,15 +112,13 @@ public class RunService {
             runMapper.markRunning(runId);
             sessionMapper.updateStats(session.getSessionId(), 1, 1, 0);
 
-            String systemPrompt = skillService.assembleSystemPrompt(
-                    userId, session.getSystemPrompt(), req.getContent());
+            String systemPrompt = composeSystemPrompt(userId, session.getSystemPrompt(), req.getContent());
             RunContext context = new RunContext(userId, session.getSessionId(), runId,
                     providerCode, modelName, systemPrompt, loadHistory(session.getSessionId(), runId),
                     req.getContent());
 
             ActiveRun run = new ActiveRun(runId, userId, session.getSessionId(), sink);
             active.put(runId, run);
-            // 首轮对话自动命名会话：运行结束后异步触发，静默失败不影响对话
             dispatch(run, context, () -> sessionService.autoRenameIfDefault(session, req.getContent()));
             log.info("[run.start] userId={} sessionId={} runId={} model={}",
                     userId, session.getSessionId(), runId, modelName);
@@ -148,6 +139,17 @@ public class RunService {
         }
     }
 
+    /** 系统提示装配：平台提示 + 技能展开 + 长期记忆，记忆放末尾——最近约束最容易被模型遵守 */
+    private String composeSystemPrompt(String userId, String sessionPrompt, String userInput) {
+        String base = skillService.assembleSystemPrompt(userId, sessionPrompt, userInput);
+        String memory = memoryPort.promptBlock(userId);
+        if (StrUtil.isBlank(memory)) {
+            return base;
+        }
+        return StrUtil.nullToEmpty(base) + "\n\n[用户长期记忆] 以下为该用户已沉淀的偏好与事实，"
+                + "与本轮任务相关时必须遵守：\n" + memory;
+    }
+
     /** 运行分页，按归属用户过滤 */
     public PageResult<RunVO> page(SessionPageREQ req) {
         String userId = LoginContext.userId();
@@ -160,7 +162,6 @@ public class RunService {
         return PageResult.of(list, total, req.pageNo(), req.pageSize());
     }
 
-    /** 运行详情 */
     public RunVO detail(String runId) {
         return toVO(getOwned(runId));
     }
@@ -169,7 +170,7 @@ public class RunService {
     public List<RunEventDTO> events(String runId, long afterSeq) {
         getOwned(runId);
         return eventMapper.selectByRunAfterSeq(runId, afterSeq, REPLAY_PAGE_SIZE)
-                .stream().map(this::toEventDTO).toList();
+                .stream().map(RunEventCodec::toDTO).toList();
     }
 
     /** 中断运行：协作式取消，无活动实例的孤儿运行直接落终态 */
@@ -210,11 +211,9 @@ public class RunService {
             }
         });
         scheduleHeartbeat(run);
-        // 冲刷任务全进程一个，与运行数量无关
-        if (flushScheduled.compareAndSet(false, true)) {
-            flushExecutor.scheduleWithFixedDelay(this::flushAll, FLUSH_INTERVAL_MS,
-                    FLUSH_INTERVAL_MS, TimeUnit.MILLISECONDS);
-        }
+        // 两个节拍器全进程各一个，与运行数量无关；无运行时自行注销，空跑不占调度
+        pushLoop.ensure(() -> pumpAll(), RunConst.SSE_PUSH_TICK_MS);
+        persistLoop.ensure(() -> persistAll(), RunConst.EVENT_PERSIST_INTERVAL_MS);
     }
 
     /** 通道关闭回调：由 api 层在 SSE 完成 / 超时 / 出错时调用，按中断收敛并释放运行占用 */
@@ -227,48 +226,103 @@ public class RunService {
         settleAborted(run);
     }
 
-    /** 冲刷所有活动运行的批缓冲；已终态运行由收尾路径负责最终冲刷，跳过避免空转 */
-    private void flushAll() {
+    /** 推送节拍：把所有活动运行的新事件合成帧发出去；无运行则注销节拍器 */
+    private void pumpAll() {
+        if (active.isEmpty()) {
+            pushLoop.stop();
+            return;
+        }
         for (ActiveRun run : active.values()) {
             if (run.settled.get()) {
                 continue;
             }
-            try {
-                MDC.put(AppConst.MDC_SESSION_ID, run.sessionId);
-                MDC.put(AppConst.MDC_RUN_ID, run.runId);
-                flush(run);
-            } catch (Exception e) {
-                log.error("[run.event.flush] runId={} 冲刷失败 {}", run.runId, e.getMessage());
-            } finally {
-                MDC.remove(AppConst.MDC_SESSION_ID);
-                MDC.remove(AppConst.MDC_RUN_ID);
-            }
+            withMdc(run, () -> {
+                synchronized (run) {
+                    pumpLocked(run);
+                }
+            }, "run.sse.pump");
         }
     }
 
-    /** 冲刷单个运行：先落库再推送，落库失败不中断输出；持运行监视器保证与收尾最终冲刷串行，不丢帧 */
-    private void flush(ActiveRun run) {
-        synchronized (run) {
-            flushLocked(run);
+    /** 落库节拍：把所有活动运行的待落事件按批写入；无运行则注销节拍器 */
+    private void persistAll() {
+        if (active.isEmpty()) {
+            persistLoop.stop();
+            return;
+        }
+        for (ActiveRun run : active.values()) {
+            withMdc(run, () -> {
+                synchronized (run) {
+                    persistLocked(run);
+                }
+            }, "run.event.persist");
         }
     }
 
-    /** 冲刷本体：持运行监视器调用，与 offer / drain 及收尾路径互斥 */
-    private void flushLocked(ActiveRun run) {
-        List<RunEventDTO> batch = run.drain();
+    /** 推送本体：取待推送事件 → 登记落库 → 观测累积 → 合帧下发 → 按需补水位快照 */
+    private void pumpLocked(ActiveRun run) {
+        pumpLocked(run, true);
+    }
+
+    /** 推送本体（可选快照）：收尾路径不补快照，避免终态帧前多一帧无效水位 */
+    private void pumpLocked(ActiveRun run, boolean allowSnapshot) {
+        List<RunEventDTO> batch = run.drainPending();
+        if (batch.isEmpty()) {
+            return;
+        }
+        run.enqueuePersist(batch);
+        batch.forEach(run::observe);
+        mergeFrames(batch).forEach(event -> push(run, event));
+        if (allowSnapshot) {
+            pushSnapshotIfNeeded(run);
+        }
+    }
+
+    /** 落库本体：批内事件一次写库，失败不回滚推送——客户端已收到内容不能撤回 */
+    private void persistLocked(ActiveRun run) {
+        List<RunEventDTO> batch = run.drainPersist();
         if (batch.isEmpty()) {
             return;
         }
         try {
-            eventMapper.insertBatch(batch.stream().map(event -> toEventDO(run, event)).toList());
+            eventMapper.insertBatch(batch.stream()
+                    .map(event -> RunEventCodec.toDO(run.userId, event)).toList());
         } catch (Exception e) {
-            log.error("[run.event.persist] runId={} 落库失败 {}", run.runId, e.getMessage());
+            log.error("[run.event.persist] runId={} 落库失败 count={} {}", run.runId, batch.size(), e.getMessage());
         }
-        batch.forEach(run::observe);
-        mergeFrames(batch).forEach(event -> push(run, event));
     }
 
-    /** 推送合帧：批内连续同类型增量合并为一帧（textDelta 拼接、seq 取最后一条），其余事件原样 */
+    /** 收尾冲刷：推送与落库各走一次，保证终态前攒批内的事件全部可见且可回放 */
+    private void flush(ActiveRun run) {
+        synchronized (run) {
+            pumpLocked(run, false);
+            persistLocked(run);
+        }
+    }
+
+    /** 水位快照：仅在 seq 有新推进时下发，客户端比对最大 seq 判定丢帧并补齐 */
+    private void pushSnapshotIfNeeded(ActiveRun run) {
+        long now = System.currentTimeMillis();
+        if (now - run.lastSnapshotAt < RunConst.SSE_SNAPSHOT_THROTTLE_MS || run.seq <= run.snapshotSeq) {
+            return;
+        }
+        run.lastSnapshotAt = now;
+        run.snapshotSeq = run.seq;
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("watermark", run.seq);
+        payload.put("textLength", run.answer.length());
+        payload.put("toolCalls", run.toolCalls);
+        RunEventDTO snapshot = new RunEventDTO(run.runId, run.sessionId, run.seq,
+                EventTypeEnum.RUN_SNAPSHOT.getCode(), null, null, payload, now);
+        try {
+            run.sink.send(snapshot.seq(), snapshot.eventType(), JSONUtil.toJsonStr(snapshot));
+        } catch (RuntimeException e) {
+            log.warn("[run.sse] runId={} 水位快照推送失败 {}", run.runId, e.getMessage());
+            run.cancel();
+        }
+    }
+
+    /** 推送合帧：批内连续同类型增量合并为一帧（textDelta 拼接、seq 取最后一条、merged 记合并条数），其余事件原样 */
     static List<RunEventDTO> mergeFrames(List<RunEventDTO> batch) {
         List<RunEventDTO> frames = new ArrayList<>(batch.size());
         RunEventDTO pending = null;
@@ -297,13 +351,31 @@ public class RunService {
                 || EventTypeEnum.THINKING_DELTA.getCode().equals(event.eventType());
     }
 
+    /** 增量拼接：merged 记录被合并的原始条数，客户端据此对齐序号 */
     private static RunEventDTO appendDelta(RunEventDTO pending, RunEventDTO next) {
         String merged = Objects.toString(pending.textDelta(), StrUtil.EMPTY)
                 + Objects.toString(next.textDelta(), StrUtil.EMPTY);
+        Object mergedCount = pending.payload().get("merged");
+        long count = (mergedCount instanceof Number number ? number.longValue() : 1L) + 1L;
         Map<String, Object> payload = new HashMap<>(next.payload());
         payload.put("delta", merged);
+        payload.put("merged", count);
         return new RunEventDTO(next.runId(), next.sessionId(), next.seq(), next.eventType(),
                 next.blockType(), merged, payload, next.occurredAt());
+    }
+
+    /** 周期性任务统一补 MDC 与异常兜底，单次失败不影响其他运行 */
+    private void withMdc(ActiveRun run, Runnable action, String tag) {
+        MDC.put(AppConst.MDC_SESSION_ID, run.sessionId);
+        MDC.put(AppConst.MDC_RUN_ID, run.runId);
+        try {
+            action.run();
+        } catch (Exception e) {
+            log.error("[{}] runId={} 执行失败 {}", tag, run.runId, e.getMessage());
+        } finally {
+            MDC.remove(AppConst.MDC_SESSION_ID);
+            MDC.remove(AppConst.MDC_RUN_ID);
+        }
     }
 
     /** 推送 SSE 帧；客户端断开时取消运行 */
@@ -448,7 +520,7 @@ public class RunService {
         RunEventDTO event = new RunEventDTO(run.runId, run.sessionId, ++run.seq, eventType, null, null,
                 payload, System.currentTimeMillis());
         try {
-            eventMapper.insertBatch(List.of(toEventDO(run, event)));
+            eventMapper.insertBatch(List.of(RunEventCodec.toDO(run.userId, event)));
         } catch (Exception e) {
             log.error("[run.event.persist] runId={} 终态帧落库失败 {}", run.runId, e.getMessage());
         }
@@ -506,7 +578,7 @@ public class RunService {
     }
 
     private void scheduleHeartbeat(ActiveRun run) {
-        run.heartbeat = heartbeatExecutor.scheduleAtFixedRate(() -> {
+        run.heartbeat = scheduler.scheduleAtFixedRate(() -> {
             MDC.put(AppConst.MDC_SESSION_ID, run.sessionId);
             MDC.put(AppConst.MDC_RUN_ID, run.runId);
             try {
@@ -522,7 +594,7 @@ public class RunService {
                 MDC.remove(AppConst.MDC_SESSION_ID);
                 MDC.remove(AppConst.MDC_RUN_ID);
             }
-        }, RunConst.SSE_HEARTBEAT_MS, RunConst.SSE_HEARTBEAT_MS, TimeUnit.MILLISECONDS);
+        }, Duration.ofMillis(RunConst.SSE_HEARTBEAT_MS));
     }
 
     private void cancelHeartbeat(ActiveRun run) {
@@ -556,31 +628,6 @@ public class RunService {
         return run;
     }
 
-    private WbEventDO toEventDO(ActiveRun run, RunEventDTO event) {
-        WbEventDO entity = new WbEventDO();
-        entity.setEventId(IdGenerator.generate(IdPrefixConst.EVENT));
-        entity.setUserId(run.userId);
-        entity.setRunId(event.runId());
-        entity.setSessionId(event.sessionId());
-        entity.setSeq((int) event.seq());
-        entity.setEventType(event.eventType());
-        entity.setBlockType(event.blockType());
-        entity.setTextDelta(event.textDelta());
-        entity.setPayload(JSONUtil.toJsonStr(event.payload()));
-        entity.setOccurredAt(LocalDateTimeUtil.of(event.occurredAt()));
-        return entity;
-    }
-
-    @SuppressWarnings("unchecked")
-    private RunEventDTO toEventDTO(WbEventDO entity) {
-        return new RunEventDTO(entity.getRunId(), entity.getSessionId(),
-                entity.getSeq(), entity.getEventType(), entity.getBlockType(), entity.getTextDelta(),
-                StrUtil.isBlank(entity.getPayload()) ? Map.of()
-                        : JSONUtil.toBean(entity.getPayload(), Map.class),
-                Objects.nonNull(entity.getOccurredAt())
-                        ? LocalDateTimeUtil.toEpochMilli(entity.getOccurredAt()) : 0L);
-    }
-
     private RunVO toVO(WbRunDO run) {
         RunVO vo = new RunVO();
         vo.setRunId(run.getRunId());
@@ -599,11 +646,17 @@ public class RunService {
         return vo;
     }
 
-    /** 关闭调度器 */
+    /** 容器停机：停两个节拍器、掐断在途心跳并冲刷残留事件，线程资源由 ExecutorConfig 统一回收 */
     @PreDestroy
     public void shutdown() {
-        heartbeatExecutor.shutdownNow();
-        flushExecutor.shutdownNow();
+        pushLoop.stop();
+        persistLoop.stop();
+        active.values().forEach(run -> {
+            run.heartbeat.cancel(true);
+            flush(run);
+        });
+        active.clear();
+        log.info("[run.shutdown] 运行资源已释放");
     }
 
     /** 单次活动运行：SSE 通道 + 句柄 + 批缓冲 + 观测累积 */
@@ -620,10 +673,16 @@ public class RunService {
         final long[] usage = new long[2];
         volatile long seq = RunConst.EVENT_SEQ_START - 1;
         volatile int modelCalls = 0;
+        volatile int toolCalls = 0;
+        volatile long snapshotSeq = RunConst.EVENT_SEQ_START - 1;
+        volatile long lastSnapshotAt = 0L;
         volatile RunHandle handle;
         volatile ScheduledFuture<?> heartbeat;
 
-        private final List<RunEventDTO> buffer = new ArrayList<>();
+        /** 待推送缓冲：由 16ms 节拍取走 */
+        private final List<RunEventDTO> pending = new ArrayList<>();
+        /** 待落库缓冲：推送过的原始事件，由 200ms 节拍取走 */
+        private final List<RunEventDTO> persistBuffer = new ArrayList<>();
 
         ActiveRun(String runId, String userId, String sessionId, RunSink sink) {
             this.runId = runId;
@@ -632,18 +691,33 @@ public class RunService {
             this.sink = sink;
         }
 
-        /** 事件入批：由冲刷调度器按批大小与时间阈值统一落库推送 */
+        /** 事件入推送缓冲：内核线程只做一次 add，任何 IO 都不在此线程上发生 */
         synchronized void offer(RunEventDTO event) {
-            buffer.add(event);
+            pending.add(event);
         }
 
-        /** 取出并清空批缓冲 */
-        synchronized List<RunEventDTO> drain() {
-            if (buffer.isEmpty()) {
+        /** 取出并清空待推送缓冲 */
+        synchronized List<RunEventDTO> drainPending() {
+            if (pending.isEmpty()) {
                 return List.of();
             }
-            List<RunEventDTO> batch = new ArrayList<>(buffer);
-            buffer.clear();
+            List<RunEventDTO> batch = new ArrayList<>(pending);
+            pending.clear();
+            return batch;
+        }
+
+        /** 推送前把原始事件登记进落库缓冲 */
+        synchronized void enqueuePersist(List<RunEventDTO> events) {
+            persistBuffer.addAll(events);
+        }
+
+        /** 取出并清空待落库缓冲 */
+        synchronized List<RunEventDTO> drainPersist() {
+            if (persistBuffer.isEmpty()) {
+                return List.of();
+            }
+            List<RunEventDTO> batch = new ArrayList<>(persistBuffer);
+            persistBuffer.clear();
             return batch;
         }
 
@@ -655,7 +729,7 @@ public class RunService {
             }
         }
 
-        /** 从事件流提取答案文本、用量与迭代数 */
+        /** 从事件流提取答案文本、用量、工具数与迭代数；seq 取高水位，合并帧不改变净增语义 */
         void observe(RunEventDTO event) {
             if (event.seq() > seq) {
                 seq = event.seq();
@@ -668,6 +742,10 @@ public class RunService {
                 if (Objects.nonNull(text) && StrUtil.isNotBlank(text.toString())) {
                     answer.setLength(0);
                     answer.append(text);
+                }
+            } else if (EventTypeEnum.TOOL_CALL.getCode().equals(event.eventType())) {
+                if ("start".equals(event.payload().get("phase"))) {
+                    toolCalls++;
                 }
             } else if (EventTypeEnum.MODEL_CALL.getCode().equals(event.eventType())
                     && "end".equals(event.payload().get("phase"))) {
@@ -683,6 +761,35 @@ public class RunService {
             } else if (EventTypeEnum.RUN_EXCEED.getCode().equals(event.eventType())) {
                 exceeded.set(true);
             }
+        }
+    }
+
+    /** 自注销节拍器：首次注册需要时启动，运行清空后由任务自身停表，避免空转占调度线程 */
+    private final class EventLoop {
+
+        private final AtomicBoolean running = new AtomicBoolean(false);
+        private volatile ScheduledFuture<?> future;
+
+        /** 幂等启动：已在跑则不重复注册 */
+        void ensure(Runnable task, long intervalMs) {
+            if (!running.compareAndSet(false, true)) {
+                return;
+            }
+            try {
+                future = scheduler.scheduleWithFixedDelay(task::run, Duration.ofMillis(intervalMs));
+            } catch (RuntimeException e) {
+                running.set(false);
+                log.error("[run.loop] 节拍器注册失败 interval={}ms {}", intervalMs, e.getMessage());
+            }
+        }
+
+        /** 由任务自身调用停表，下一个运行到来时会重新注册 */
+        void stop() {
+            ScheduledFuture<?> current = future;
+            if (Objects.nonNull(current)) {
+                current.cancel(false);
+            }
+            running.set(false);
         }
     }
 }

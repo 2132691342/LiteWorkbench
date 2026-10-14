@@ -41,7 +41,6 @@ public class RoleService {
     private final MenuService menuService;
     private final LoginUserAssembler loginUserAssembler;
 
-    /** 分页查询 */
     public PageResult<RoleVO> page(PageREQ req) {
         long total = sysRoleMapper.countPage(req.getKeyword());
         if (total <= 0) {
@@ -53,12 +52,10 @@ public class RoleService {
         return PageResult.of(list, total, req.pageNo(), req.pageSize());
     }
 
-    /** 全量角色列表 */
     public List<RoleVO> list() {
         return sysRoleMapper.selectList().stream().map(this::toVO).toList();
     }
 
-    /** 角色详情 */
     public RoleVO detail(String roleId) {
         return toVO(require(roleId));
     }
@@ -69,7 +66,6 @@ public class RoleService {
         return sysRoleMapper.selectMenuIdsByRoleId(roleId);
     }
 
-    /** 新建角色 */
     @Transactional(rollbackFor = Exception.class)
     public String create(RoleREQ req, String operatorId) {
         if (sysRoleMapper.countByCode(req.getRoleCode(), null) > 0) {

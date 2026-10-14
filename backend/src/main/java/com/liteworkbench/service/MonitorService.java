@@ -2,13 +2,12 @@ package com.liteworkbench.service;
 
 import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.core.date.DateUtil;
-import cn.hutool.core.thread.ExecutorBuilder;
-import cn.hutool.core.thread.ThreadUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import com.liteworkbench.common.BizException;
 import com.liteworkbench.common.ErrorCodeEnum;
 import com.liteworkbench.common.LoginContext;
+import com.liteworkbench.config.ExecutorConfig;
 import com.liteworkbench.config.StorageProperties;
 import com.liteworkbench.domain.constant.EventTypeEnum;
 import com.liteworkbench.domain.constant.PermConst;
@@ -33,6 +32,7 @@ import io.minio.MinioClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -82,14 +82,11 @@ public class MonitorService {
     private final UtilsApi manticoreUtilsApi;
     private final StorageProperties storageProperties;
 
-    /** 探测专用线程池，探测互不阻塞 */
-    private final ExecutorService probeExecutor = ExecutorBuilder.create()
-            .setCorePoolSize(5).setMaxPoolSize(5)
-            .setThreadFactory(ThreadUtil.newNamedThreadFactory("lw-probe", true))
-            .build();
+    /** 探测走入库池：探测多为阻塞 IO，宁可慢也不让健康检查假阳性 */
+    @Qualifier(ExecutorConfig.INDEX_EXECUTOR)
+    private final ExecutorService probeExecutor;
 
-    /** Manticore 日志检索，按时间倒序分页，索引不可用时降级为空结果；视角在服务端判定，非全局角色锁定本人；
-     *  未传时间范围时默认近 7 天，禁止无界查询；响应带 scope 视角标识 */
+    /** Manticore 日志检索：视角非全局时锁定本人，未传时间范围默认近 7 天，索引不可用时降级为空结果 */
     public LogPageVO searchLogs(String keyword, String field, String level,
                                 String logger, String traceId, String userId, String runId,
                                 long from, long to, long page, long size) {
@@ -155,7 +152,6 @@ public class MonitorService {
         return globalLogScope() ? StrUtil.nullToEmpty(requestedUserId) : LoginContext.userId();
     }
 
-    /** 是否持有全局日志视角 */
     private boolean globalLogScope() {
         try {
             return StpUtil.hasPermission(PermConst.MONITOR_LOG_GLOBAL);
@@ -176,9 +172,7 @@ public class MonitorService {
             return "pong";
         }));
         components.add(probe("manticore", 3, () -> {
-            // /sql 非 raw 模式会把语句编译成搜索查询：必须带 FROM 索引。
-            // SELECT 1 与 SHOW TABLES 都会被回 501 `only SELECT queries are supported`，
-            // 探测语句因此必须查真实索引，顺带证明索引还在。
+            // /sql 非 raw 模式会把语句编译成搜索查询，必须带 FROM 真实索引：SELECT 1 / SHOW TABLES 均被回 501
             manticoreUtilsApi.sql("SELECT log_id FROM lw_log LIMIT 1", false);
             return "log index ok";
         }));
@@ -206,7 +200,6 @@ public class MonitorService {
         return resp;
     }
 
-    /** Python 运行时状态 */
     public PythonStatusVO pythonStatus() {
         var status = pythonRuntime.detect();
         PythonStatusVO vo = new PythonStatusVO();
@@ -217,7 +210,6 @@ public class MonitorService {
         return vo;
     }
 
-    /** 重新探测 Python */
     public void reprobePython() {
         pythonRuntime.resetProbe();
         pythonRuntime.detect();
@@ -243,7 +235,6 @@ public class MonitorService {
         return resp;
     }
 
-    /** 汇总指标实算 */
     private OverviewRESP buildOverview() {
         OverviewRESP resp = new OverviewRESP();
         resp.setSessionCount(sessionMapper.countAll());

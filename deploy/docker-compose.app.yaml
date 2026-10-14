@@ -1,43 +1,39 @@
-# LiteWorkbench 应用编排：只跑应用容器，中间件由 docker-compose.yaml 单独维护
-# 目标主机运行时为 Podman 3.4.2 + podman-compose（无 Docker）
-# 用法（目标主机）：
-#   export LITEWORKBENCH_IMAGE=ghcr.io/2132691342/liteworkbench:latest
-#   export LITEWORKBENCH_SECURITY_SECRET=<32 位以上随机串>
-#   podman-compose -f docker-compose.app.yaml pull && podman-compose -f docker-compose.app.yaml up -d
+# 应用编排：只跑应用容器，中间件由 docker-compose.yaml 单独维护。
+# 目标主机运行时为 Podman + podman-compose（无 Docker），发布走 deploy-app.sh，它会先 source .env.infra。
+# 所有凭据与端口一律由环境注入，本文件不提供任何可用默认值。
 services:
   liteworkbench:
-    image: ${LITEWORKBENCH_IMAGE:-ghcr.io/2132691342/liteworkbench:latest}
+    image: ${LITEWORKBENCH_IMAGE:?未指定镜像，请执行 deploy-app.sh <镜像:tag>}
     container_name: liteworkbench
     restart: always
     # 与中间件编排同一网络，postgres / redis / manticore / minio / rabbitmq 主机名可直接解析
-    # 网络名若不同，先 podman network ls 确认后修改
     networks:
       - infra_default
-    # 2GB 小主机：容器限内存，JVM MaxRAMPercentage=70 据此收敛堆上限
+    # 2GB 小主机：容器限内存，JVM 的 MaxRAMPercentage 据此收敛堆上限
     mem_limit: 1152m
     environment:
       # rootless podman 的端口转发只识别 IPv4 监听，显式绑定 IPv4 通配地址
       SERVER_ADDRESS: 0.0.0.0
       LITEWORKBENCH_DATASOURCE_URL: jdbc:postgresql://postgres:5432/postgres
       LITEWORKBENCH_DATASOURCE_USERNAME: postgres
-      LITEWORKBENCH_DATASOURCE_PASSWORD: ${LITEWORKBENCH_DATASOURCE_PASSWORD:-admin_public}
+      LITEWORKBENCH_DATASOURCE_PASSWORD: ${LITEWORKBENCH_DATASOURCE_PASSWORD:?未设置数据库口令，请先执行 deploy/gen-secrets.sh}
       LITEWORKBENCH_REDIS_HOST: redis
-      LITEWORKBENCH_REDIS_PASSWORD: ${LITEWORKBENCH_REDIS_PASSWORD:-admin_public}
+      LITEWORKBENCH_REDIS_PASSWORD: ${LITEWORKBENCH_REDIS_PASSWORD:?未设置 Redis 口令，请先执行 deploy/gen-secrets.sh}
       # Manticore HTTP JSON API 只对同网络容器开放，走服务名直连，不发布宿主机端口
       LITEWORKBENCH_MANTICORE_URL: http://manticore:9308
       LITEWORKBENCH_STORAGE_ENDPOINT: http://minio:9000
-      LITEWORKBENCH_STORAGE_ACCESS_KEY: ${LITEWORKBENCH_STORAGE_ACCESS_KEY:-minioadmin}
-      LITEWORKBENCH_STORAGE_SECRET_KEY: ${LITEWORKBENCH_STORAGE_SECRET_KEY:-minioadminpublic}
+      LITEWORKBENCH_STORAGE_ACCESS_KEY: ${LITEWORKBENCH_STORAGE_ACCESS_KEY:?未设置对象存储账号，请先执行 deploy/gen-secrets.sh}
+      LITEWORKBENCH_STORAGE_SECRET_KEY: ${LITEWORKBENCH_STORAGE_SECRET_KEY:?未设置对象存储口令，请先执行 deploy/gen-secrets.sh}
       LITEWORKBENCH_MQ_HOST: rabbitmq
-      LITEWORKBENCH_MQ_USERNAME: admin
-      LITEWORKBENCH_MQ_PASSWORD: ${LITEWORKBENCH_MQ_PASSWORD:-admin_public}
-      LITEWORKBENCH_SECURITY_SECRET: ${LITEWORKBENCH_SECURITY_SECRET:?必须设置}
-      # 种子账号初始密码：仅对未激活账号生效，账号自助改密后不再覆盖
-      LITEWORKBENCH_ADMIN_PASSWORD: ${LITEWORKBENCH_ADMIN_PASSWORD:-admin@123}
+      LITEWORKBENCH_MQ_USERNAME: ${LITEWORKBENCH_MQ_USERNAME:?未设置消息队列账号，请先执行 deploy/gen-secrets.sh}
+      LITEWORKBENCH_MQ_PASSWORD: ${LITEWORKBENCH_MQ_PASSWORD:?未设置消息队列口令，请先执行 deploy/gen-secrets.sh}
+      LITEWORKBENCH_SECURITY_SECRET: ${LITEWORKBENCH_SECURITY_SECRET:?未设置签名密钥，请先执行 deploy/gen-secrets.sh}
+      # 种子账号初始密码：留空则由应用随机生成并仅在启动日志 WARN 打印一次，账号首登强制改密
+      LITEWORKBENCH_ADMIN_PASSWORD: ${LITEWORKBENCH_ADMIN_PASSWORD:-}
       LITEWORKBENCH_LOG_DIR: /var/log/liteworkbench
       LITEWORKBENCH_RUNTIME_DATA_DIR: /var/lib/liteworkbench
     ports:
-      - "24399:8080"
+      - "${LITEWORKBENCH_PORT:?未指定宿主端口，deploy-app.sh 会注入}:8080"
     volumes:
       - app_logs:/var/log/liteworkbench
       - app_data:/var/lib/liteworkbench

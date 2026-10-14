@@ -28,21 +28,18 @@ public class UserController {
 
     private final UserService userService;
 
-    /** 分页查询 */
     @SaCheckPermission(PermConst.SYSTEM_USER_LIST)
     @GetMapping("/page")
     public R<PageResult<UserVO>> page(UserPageREQ req) {
         return R.ok(userService.page(req));
     }
 
-    /** 详情 */
     @SaCheckPermission(PermConst.SYSTEM_USER_LIST)
     @GetMapping("/detail/{userId}")
     public R<UserVO> detail(@PathVariable String userId) {
         return R.ok(userService.detail(userId));
     }
 
-    /** 新建用户 */
     @SaCheckPermission(PermConst.SYSTEM_USER_CREATE)
     @Idempotent(prefix = "user:create")
     @PostMapping("/create")
@@ -59,7 +56,6 @@ public class UserController {
         return R.ok();
     }
 
-    /** 启用 / 停用 */
     @SaCheckPermission(PermConst.SYSTEM_USER_UPDATE)
     @Idempotent(prefix = "user:toggle")
     @PostMapping("/toggle/{userId}")
@@ -68,7 +64,6 @@ public class UserController {
         return R.ok();
     }
 
-    /** 重置密码 */
     @SaCheckPermission(PermConst.SYSTEM_USER_RESET)
     @Idempotent(prefix = "user:reset")
     @PostMapping("/reset-password")

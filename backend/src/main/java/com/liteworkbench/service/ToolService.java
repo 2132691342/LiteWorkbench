@@ -3,12 +3,16 @@ package com.liteworkbench.service;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.json.JSONUtil;
 import com.liteworkbench.agent.spi.KbSearchPort;
+import com.liteworkbench.agent.spi.MemoryPort;
+import com.liteworkbench.agent.spi.SubRunPort;
 import com.liteworkbench.agent.spi.ToolGate;
+import com.liteworkbench.agent.tool.ToolOwner;
 import com.liteworkbench.agent.tool.ToolRegistry;
 import com.liteworkbench.agent.tool.WorkbenchTools;
 import com.liteworkbench.common.BizException;
 import com.liteworkbench.common.ErrorCodeEnum;
 import com.liteworkbench.common.LoginContext;
+import com.liteworkbench.config.ExecutorConfig;
 import com.liteworkbench.config.RuntimeProperties;
 import com.liteworkbench.domain.constant.ToolRiskEnum;
 import com.liteworkbench.domain.dto.InvokeToolREQ;
@@ -18,12 +22,14 @@ import com.liteworkbench.mapper.WbToolMapper;
 import com.liteworkbench.runtime.PythonRuntime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ExecutorService;
 
 /** 工具：列表、启停与页面手工调试执行 */
 @Slf4j
@@ -37,10 +43,14 @@ public class ToolService {
     private final WbToolMapper toolMapper;
     private final ToolGate toolGate;
     private final KbSearchPort kbSearchPort;
+    private final MemoryPort memoryPort;
+    private final SubRunPort subRunPort;
     private final PythonRuntime pythonRuntime;
     private final RuntimeProperties runtimeProperties;
+    /** 页面手工调用复用工具池，避免每点一次按钮就新建一组线程 */
+    @Qualifier(ExecutorConfig.TOOL_EXECUTOR)
+    private final ExecutorService toolExecutor;
 
-    /** 工具列表 */
     public List<ToolVO> list() {
         return toolMapper.selectAll().stream().map(this::toVO).toList();
     }
@@ -76,17 +86,14 @@ public class ToolService {
         long timeoutSeconds = resolveTimeout(req);
         // 页面未指定超时时把归一后的值显式传给工具，避免工具自身默认值与页面语义不一致
         args.put("timeoutSeconds", timeoutSeconds);
-        ToolRegistry registry = new ToolRegistry();
-        registry.register(new WorkbenchTools(toolGate, kbSearchPort, pythonRuntime, runtimeProperties, userId));
+        ToolRegistry registry = new ToolRegistry(toolExecutor);
+        registry.register(new WorkbenchTools(toolGate, kbSearchPort, memoryPort, subRunPort,
+                pythonRuntime, runtimeProperties, new ToolOwner(userId, null, null)));
         long start = System.currentTimeMillis();
-        try {
-            String output = registry.invoke(toolName, JSONUtil.toJsonStr(args), timeoutSeconds);
-            log.info("[tool.invoke] toolName={} userId={} cost={}ms", toolName, userId,
-                    System.currentTimeMillis() - start);
-            return output;
-        } finally {
-            registry.shutdown();
-        }
+        String output = registry.invoke(toolName, JSONUtil.toJsonStr(args), timeoutSeconds);
+        log.info("[tool.invoke] toolName={} userId={} cost={}ms", toolName, userId,
+                System.currentTimeMillis() - start);
+        return output;
     }
 
     private long resolveTimeout(InvokeToolREQ req) {

@@ -6,7 +6,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /** 运行句柄：协作式取消 + 完成通知，cancel 幂等且可跨线程调用 */
 public class RunHandle {
 
-    /** 归属运行 */
     private final String runId;
     /** 取消标志，内核在检查点读取 */
     private final AtomicBoolean cancelled = new AtomicBoolean(false);

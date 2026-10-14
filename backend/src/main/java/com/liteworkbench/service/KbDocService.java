@@ -95,7 +95,6 @@ public class KbDocService implements KbSearchPort {
         return toVO(doc);
     }
 
-    /** 文档分页 */
     public PageResult<KbDocVO> page(String kbId, String userId, String keyword, String state,
                                     long page, long size) {
         kbService.getOwned(kbId, userId);
@@ -220,7 +219,6 @@ public class KbDocService implements KbSearchPort {
         }
     }
 
-    /** 分块转索引文档模型 */
     private List<KbChunkVO> buildChunkDocs(KbDocParseDTO task, List<String> chunks) {
         List<KbChunkVO> docs = new ArrayList<>(chunks.size());
         long ts = System.currentTimeMillis();
@@ -239,7 +237,6 @@ public class KbDocService implements KbSearchPort {
         return docs;
     }
 
-    /** 归属校验 */
     private WbKbDocDO getOwned(String docId, String userId) {
         WbKbDocDO doc = kbDocMapper.selectByIdAndUser(userId, docId);
         if (Objects.isNull(doc)) {

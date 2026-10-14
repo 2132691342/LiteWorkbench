@@ -10,7 +10,6 @@ public class RuntimeProperties {
 
     /** 运行时数据根目录，Python 工作目录与内置解释器都挂在它下面 */
     private String dataDir = "./data";
-    /** Python 参数 */
     private Python python = new Python();
 
     @Data

@@ -16,14 +16,13 @@ public enum AgentEventType {
     TOOL_RESULT("tool.result", "工具结果"),
     MODEL_CALL_START("model.call.start", "模型调用开始"),
     MODEL_CALL_END("model.call.end", "模型调用结束"),
+    PLAN_UPDATED("plan.updated", "计划更新"),
     AGENT_RESULT("agent.result", "运行产出"),
     EXCEED_MAX_ITERS("agent.exceed", "超出迭代上限"),
     AGENT_END("agent.end", "运行结束"),
     AGENT_ERROR("agent.error", "运行错误"),
     ;
 
-    /** 事件类型码 */
     private final String code;
-    /** 事件描述 */
     private final String description;
 }

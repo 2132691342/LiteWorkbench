@@ -14,7 +14,6 @@ public class InvokeToolREQ implements Serializable {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    /** 工具参数 */
     @NotNull(message = "参数不能为空")
     private Map<String, Object> args;
     /** confirm 级工具必须显式确认为 true */

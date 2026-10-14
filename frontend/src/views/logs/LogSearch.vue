@@ -55,7 +55,6 @@ function toMillis(value: TimeInput): number | undefined {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
 }
 
-/** 时间选择器变更：归一后记录为数字并清掉预设高亮 */
 function onTimeChange(): void {
   query.from = toMillis(query.from)
   query.to = toMillis(query.to)
@@ -63,7 +62,6 @@ function onTimeChange(): void {
   handleSearch()
 }
 
-/** 快捷时间预设：15 分钟 / 1 小时 / 24 小时 / 7 天 */
 const PRESETS = [
   { key: '15m', ms: 15 * 60 * 1000 },
   { key: '1h', ms: 60 * 60 * 1000 },
@@ -86,7 +84,6 @@ const traceMode = computed(() => query.field === 'traceId' && query.keyword.trim
 /** 展示用列表：链路钻取升序，其余保持服务端的时间倒序 */
 const displayDocs = computed(() => (traceMode.value ? [...docs.value].reverse() : docs.value))
 
-/** 级别计数 Map，概览卡直接查 */
 const levelCount = computed(() => {
   const map = new Map<string, number>()
   levels.value.forEach((item) => map.set(item.level, item.count))
@@ -116,7 +113,6 @@ function formatHour(value: number): string {
   return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:00`
 }
 
-/** 关键字命中高亮：按词切分，命中段包 <mark>，未命中原样返回 */
 interface Segment {
   text: string
   hit: boolean
@@ -162,7 +158,6 @@ function scheduleRefresh(): void {
   }, 300)
 }
 
-/** 条件变更后回到第一页并防抖刷新 */
 function handleSearch(): void {
   query.page = 1
   scheduleRefresh()
@@ -223,7 +218,6 @@ async function loadStats(): Promise<void> {
   }
 }
 
-/** 快捷时间预设：点击即写入时间范围并刷新 */
 function applyPreset(key: string): void {
   const preset = PRESETS.find((item) => item.key === key)
   if (!preset) return
@@ -233,7 +227,6 @@ function applyPreset(key: string): void {
   handleSearch()
 }
 
-/** 直方图钻取：点某桶把时间范围收敛到该桶 */
 function drillHour(index: number): void {
   const bucket = histogram.value[index]
   if (!bucket) return
@@ -243,7 +236,6 @@ function drillHour(index: number): void {
   handleSearch()
 }
 
-/** 复制 traceId：按钮文案 400ms 切对勾并 toast 提示 */
 async function copyTraceId(traceId: string): Promise<void> {
   if (!traceId) return
   try {
@@ -258,7 +250,6 @@ async function copyTraceId(traceId: string): Promise<void> {
   }
 }
 
-/** 按 traceId 钻取：写入过滤区并刷新，把一次请求的日志串成时间线 */
 function filterByTrace(traceId: string): void {
   if (!traceId) return
   query.field = 'traceId'
@@ -267,7 +258,6 @@ function filterByTrace(traceId: string): void {
   handleSearch()
 }
 
-/** 按 userId 钻取：全局视角下查看某用户的全部日志 */
 function filterByUser(userId: string): void {
   if (!userId) return
   query.userId = userId
@@ -275,7 +265,6 @@ function filterByUser(userId: string): void {
   handleSearch()
 }
 
-/** 按 runId 钻取：把一次运行的全部日志串成时间线 */
 function filterByRun(runId: string): void {
   if (!runId) return
   query.runId = runId
@@ -354,7 +343,6 @@ onBeforeUnmount(() => {
       </LwCard>
     </div>
 
-    <!-- 过滤区 -->
     <LwCard>
       <div class="flex flex-wrap items-center gap-3">
         <el-select v-model="query.field" style="width: 130px" @change="handleSearch">
@@ -439,7 +427,6 @@ onBeforeUnmount(() => {
       </p>
     </LwCard>
 
-    <!-- 结果列表 -->
     <LwCard>
       <LwPageState :loading="loading" :error="error" :empty="!docs.length" :skeleton-rows="8" @retry="search">
         <div v-if="traceMode" class="text-xs mb-3 px-3 py-2 rounded-lg" style="background: var(--lw-secondary-tint); color: var(--lw-primary)">
@@ -522,7 +509,6 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-/* 关键字高亮：浅紫底圆角，不用浏览器默认黄 */
 .lw-mark {
   background-color: var(--lw-secondary-tint);
   color: var(--lw-primary);

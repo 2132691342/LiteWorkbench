@@ -25,7 +25,6 @@ public class LogStatsVO {
     public static class LevelCount {
         /** 级别：INFO / WARN / ERROR */
         private String level;
-        /** 计数 */
         private long count;
     }
 
@@ -34,7 +33,6 @@ public class LogStatsVO {
     public static class HourCount {
         /** 桶起点，整点毫秒时间戳 */
         private long hour;
-        /** 计数 */
         private long count;
     }
 }

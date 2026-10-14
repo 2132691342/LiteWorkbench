@@ -28,14 +28,10 @@ public class MenuREQ implements Serializable {
     private String routePath;
     /** 前端组件路径 */
     private String component;
-    /** 图标名 */
     private String icon;
     /** 权限标识，形如 system:user:create */
     private String permCode;
-    /** 排序号 */
     private Integer sortNo;
-    /** 是否显示 */
     private Boolean visible;
-    /** 备注 */
     private String remark;
 }

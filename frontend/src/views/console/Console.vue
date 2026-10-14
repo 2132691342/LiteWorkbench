@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import ConsoleQuickStart from '@/components/console/ConsoleQuickStart.vue'
+import PlanChecklist from '@/components/console/PlanChecklist.vue'
 import LwButton from '@/components/ui/LwButton.vue'
 import LwErrorBar from '@/components/ui/LwErrorBar.vue'
 import LwMarkdown from '@/components/ui/LwMarkdown.vue'
@@ -141,7 +142,6 @@ async function replay(runId: string): Promise<void> {
   scrollToBottom()
 }
 
-/** 跳转到运行记录页并定位该运行（独立详情视图） */
 function openInRuns(runId: string): void {
   void router.push({ path: '/runs', query: { runId } })
 }
@@ -171,6 +171,10 @@ function toolLabel(name: string): string {
     file_write: t('console.toolWrite'),
     http_get: t('console.toolHttp'),
     kb_search: t('console.toolKb'),
+    task_plan: t('console.toolPlan'),
+    memory_write: t('console.toolMemoryWrite'),
+    memory_search: t('console.toolMemorySearch'),
+    task_delegate: t('console.toolDelegate'),
   }
   return labels[name] ?? name
 }
@@ -347,6 +351,7 @@ onMounted(async () => {
                   {{ message.thinking }}
                 </div>
               </details>
+              <PlanChecklist v-if="message.plan.length" :steps="message.plan" />
               <div
                 v-for="(step, toolIndex) in message.tools"
                 :key="toolIndex"
@@ -366,7 +371,6 @@ onMounted(async () => {
                 </div>
                 <pre v-if="step.output" class="mt-1 whitespace-pre-wrap break-all max-h-40 overflow-auto">{{ step.output }}</pre>
               </div>
-              <!-- 助手消息左对齐无气泡，Markdown 全文渲染（DESIGN.md §12.2） -->
               <div v-if="message.content || message.streaming" class="text-sm">
                 <LwMarkdown :content="message.content" /><span v-if="message.streaming" class="lw-cursor">▍</span>
               </div>

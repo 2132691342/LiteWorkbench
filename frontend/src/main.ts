@@ -1,4 +1,3 @@
-import * as ElementPlusIcons from '@element-plus/icons-vue'
 import ElementPlus from 'element-plus'
 import { createPinia } from 'pinia'
 import { createApp } from 'vue'
@@ -23,7 +22,6 @@ function collectError(message: string): void {
   }
 }
 
-// 组件错误统一上抛，便于无控制台环境排障
 app.config.errorHandler = (err, _instance, info) => {
   collectError(`${String((err as Error)?.message ?? err)} | ${info} | ${(err as Error)?.stack?.slice(0, 400) ?? ''}`)
   console.error(err)
@@ -39,8 +37,5 @@ app.use(i18n)
 app.use(ElementPlus)
 setupPermDirective(app)
 
-for (const [name, component] of Object.entries(ElementPlusIcons)) {
-  app.component(name, component)
-}
-
+// 图标一律按需具名引入（见 components/layout/icons.ts）；全量注册会把千余个图标打包进主 chunk
 app.mount('#app')

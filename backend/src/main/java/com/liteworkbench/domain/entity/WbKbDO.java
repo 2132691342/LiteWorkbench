@@ -27,7 +27,6 @@ public class WbKbDO implements Serializable {
     private String userId;
     /** 知识库名，用户内唯一 */
     private String kbName;
-    /** 描述 */
     private String description;
     /** 文档数，冗余计数 */
     private Integer docCount;
@@ -41,6 +40,5 @@ public class WbKbDO implements Serializable {
     private LocalDateTime updatedAt;
     /** 逻辑删除 */
     private Boolean deleted;
-    /** 备注 */
     private String remark;
 }

@@ -3,8 +3,12 @@ package com.liteworkbench.domain.constant;
 /** 运行相关静态常量 */
 public interface RunConst {
 
-    /** 事件攒批时间阈值，毫秒 */
-    long EVENT_BATCH_INTERVAL_MS = 200L;
+    /** 事件落库节拍，毫秒；DB 写入不用跟手，按批压到 5 次/秒 */
+    long EVENT_PERSIST_INTERVAL_MS = 200L;
+    /** 增量推送节拍，毫秒；≈一帧的时间，决定「打字」跟手程度 */
+    long SSE_PUSH_TICK_MS = 16L;
+    /** 水位快照节流，毫秒；客户端据此判定丢帧并补齐 */
+    long SSE_SNAPSHOT_THROTTLE_MS = 200L;
     /** 单次运行输入最大长度 */
     int PROMPT_MAX_LENGTH = 32000;
     /** SSE 连接超时，毫秒 */

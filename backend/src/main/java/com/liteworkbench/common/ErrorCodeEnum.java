@@ -105,6 +105,11 @@ public enum ErrorCodeEnum {
     PROMPT_TITLE_CONFLICT("8803", 409, "同名提示词已存在"),
     PROMPT_VARIABLE_MISSING("8804", 400, "变量未填写完整"),
 
+    // 长期记忆 8900
+    MEMORY_NOT_FOUND("8901", 404, "记忆不存在"),
+    MEMORY_EMPTY("8902", 400, "记忆键与内容不能为空"),
+    MEMORY_LIMIT_REACHED("8903", 409, "记忆条数已达上限"),
+
     // 系统 9000
     DB_UNAVAILABLE("9001", 503, "数据库不可用"),
     REDIS_UNAVAILABLE("9002", 503, "缓存不可用"),
@@ -112,10 +117,7 @@ public enum ErrorCodeEnum {
     MQ_UNAVAILABLE("9004", 503, "消息队列不可用"),
     ;
 
-    /** 业务码 */
     private final String code;
-    /** 对应 HTTP 状态码 */
     private final int httpStatus;
-    /** 面向人的提示 */
     private final String message;
 }

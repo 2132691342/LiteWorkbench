@@ -14,7 +14,6 @@ public class LogPageVO {
     private long total;
     /** 页码，从 1 开始 */
     private long page;
-    /** 每页条数 */
     private long size;
     /** 检索视角：global（全局，管理员）/ self（仅本人） */
     private String scope;

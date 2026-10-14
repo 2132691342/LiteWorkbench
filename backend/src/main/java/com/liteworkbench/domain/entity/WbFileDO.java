@@ -31,9 +31,7 @@ public class WbFileDO implements Serializable {
     private String fileName;
     /** MinIO 对象键，含用户前缀 */
     private String objectKey;
-    /** 桶名 */
     private String bucketName;
-    /** 字节数 */
     private Long fileSize;
     /** MIME 类型 */
     private String contentType;

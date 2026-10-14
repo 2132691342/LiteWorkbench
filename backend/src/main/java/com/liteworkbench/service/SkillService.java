@@ -35,7 +35,6 @@ public class SkillService {
     private final WbSkillMapper skillMapper;
     private final AgentProperties agentProperties;
 
-    /** 分页查询 */
     public PageResult<SkillVO> page(PageREQ req, String userId) {
         long total = skillMapper.countPage(req, userId);
         if (total <= 0) {
@@ -46,7 +45,6 @@ public class SkillService {
         return PageResult.of(list, total, req.pageNo(), req.pageSize());
     }
 
-    /** 新建技能 */
     public String create(SkillREQ req, String userId) {
         validate(req);
         if (Objects.nonNull(skillMapper.selectByCode(userId, req.getSkillCode()))) {
@@ -62,7 +60,6 @@ public class SkillService {
         return skill.getSkillId();
     }
 
-    /** 更新技能 */
     public void update(SkillREQ req, String userId) {
         if (StrUtil.isBlank(req.getSkillId())) {
             throw new BizException(ErrorCodeEnum.PARAM_INVALID, "skillId 不能为空");
@@ -81,7 +78,6 @@ public class SkillService {
         skillMapper.update(skill);
     }
 
-    /** 删除技能 */
     public void delete(String skillId, String userId) {
         getOwned(skillId, userId);
         skillMapper.deleteById(userId, skillId, userId);

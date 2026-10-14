@@ -18,9 +18,7 @@ public class LogDocVO implements Serializable {
     private Long ts;
     /** 级别 INFO / WARN / ERROR */
     private String level;
-    /** 记录器名 */
     private String logger;
-    /** 线程名 */
     private String thread;
     /** 链路标识 */
     private String traceId;

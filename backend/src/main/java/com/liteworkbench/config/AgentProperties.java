@@ -8,13 +8,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "liteworkbench.agent")
 public class AgentProperties {
 
-    /** 模型参数 */
     private Model model = new Model();
-    /** 推理循环参数 */
     private Loop loop = new Loop();
-    /** 历史消息参数 */
     private History history = new History();
-    /** 技能注入开关 */
     private Skill skill = new Skill();
 
     @Data

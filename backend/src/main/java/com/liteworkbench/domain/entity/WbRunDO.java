@@ -25,13 +25,11 @@ public class WbRunDO implements Serializable {
     private String runId;
     /** 归属用户 */
     private String userId;
-    /** 会话 ID */
     private String sessionId;
-    /** 父运行 ID，预留 */
+    /** 父运行 ID，子运行填父运行，根运行为空 */
     private String parentRunId;
-    /** 派生关系，MVP 恒为 original */
+    /** 派生关系：original 会话对话 / child 子运行 */
     private String relation;
-    /** 本次输入 */
     private String prompt;
     /** 实际使用模型 */
     private String modelName;
@@ -39,11 +37,8 @@ public class WbRunDO implements Serializable {
     private String state;
     /** 停止原因 completed / max_iters / aborted / error */
     private String stopReason;
-    /** 迭代轮次 */
     private Integer iterCount;
-    /** 输入 token */
     private Integer inputTokens;
-    /** 输出 token */
     private Integer outputTokens;
     private LocalDateTime startedAt;
     private LocalDateTime endedAt;

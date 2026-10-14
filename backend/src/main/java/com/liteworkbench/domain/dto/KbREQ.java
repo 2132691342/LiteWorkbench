@@ -16,11 +16,9 @@ public class KbREQ implements Serializable {
 
     /** 知识库 ID，更新时必填 */
     private String kbId;
-    /** 知识库名 */
     @NotBlank(message = "知识库名不能为空")
     @Size(max = 128, message = "名称最长 128 字")
     private String kbName;
-    /** 描述 */
     @Size(max = 512, message = "描述最长 512 字")
     private String description;
 }

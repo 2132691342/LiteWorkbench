@@ -6,6 +6,5 @@ public interface DocAssistSink {
     /** 推送一帧，eventType 为 assist.start / assist.delta / assist.end / assist.error */
     void send(String eventType, String payloadJson);
 
-    /** 关闭通道 */
     void complete();
 }

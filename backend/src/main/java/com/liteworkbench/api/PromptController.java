@@ -36,14 +36,12 @@ public class PromptController {
         return R.ok(promptService.page(req, category));
     }
 
-    /** 详情 */
     @SaCheckPermission(PermConst.WB_PROMPT_LIST)
     @GetMapping("/detail/{promptId}")
     public R<PromptVO> detail(@PathVariable String promptId) {
         return R.ok(promptService.detail(promptId));
     }
 
-    /** 新建 */
     @SaCheckPermission(PermConst.WB_PROMPT_CREATE)
     @Idempotent(prefix = "prompt:create")
     @PostMapping("/create")

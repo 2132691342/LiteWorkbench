@@ -12,17 +12,13 @@ public class FileVO implements Serializable {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    /** 文件 ID */
     private String fileId;
     /** 关联会话 */
     private String sessionId;
-    /** 文件名 */
     private String fileName;
-    /** 字节数 */
     private Long fileSize;
     /** MIME 类型 */
     private String contentType;
-    /** 分类 */
     private String category;
     /** 上传人 */
     private String createdBy;

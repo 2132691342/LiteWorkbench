@@ -25,17 +25,13 @@ public class WbPromptDO implements Serializable {
     private String promptId;
     /** 归属用户，内置模板为 builtin */
     private String userId;
-    /** 标题 */
     private String promptTitle;
-    /** 分类 */
     private String category;
     /** 模板正文，变量写作 {{name}} */
     private String content;
     /** 变量定义 JSON：[{name,label,defaultValue}] */
     private String variables;
-    /** 是否内置 */
     private Boolean builtin;
-    /** 使用次数 */
     private Integer useCount;
     private String createdBy;
     private LocalDateTime createdAt;
@@ -43,6 +39,5 @@ public class WbPromptDO implements Serializable {
     private LocalDateTime updatedAt;
     /** 逻辑删除 */
     private Boolean deleted;
-    /** 备注 */
     private String remark;
 }

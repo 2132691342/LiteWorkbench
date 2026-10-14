@@ -1,13 +1,14 @@
 package com.liteworkbench.agent.tool;
 
+import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.convert.Convert;
-import cn.hutool.core.thread.ThreadUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.liteworkbench.agent.model.ModelTypes.ToolSpec;
 import com.liteworkbench.common.OutputSanitizer;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.lang.reflect.InvocationTargetException;
@@ -20,23 +21,25 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Predicate;
 
 /** 工具注册表：扫描 @AgentTool 生成 Schema，按名调用并统一超时、异常与输出裁剪 */
 @Slf4j
+@Getter
 public class ToolRegistry {
-
-    /** 并发执行工具数上限 */
-    private static final int POOL_SIZE = 8;
 
     private final Map<String, ToolDefinition> definitions = new LinkedHashMap<>();
 
-    /** 执行线程池懒创建：无工具调用的运行不占线程 */
-    private volatile ExecutorService executor;
+    /** 共享工具池：由 ExecutorConfig 供给，注册表本身不再持有线程资源 */
+    private final ExecutorService executor;
+
+    public ToolRegistry(ExecutorService executor) {
+        this.executor = executor;
+    }
 
     /** 扫描并注册一个工具实现类，Schema 不合法即抛异常（错误左移到启动期） */
     public void register(Object bean) {
@@ -59,6 +62,71 @@ public class ToolRegistry {
     /** 已注册工具名 */
     public List<String> names() {
         return new ArrayList<>(definitions.keySet());
+    }
+
+    /** 工具是否允许与同批其他调用并发执行；未注册工具按不可并发处理 */
+    public boolean parallelSafe(String name) {
+        ToolDefinition definition = definitions.get(name);
+        return Objects.nonNull(definition) && definition.isParallelSafe();
+    }
+
+    /** 是否为计划类工具：输出是结构化计划，内核据此额外产出一条计划事件 */
+    public boolean isPlanTool(String name) {
+        ToolDefinition definition = definitions.get(name);
+        return Objects.nonNull(definition) && definition.isPlanTool();
+    }
+
+    /** 批量调用：全部可并发时并发，任一不可并发则整批串行；结果严格按下标顺序返回 */
+    public List<String> invokeBatch(List<ToolCallTask> tasks, long timeoutSeconds) {
+        if (CollUtil.isEmpty(tasks)) {
+            return List.of();
+        }
+        boolean parallel = tasks.stream().allMatch(task -> parallelSafe(task.name()));
+        if (!parallel || tasks.size() == 1) {
+            return tasks.stream()
+                    .map(task -> invoke(task.name(), task.arguments(), timeoutSeconds))
+                    .toList();
+        }
+        List<Future<String>> futures = tasks.stream()
+                .map(task -> executor.submit(() -> invokeGuarded(task)))
+                .toList();
+        List<String> outputs = new ArrayList<>(tasks.size());
+        for (int i = 0; i < futures.size(); i++) {
+            outputs.add(await(futures.get(i), tasks.get(i).name(), timeoutSeconds));
+        }
+        return outputs;
+    }
+
+    /** 并发分支的单个任务：任何 Throwable 都转成结构化失败，不允许吞掉整批 */
+    private String invokeGuarded(ToolCallTask task) {
+        try {
+            ToolDefinition definition = definitions.get(task.name());
+            if (Objects.isNull(definition)) {
+                return error(StrUtil.format("未知工具 {}", task.name()));
+            }
+            return OutputSanitizer.clean(call(definition, parseArguments(task.arguments())));
+        } catch (Throwable t) {
+            log.warn("[tool.batch] name={} 并发执行异常 {}", task.name(), t.getMessage());
+            return error(StrUtil.format("工具 {} 执行失败：{}", task.name(),
+                    Objects.toString(t.getMessage(), t.getClass().getSimpleName())));
+        }
+    }
+
+    /** 等待单个并发结果：超时 / 中断 / 拒绝都转成结构化文本，保证结果与调用一一对应 */
+    private String await(Future<String> future, String name, long timeoutSeconds) {
+        try {
+            return future.get(timeoutSeconds, TimeUnit.SECONDS);
+        } catch (TimeoutException e) {
+            future.cancel(true);
+            return error(StrUtil.format("工具 {} 执行超时（{}s）", name, timeoutSeconds));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return error(StrUtil.format("工具 {} 执行被中断", name));
+        } catch (RejectedExecutionException | ExecutionException e) {
+            Throwable cause = Objects.isNull(e.getCause()) ? e : e.getCause();
+            log.warn("[tool.batch] name={} 失败 {}", name, cause.getMessage());
+            return error(StrUtil.format("工具 {} 执行失败：{}", name, cause.getMessage()));
+        }
     }
 
     /** 风险等级，未注册返回 SAFE */
@@ -86,7 +154,14 @@ public class ToolRegistry {
             return error(StrUtil.format("未知工具 {}", name));
         }
         JSONObject arguments = parseArguments(argumentsJson);
-        Future<String> future = executor().submit(() -> call(definition, arguments));
+        Future<String> future;
+        try {
+            future = executor.submit(() -> call(definition, arguments));
+        } catch (RejectedExecutionException e) {
+            // 池满直接结构化失败：让模型换路径，不能让它以为工具坏了而无限重试
+            log.warn("[tool.invoke] name={} 工具池已满，拒绝执行", name);
+            return error(StrUtil.format("工具 {} 当前并发已满，请稍后重试或换一种方式", name));
+        }
         try {
             return future.get(timeoutSeconds, TimeUnit.SECONDS);
         } catch (TimeoutException e) {
@@ -99,29 +174,6 @@ public class ToolRegistry {
             Throwable cause = Objects.isNull(e.getCause()) ? e : e.getCause();
             log.warn("[tool.invoke] name={} 失败 {}", name, cause.getMessage());
             return error(StrUtil.format("工具 {} 执行失败：{}", name, cause.getMessage()));
-        }
-    }
-
-    /** 关闭执行线程池（未创建过则为空操作） */
-    public void shutdown() {
-        ExecutorService current = executor;
-        if (Objects.nonNull(current)) {
-            current.shutdownNow();
-        }
-    }
-
-    /** 执行线程池：首次调用时创建 */
-    private ExecutorService executor() {
-        ExecutorService current = executor;
-        if (Objects.nonNull(current)) {
-            return current;
-        }
-        synchronized (this) {
-            if (Objects.isNull(executor)) {
-                executor = Executors.newFixedThreadPool(POOL_SIZE,
-                        ThreadUtil.newNamedThreadFactory("lw-tool", true));
-            }
-            return executor;
         }
     }
 
@@ -194,7 +246,7 @@ public class ToolRegistry {
             schema.put("required", required);
         }
         return new ToolDefinition(annotation.name(), annotation.description(), annotation.risk(), schema,
-                bean, method, names, types);
+                bean, method, names, types, annotation.parallelSafe(), annotation.emitsPlan());
     }
 
     private String resolveType(AgentToolParam param, Class<?> javaType) {

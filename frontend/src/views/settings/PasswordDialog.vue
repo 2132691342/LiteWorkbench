@@ -19,7 +19,6 @@ const errorMessage = ref('')
 /** 口令框共用显隐开关，与强制改密页保持一致 */
 const showPassword = ref(false)
 
-/** 打开时重置表单与错误 */
 watch(visible, (value) => {
   if (value) {
     form.oldPassword = ''

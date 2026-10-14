@@ -11,7 +11,6 @@ export const useMonitorStore = defineStore('monitor', () => {
   const loading = ref(false)
   const error = ref('')
 
-  /** 逐组件健康状态 */
   async function loadHealth(): Promise<void> {
     loading.value = true
     error.value = ''
@@ -24,7 +23,6 @@ export const useMonitorStore = defineStore('monitor', () => {
     }
   }
 
-  /** 仪表盘汇总 */
   async function loadOverview(): Promise<void> {
     loading.value = true
     error.value = ''
@@ -37,7 +35,7 @@ export const useMonitorStore = defineStore('monitor', () => {
     }
   }
 
-  /** Python 运行时探测结果，失败不阻塞健康面板（错误由健康聚合兜底） */
+  /** Python 探测失败不阻塞健康面板，错误由健康聚合兜底 */
   async function loadPython(): Promise<void> {
     try {
       python.value = await monitorApi.pythonStatus()
@@ -46,7 +44,6 @@ export const useMonitorStore = defineStore('monitor', () => {
     }
   }
 
-  /** 清缓存重探 Python */
   async function reprobe(): Promise<void> {
     try {
       python.value = await monitorApi.pythonReprobe()

@@ -1,9 +1,7 @@
 <script setup lang="ts">
 /** 卡片容器：可选标题、说明与右上操作区 */
 defineProps<{
-  /** 卡片标题 */
   title?: string
-  /** 标题下的说明 */
   desc?: string
 }>()
 </script>

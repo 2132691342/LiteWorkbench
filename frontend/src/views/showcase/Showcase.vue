@@ -16,7 +16,6 @@ const { t } = useI18n()
 const demoLoading = ref(false)
 const demoDone = ref(false)
 
-/** 分段切换样例 */
 const segmentedDemo = ref('all')
 const segmentedOptions = computed(() => [
   { value: 'all', label: t('common.all') },
@@ -24,7 +23,6 @@ const segmentedOptions = computed(() => [
   { value: 'disabled', label: t('common.disabled'), count: 3 },
 ])
 
-/** 按钮加载态演示：1.2s 后结束 */
 async function simulate(): Promise<void> {
   demoLoading.value = true
   demoDone.value = false
@@ -34,7 +32,6 @@ async function simulate(): Promise<void> {
 }
 
 onMounted(() => {
-  // 让首屏直接看到骨架效果
   demoLoading.value = true
   void simulate()
 })

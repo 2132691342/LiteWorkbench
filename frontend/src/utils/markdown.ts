@@ -23,7 +23,6 @@ import typescript from 'highlight.js/lib/languages/typescript'
 import xml from 'highlight.js/lib/languages/xml'
 import yaml from 'highlight.js/lib/languages/yaml'
 
-/* 按需注册常用语言，控制包体 */
 hljs.registerLanguage('bash', bash)
 hljs.registerLanguage('c', c)
 hljs.registerLanguage('cpp', cpp)
@@ -59,7 +58,7 @@ const md: MarkdownIt = new MarkdownIt({
       try {
         return hljs.highlight(code, { language: lang, ignoreIllegals: true }).value
       } catch {
-        // 高亮失败回退为转义文本
+        return ''
       }
     }
     return ''
@@ -83,7 +82,6 @@ md.renderer.rules.fence = (tokens, idx, options, env, self) => {
   )
 }
 
-/** 链接统一新窗口打开 */
 const defaultLinkOpen = md.renderer.rules.link_open
 md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
   tokens[idx].attrSet('target', '_blank')
@@ -93,7 +91,6 @@ md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
     : self.renderToken(tokens, idx, options)
 }
 
-/** Markdown 转 HTML，输入按纯文本兜底 */
 export function renderMarkdown(source: string): string {
   return md.render(source ?? '')
 }

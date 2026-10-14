@@ -1,6 +1,6 @@
 # LiteWorkbench 中间件编排：PostgreSQL(pgvector) / Manticore / Redis / MinIO / RabbitMQ
-# 与云服务器（47.108.73.153，Podman）运行中的共享中间件栈保持一致，镜像取自华为云 SWR，国内网络友好
-# 端口与凭据与 docs/DEPLOYMENT.md 对齐
+# 镜像取自华为云 SWR，国内网络友好；端口与 docs/DEPLOYMENT.md 对齐
+# 凭据一律由环境提供，仓库内不保留任何可用口令：先执行 ./gen-secrets.sh 生成 .env.infra
 services:
   postgres:
     image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/pgvector/pgvector:pg16
@@ -9,7 +9,7 @@ services:
     environment:
       POSTGRES_DB: postgres
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: admin_public
+      POSTGRES_PASSWORD: ${LITEWORKBENCH_DATASOURCE_PASSWORD:?未设置数据库口令，请先执行 deploy/gen-secrets.sh}
     ports:
       - "5432:5432"
     volumes:
@@ -24,11 +24,14 @@ services:
     image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/redis:8
     container_name: redis
     restart: always
-    command: redis-server --requirepass admin_public --maxmemory 256mb --maxmemory-policy allkeys-lru
+    # 口令经 shell 变量展开注入，避免把明文写进进程命令行（ps 可见）
+    command: sh -c 'exec redis-server --requirepass "$$REDIS_PASSWORD" --maxmemory 256mb --maxmemory-policy allkeys-lru'
+    environment:
+      REDIS_PASSWORD: ${LITEWORKBENCH_REDIS_PASSWORD:?未设置 Redis 口令，请先执行 deploy/gen-secrets.sh}
     ports:
       - "6379:6379"
     healthcheck:
-      test: [ "CMD", "redis-cli", "-a", "admin_public", "ping" ]
+      test: [ "CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG" ]
       interval: 10s
       timeout: 3s
       retries: 3
@@ -58,8 +61,8 @@ services:
     restart: always
     command: server /data --console-address :9001
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadminpublic
+      MINIO_ROOT_USER: ${LITEWORKBENCH_STORAGE_ACCESS_KEY:?未设置对象存储账号，请先执行 deploy/gen-secrets.sh}
+      MINIO_ROOT_PASSWORD: ${LITEWORKBENCH_STORAGE_SECRET_KEY:?未设置对象存储口令，请先执行 deploy/gen-secrets.sh}
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -76,8 +79,8 @@ services:
     container_name: rabbitmq
     restart: always
     environment:
-      RABBITMQ_DEFAULT_USER: admin
-      RABBITMQ_DEFAULT_PASS: admin_public
+      RABBITMQ_DEFAULT_USER: ${LITEWORKBENCH_MQ_USERNAME:-admin}
+      RABBITMQ_DEFAULT_PASS: ${LITEWORKBENCH_MQ_PASSWORD:?未设置消息队列口令，请先执行 deploy/gen-secrets.sh}
     ports:
       - "5672:5672"
       - "15672:15672"

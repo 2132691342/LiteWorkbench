@@ -13,17 +13,11 @@ public class LoginUser implements Serializable {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    /** 用户 ID */
     private String userId;
-    /** 登录名 */
     private String username;
-    /** 显示名 */
     private String nickname;
-    /** 头像地址 */
     private String avatarUrl;
-    /** 角色码集合 */
     private List<String> roleCodes;
-    /** 权限标识集合 */
     private List<String> perms;
     /** 账号状态：normal / disabled，停用后拦截器直接拒绝，不依赖重新登录 */
     private String state;

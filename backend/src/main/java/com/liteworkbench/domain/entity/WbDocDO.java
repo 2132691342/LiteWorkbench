@@ -25,21 +25,17 @@ public class WbDocDO implements Serializable {
     private String docId;
     /** 归属用户 */
     private String userId;
-    /** 标题 */
     private String docTitle;
     /** 正文格式 markdown / rich / code */
     private String docType;
-    /** 分类 */
     private String category;
     /** 标签，逗号分隔 */
     private String tags;
-    /** 摘要 */
     private String summary;
     /** 正文原文 */
     private String content;
     /** 去标签纯文本，供索引与字数统计 */
     private String contentText;
-    /** 字数 */
     private Integer wordCount;
     /** 当前版本号，每次保存 +1 */
     private Integer versionNo;
@@ -53,6 +49,5 @@ public class WbDocDO implements Serializable {
     private LocalDateTime updatedAt;
     /** 逻辑删除 */
     private Boolean deleted;
-    /** 备注 */
     private String remark;
 }

@@ -314,7 +314,6 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4 items-start">
-      <!-- 左：知识库列表 -->
       <LwPageState :loading="kbLoading" :error="kbError" :empty="!kbList.length" @retry="loadKbs">
         <div class="flex flex-col gap-2">
           <div
@@ -352,7 +351,6 @@ onBeforeUnmount(() => {
         </div>
       </LwPageState>
 
-      <!-- 右：文档 + 检索 -->
       <div class="flex flex-col gap-4 min-w-0">
         <LwCard :title="selectedKb ? `${t('kb.docs')} · ${selectedKb.kbName}` : t('kb.docs')">
           <template #actions>
@@ -491,7 +489,6 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <!-- 新建 / 编辑知识库 -->
     <el-dialog v-model="kbDialogVisible" :title="kbForm.kbId ? t('kb.updateTitle') : t('kb.createTitle')" width="520">
       <el-form :model="kbForm" label-width="90">
         <el-form-item :label="t('kb.kbName')" required>

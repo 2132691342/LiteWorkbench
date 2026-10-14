@@ -42,7 +42,6 @@ public class ProviderController {
         return R.ok(providerService.presets());
     }
 
-    /** 新建 */
     @SaCheckPermission(PermConst.WB_PROVIDER_CREATE)
     @Idempotent(prefix = "provider:create")
     @PostMapping("/create")
@@ -50,7 +49,6 @@ public class ProviderController {
         return R.ok(providerService.create(req, LoginContext.userId()));
     }
 
-    /** 更新 */
     @SaCheckPermission(PermConst.WB_PROVIDER_UPDATE)
     @Idempotent(prefix = "provider:update")
     @PostMapping("/update")
@@ -59,7 +57,6 @@ public class ProviderController {
         return R.ok();
     }
 
-    /** 删除 */
     @SaCheckPermission(PermConst.WB_PROVIDER_DELETE)
     @Idempotent(prefix = "provider:delete")
     @PostMapping("/delete/{providerId}")
@@ -68,7 +65,6 @@ public class ProviderController {
         return R.ok();
     }
 
-    /** 连通性测试 */
     @SaCheckPermission(PermConst.WB_PROVIDER_UPDATE)
     @Idempotent(prefix = "provider:test")
     @PostMapping("/test/{providerId}")

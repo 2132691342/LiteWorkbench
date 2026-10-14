@@ -247,7 +247,6 @@ onMounted(load)
       </LwPageState>
     </LwCard>
 
-    <!-- 新建 / 编辑 -->
     <el-dialog v-model="dialog" :title="editingId ? t('common.edit') : t('prompt.newPrompt')" width="640px">
       <div class="flex flex-col gap-4">
         <div class="flex flex-col gap-1.5">
@@ -283,7 +282,6 @@ onMounted(load)
       </template>
     </el-dialog>
 
-    <!-- 变量渲染 -->
     <el-dialog v-model="renderDialog" :title="t('prompt.render')" width="640px">
       <div class="flex flex-col gap-4">
         <div class="lw-label">{{ t('prompt.fillVariables') }}</div>

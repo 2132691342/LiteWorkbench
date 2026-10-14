@@ -8,7 +8,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "liteworkbench.kb")
 public class KbProperties {
 
-    /** 分块参数 */
     private Chunk chunk = new Chunk();
 
     @Data

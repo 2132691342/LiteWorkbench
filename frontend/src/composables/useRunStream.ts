@@ -7,7 +7,6 @@ export function useRunStream() {
   const active = ref(false)
   let stop: ((reason?: string) => void) | null = null
 
-  /** 发起流式对话，终态统一收敛为 active=false */
   function start(body: ChatStreamREQ, handlers: RunStreamHandlers): void {
     active.value = true
     stop = openRunStream(body, {

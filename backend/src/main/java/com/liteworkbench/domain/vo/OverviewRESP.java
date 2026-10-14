@@ -14,15 +14,11 @@ public class OverviewRESP implements Serializable {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    /** 会话总数 */
     private Long sessionCount;
-    /** 运行总数 */
     private Long runCount;
     /** 成功运行数，成功率用 */
     private Long successRunCount;
-    /** 今日运行数 */
     private Long todayRunCount;
-    /** 累计 token */
     private Long totalTokens;
     /** 近 7 天运行趋势，date -> count */
     private List<TrendPoint> runTrend;
@@ -40,7 +36,6 @@ public class OverviewRESP implements Serializable {
 
         /** 日期，yyyyMMdd */
         private String date;
-        /** 数值 */
         private Long value;
 
         public TrendPoint() {

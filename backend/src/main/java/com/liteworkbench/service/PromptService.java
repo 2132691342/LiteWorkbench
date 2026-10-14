@@ -49,7 +49,6 @@ public class PromptService {
         return toVO(getVisible(promptId));
     }
 
-    /** 新建模板 */
     public String create(PromptREQ req) {
         String userId = LoginContext.userId();
         requireUniqueTitle(userId, req.getPromptTitle(), null);
@@ -156,7 +155,6 @@ public class PromptService {
         return prompt;
     }
 
-    /** 用户内标题唯一 */
     private void requireUniqueTitle(String userId, String promptTitle, String excludeId) {
         if (promptMapper.countByTitle(userId, promptTitle, excludeId) > 0) {
             throw new BizException(ErrorCodeEnum.PROMPT_TITLE_CONFLICT, promptTitle);

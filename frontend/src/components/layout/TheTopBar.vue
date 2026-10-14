@@ -30,12 +30,10 @@ const roleLabel = computed(() => {
   return t('app.roleUser')
 })
 
-/** 中英切换 */
 function toggleLocale(): void {
   switchLocale(appStore.locale === 'zh-CN' ? 'en-US' : 'zh-CN')
 }
 
-/** 退出前二次确认，避免误触 */
 async function handleLogout(): Promise<void> {
   await ElMessageBox.confirm(t('app.logoutConfirm'), t('app.logout'), {
     confirmButtonText: t('common.confirm'),
@@ -46,7 +44,6 @@ async function handleLogout(): Promise<void> {
   router.push('/login')
 }
 
-/** 用户下拉命令 */
 function handleCommand(command: string): void {
   if (command === 'password') {
     passwordVisible.value = true

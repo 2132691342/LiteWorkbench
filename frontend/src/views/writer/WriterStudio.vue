@@ -44,7 +44,7 @@ const saving = ref(false)
 const opening = ref(false)
 const mode = ref<'edit' | 'preview'>('edit')
 
-/** 编辑 / 预览切换：离开编辑态时同步编辑器内容 */
+/** 切到预览前先把富文本编辑器内容回写，避免渲染滞后一帧 */
 function switchMode(next: string | number): void {
   const target = next === 'preview' ? 'preview' : 'edit'
   if (target === 'preview' && isRich.value) {
@@ -350,7 +350,6 @@ void loadKbOptions()
     </div>
 
     <div class="grid grid-cols-1 xl:grid-cols-[260px_minmax(0,1fr)_320px] gap-4">
-      <!-- 文档列表 -->
       <LwCard class="p-4 flex flex-col gap-3 max-h-[calc(100vh-220px)] overflow-auto">
         <div class="lw-label">{{ t('writer.docList') }}</div>
         <LwPageState :loading="loading" :error="error" :skeleton-rows="5" @retry="load">
@@ -387,7 +386,6 @@ void loadKbOptions()
         </LwPageState>
       </LwCard>
 
-      <!-- 编辑器 -->
       <LwCard class="p-5 flex flex-col gap-4 min-h-[560px]">
         <template v-if="current">
           <div class="flex flex-wrap items-center gap-3">
@@ -425,7 +423,6 @@ void loadKbOptions()
             <input v-model="tags" class="lw-input" :placeholder="t('writer.tagsPlaceholder')" @input="onContentInput" />
           </div>
 
-          <!-- 富文本模式 -->
           <div v-if="isRich && mode === 'edit'" class="flex-1 flex flex-col gap-2 min-h-96">
             <Toolbar :editor="editorRef" mode="default" class="border border-lw-border rounded-control" />
             <Editor
@@ -438,7 +435,6 @@ void loadKbOptions()
             />
           </div>
 
-          <!-- Markdown / 代码模式 -->
           <textarea
             v-else-if="mode === 'edit'"
             id="doc-editor"
@@ -448,7 +444,6 @@ void loadKbOptions()
             @input="onContentInput"
           />
 
-          <!-- 预览 -->
           <div v-else class="flex-1 min-h-96 overflow-auto pr-1">
             <LwMarkdown v-if="docType === 'markdown'" :content="content" />
             <div v-else-if="docType === 'rich'" class="lw-md" v-html="content"></div>
@@ -467,7 +462,6 @@ void loadKbOptions()
         </LwEmpty>
       </LwCard>
 
-      <!-- AI 辅助 -->
       <LwCard class="p-5 flex flex-col gap-4">
         <div class="flex items-center gap-2 pb-2 border-b border-lw-border">
           <el-icon class="text-lw-secondary"><MagicStick /></el-icon>
@@ -538,7 +532,6 @@ void loadKbOptions()
       </LwCard>
     </div>
 
-    <!-- 版本历史 -->
     <el-drawer v-model="versionDrawer" :title="t('writer.versions')" size="420px">
       <LwPageState :loading="versionLoading" :skeleton-rows="4">
         <LwEmpty v-if="!versions.length" :description="t('writer.emptyResult')" />

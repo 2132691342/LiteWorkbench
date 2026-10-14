@@ -1,6 +1,7 @@
 package com.liteworkbench.agent;
 
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONUtil;
 import com.liteworkbench.agent.event.AgentEvent;
 import com.liteworkbench.domain.constant.EventTypeEnum;
 import com.liteworkbench.domain.dto.RunEventDTO;
@@ -60,6 +61,11 @@ public class AgentEventAdapter {
                 payload.put("outputTokens", Objects.isNull(event.getOutputTokens()) ? 0L : event.getOutputTokens());
                 payload.put("durationMs", Objects.isNull(event.getDurationMs()) ? 0L : event.getDurationMs());
             }
+            case PLAN_UPDATED -> {
+                blockType = "plan";
+                payload.put("steps", JSONUtil.toList(JSONUtil.parseArray(event.getPlanJson()),
+                        Map.class));
+            }
             case AGENT_RESULT -> {
                 blockType = "text";
                 payload.put("text", StrUtil.nullToEmpty(event.getMessage()));
@@ -88,6 +94,7 @@ public class AgentEventAdapter {
             case TOOL_CALL_START, TOOL_CALL_END -> EventTypeEnum.TOOL_CALL;
             case TOOL_RESULT -> EventTypeEnum.TOOL_RESULT;
             case MODEL_CALL_START, MODEL_CALL_END -> EventTypeEnum.MODEL_CALL;
+            case PLAN_UPDATED -> EventTypeEnum.PLAN_UPDATED;
             case AGENT_RESULT -> EventTypeEnum.RUN_RESULT;
             case EXCEED_MAX_ITERS -> EventTypeEnum.RUN_EXCEED;
             case AGENT_END -> EventTypeEnum.RUN_END;

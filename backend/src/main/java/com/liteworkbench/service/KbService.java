@@ -110,7 +110,6 @@ public class KbService {
         kbMapper.updateCounts(kbId, kbDocMapper.countByKb(kbId), kbDocMapper.sumChunkCount(kbId));
     }
 
-    /** 用户内知识库名唯一 */
     private void requireUniqueName(String userId, String kbName, String excludeId) {
         if (kbMapper.countByName(userId, kbName, excludeId) > 0) {
             throw new BizException(ErrorCodeEnum.KB_NAME_CONFLICT, kbName);

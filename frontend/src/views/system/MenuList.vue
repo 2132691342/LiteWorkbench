@@ -39,7 +39,6 @@ const form = reactive<MenuREQ>({
   visible: true,
 })
 
-/** 拉取全量菜单树 */
 async function load(): Promise<void> {
   loading.value = true
   error.value = ''
@@ -68,7 +67,6 @@ function openDialog(menu?: MenuVO, parent?: MenuVO): void {
   dialogVisible.value = true
 }
 
-/** 保存菜单 */
 async function submitDialog(): Promise<void> {
   dialogLoading.value = true
   try {
@@ -131,7 +129,7 @@ onMounted(load)
       <LwEmpty v-else-if="!tree.length" />
       <el-table v-else :data="tree" row-key="menuId" default-expand-all style="width: 100%">
         <el-table-column :label="t('system.menu.menuName')" min-width="200">
-          <template #default="{ row }">{{ t(row.menuName) }}</template>
+          <template #default="{ row }">{{ menuLabel(row.menuName) }}</template>
         </el-table-column>
         <el-table-column :label="t('system.menu.menuType')" width="110">
           <template #default="{ row }">

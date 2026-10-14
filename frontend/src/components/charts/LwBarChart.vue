@@ -6,17 +6,11 @@ import { chartAxis, chartTooltip, token } from '@/utils/theme'
 /** 柱状图：主色圆柱圆角 6，辅助色可切第二序列色；点击柱子抛出桶下标，用于时间范围钻取 */
 const props = withDefaults(
   defineProps<{
-    /** x 轴类目 */
     categories: string[]
-    /** 序列数据 */
     values: number[]
-    /** 序列名 */
     name?: string
-    /** 画布高度 */
     height?: number
-    /** 使用辅助色 */
     secondary?: boolean
-    /** 是否响应柱子点击 */
     clickable?: boolean
   }>(),
   { name: 'value', height: 300, secondary: false, clickable: false },
@@ -27,7 +21,6 @@ const emit = defineEmits<{ (e: 'bucket-click', index: number): void }>()
 const container = ref<HTMLDivElement | null>(null)
 let chart: echarts.ECharts | null = null
 
-/** 点击穿透：命中柱子时按类目下标抛出 */
 function bindClick(): void {
   chart?.off('click')
   if (!props.clickable) return

@@ -27,14 +27,12 @@ public class SkillController {
 
     private final SkillService skillService;
 
-    /** 分页查询 */
     @SaCheckPermission(PermConst.WB_SKILL_LIST)
     @GetMapping("/page")
     public R<PageResult<SkillVO>> page(PageREQ req) {
         return R.ok(skillService.page(req, LoginContext.userId()));
     }
 
-    /** 新建 */
     @SaCheckPermission(PermConst.WB_SKILL_CREATE)
     @Idempotent(prefix = "skill:create")
     @PostMapping("/create")
@@ -51,7 +49,6 @@ public class SkillController {
         return R.ok();
     }
 
-    /** 删除 */
     @SaCheckPermission(PermConst.WB_SKILL_DELETE)
     @Idempotent(prefix = "skill:delete")
     @PostMapping("/delete/{skillId}")

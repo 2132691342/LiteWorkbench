@@ -1,0 +1,18 @@
+# 换行符策略：仓库内一律 LF。
+# Windows 工作区若开 core.autocrlf=true 会检出 CRLF，提交时自动归一；此处显式声明，
+# 避免在 autocrlf=false 的机器上把 CRLF 的 .sh 提交进来——那会让部署脚本在 Linux 上直接报 syntax error。
+* text=auto eol=lf
+
+# 部署脚本与编排必须 LF，否则目标主机 bash 解析失败
+*.sh text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+Dockerfile text eol=lf
+
+# 二进制与锁文件不做换行符转换
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+package-lock.json -text

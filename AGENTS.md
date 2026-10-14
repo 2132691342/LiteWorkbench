@@ -244,6 +244,7 @@ public R<String> create(@RequestBody @Valid UserREQ req) { ... }
 | `DOC_` | 创作文档 |
 | `DOCV_` | 创作文档版本 |
 | `PRPT_` | 提示词 |
+| `MEMO_` | 长期记忆 |
 | `LOGD_` | 日志文档（Manticore） |
 
 ## 7. 字段规范
@@ -350,29 +351,40 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 | 对齐 | 同行控件等高（默认档 h-10），筛选区不混排尺寸；表单标签统一左对齐同宽 |
 | 错误页 | `403` / `404` / `500` 三个独立页面；无权限访问业务路由跳 `/403` 并说明所需权限 |
 
-## 13. 注释规范
+## 13. 代码风格与注释
 
-只写"是什么"和"边界"，"为什么"一律归文档。注释越短越好：**文件头一行、方法一行签名说明、字段有歧义才有注释**。
+格式统一：Java 4 空格缩进、行长 120；TypeScript 2 空格、单引号、行尾不写分号。提交信息 `feat(scope): 描述`，scope 取模块名。
+
+注释只写"是什么"和"边界"，"为什么"一律归文档。注释越短越好：**文件头一行、方法一行签名说明、字段有歧义才有注释**。
 
 | 位置 | 要求 |
 |---|---|
-| 文件头 | 一行说明文件职责 |
-| 方法 | 一行签名说明，禁止多行 `@param` / `@return` 块 |
-| 字段 | 有歧义才有注释 |
-| 行内 | 禁止连续注释块，需要解释时压成一行 |
+| 文件头 | 一行说明文件职责，禁止多行设计说明与背景叙述 |
+| 方法 | 一行签名说明，禁止多行 `@param` / `@return` 块；getter / setter / 无参构造不写 |
+| 字段 | 有歧义才有注释；`entity` / `dto` / `vo` 的业务字段必须有，同名字段（`userId`）不必 |
+| 常量 | 保留一行用途说明，**单位与阈值必须写**（秒 / 毫秒 / 字符数 / 条数） |
+| 行内 | 禁止连续注释块与装饰性分隔线，需要解释时压成一行 |
 | 设计理由 | 不写进代码，写进 `specs/` 对应文档 |
+
+以下四类注释即使费字也**必须保留**，只允许压缩措辞：
+
+| 类别 | 例子 |
+|---|---|
+| 协议与外部约束 | PG 不做隐式转换，写入 `jsonb` 必须 `CAST` |
+| 并发与时序前提 | `settled` 置位后 `push` 不再放行；先冲刷攒批再置终态 |
+| 事务与安全边界 | 必须与主记录同事务写入；`user_id` 由服务端强制注入 |
+| 单位与量纲 | 超时单位秒、节流单位毫秒、上限为字符数 |
 
 ## 14. 测试约定
 
-只保留覆盖长链路、复杂场景与跨模块契约的测试；简单断言（ID 格式、字符串清洗、空参校验、SSE 帧文本）、纯算法与薄 mock 单元测试一律不写。当前共 3 个文件 6 个用例，随 `mvn test` 一次跑完。
+只保留覆盖长链路、复杂场景与跨模块契约的测试；简单断言（ID 格式、字符串清洗、空参校验、SSE 帧文本）、纯算法与薄 mock 单元测试一律不写。当前共 2 个文件 5 个用例，随 `mvn test` 一次跑完（约 1 秒），全部不依赖中间件与 Spring 容器。
 
 | 文件 | 用例 | 覆盖 |
 |---|---|---|
 | `service/RunEventPipelineTest` | 2 | 事件长链路：一次完整运行的归一与合帧（增量合并边界、类型切换保序、工具起止与结果、用量入账）＋ 边界路径（超长裁剪、失败工具标记、异常事件） |
-| `config/PermissionContractTest` | 1 | 权限契约：api 包控制器注解与 `PermConst` 声明的权限点全部存在于菜单种子（自动扫描 api 包，无需登记清单） |
-| `config/WebRouteContractTest` | 3 | 路由契约：接口兜底与前端深链兜底的映射顺序与命中范围（未命中 `/api` 回 404 信封、深链回落 index.html、带点静态资源不被吞、两者模式重叠故顺序是唯一保障） |
+| `config/ContractTest` | 3 | 三处静态契约：权限点在三处声明的一致性（扫 api 包注解 + `PermConst` + 菜单种子）、Mapper XML 与接口的绑定与解析、路由兜底的顺序与命中范围（未命中 `/api` 回 404 信封、深链回落 `index.html`、带点静态资源不被吞） |
 
-用例名用中文直述业务断言；一个用例串起一条完整链路，一个文件只答一个契约问题；前端不写快照测试与纯渲染测试。
+用例名用中文直述业务断言；一个用例串起一条完整链路或一个契约；契约测试集中在 `config/ContractTest`，不按契约拆多个文件。资源扫描一律走 `classpath*:` 模式，禁止用目录列举（打包成 JAR 后失效）；前端不写快照测试与纯渲染测试。
 
 ## 15. 依赖使用约定
 
@@ -380,13 +392,13 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 
 ### 15.1 Agent 内核与模型出站
 
-Agent 内核全部写在 `agent` 包内，不引任何 Agent 框架。
+内核全部自研并写在 `agent` 包内，无第三方 Agent 框架依赖。
 
 | 约定 | 原因 |
 |---|---|
 | 配置层复用 hutool-ai 的 `AIConfig` 契约：`ProviderAIConfig` 承载 `apiUrl` / `apiKey` / `model` / 连接与读超时 / 动态参数 | 一处配置，内核与同步路径共用 |
-| 同步文本路径（`ModelCaller`）优先走 hutool-ai 的原生服务，失败或空文本再回退自研客户端 | 复用现成实现，同时保证异常路径可用 |
-| 供应方预设与 hutool-ai 对齐：`openai` / `deepseek` / `doubao` / `grok` 走 OpenAI 兼容通道，`ollama` 走本地通道；默认端点与默认模型取 hutool-ai `XxxConfig` 的常量，不自行发明；hutool-ai 未支持的协议（如 Anthropic）一律不做 | 依赖有什么用什么，前后端协议集合一处定义 |
+| 同步文本路径（`ModelCaller`）优先走 hutool-ai 的原生服务，失败或空文本再回退 `agent/model` 的客户端 | 复用现成实现，同时保证异常路径可用 |
+| 协议集合固定为五家：`openai` / `deepseek` / `doubao` / `grok` 走 OpenAI 兼容通道，`ollama` 走本地通道；默认端点与默认模型取 hutool-ai `XxxConfig` 的常量，不自行发明；未列入的协议一律不做 | 前后端协议集合一处定义，新增协议必须有人维护请求体与增量解析 |
 | 流式出站与工具调用自研：`agent/model` 的 `OpenAiCompatClient` / `OllamaClient` 共用 `HttpModelSupport` | 需要逐行剥协议前缀、累积工具调用增量、按 `usage` 入账，并且取消必须立即关闭连接 |
 | 工具调用请求体、消息模型、`usage` 与 `finish_reason` 解析全部自研 | 依赖只返回裸响应体，没有对应的 POJO |
 
@@ -426,3 +438,120 @@ Agent 内核全部写在 `agent` 包内，不引任何 Agent 框架。
 | `-XX:+UseCompressedOops -XX:+UseCompressedClassPointers` | — | 指针与对象头压缩，省内存 |
 | `-Xss512k` | — | 线程栈从默认 1m 降到 512k，支撑更多 SSE 线程 |
 | `-XX:+ExitOnOutOfMemoryError` | — | OOM 直接退出，交给编排重启，不留半死状态 |
+
+## 17. 并发与线程池治理
+
+单个容器跑全部异步能力，**禁止在业务类里裸 `Executors.newXxx()`**。所有线程资源由 `config/ExecutorConfig` 一处声明，按用途分池并各自命名，业务只做构造注入。
+
+| 池用途 | Bean 方法 | 规模策略 | 拒绝策略 | 理由 |
+|---|---|---|---|---|
+| Agent 运行编排 | `lwRunExecutor` | CPU 核数 × 2，队列 256 | `CallerRunsPolicy` | 提交方降速而不是丢任务；运行丢任务是直接可见的业务损失 |
+| 工具执行 | `lwToolExecutor` | CPU 核数 × 4，队列 512 | `AbortPolicy` + 结构化失败 | 工具超量说明模型在打转，快速失败让内核收敛 |
+| 事件扇出与日志投递 | `lwEventExecutor` | 固定 4，队列 2048 | 丢弃 + WARN 计数 | 观测链路不得反压业务链路；丢弃必须留下计数便于发现 |
+| 知识库解析入库 | `lwIndexExecutor` | CPU 核数，队列 128 | `CallerRunsPolicy` | 大文档解析慢，宁可使请求线程变慢也不丢用户以为已上传的文档 |
+| 心跳、超时巡检、日志清理 | `lwScheduleExecutor` | 固定 2 | `AbortPolicy` | 只跑短周期内部任务 |
+
+规则：
+
+- 统一用 Hutool `ExecutorBuilder` / `ThreadFactoryBuilder` 构造，线程名前缀 `lw-<用途>-`，排障时线程栈可读。
+- 所有池必须注册优雅关闭（`DisposableBean` 或 `@PreDestroy`），按 `shutdown → awaitTermination(10s) → shutdownNow` 三段式收尾；容器停机不留悬挂 SSE 连接与子进程。
+- **阻塞 IO（PG / Manticore / MinIO / RabbitMQ）不得占用运行编排池**；`@Async` 必须显式指定 `value = "lwXxxExecutor"`，不带参的 `@Async` 跑在 Spring 默认池上，视为违规。
+- 有界一切：队列必须给容量，禁止 `LinkedBlockingQueue` 无参构造（无界队列在 2GB 容器里等价于延迟 OOM）。
+- 信号量在**提交任务前**获取，不在任务线程内获取；任务内获取会让并发度真实上界等于调用数。
+- `LoginContext` 基于 `ThreadLocal`，跨池必须显式把 `userId` 作为首个业务参数传递（同 §3.1），禁止依赖上下文传播。
+
+## 18. 不变量表
+
+以下每条都是「违反即出现难以定位故障」的约束，修改相关代码前先读，改完自问是否违反。
+
+| 不变量 | 锁死原因 |
+|---|---|
+| 同一会话的事件出口必须串行化，且按会话分道而非全局一把锁 | 并行工具在各自线程 emit，并发改同一份累计位点会让 assistant 文本丢字或重影；全局锁则让一个慢订阅者堵住所有会话 |
+| 「分配 seq」与「投递 SSE」必须在同一次持锁内完成 | 分两步时 seq 大的帧可能先到，前端按 seq 去重会把先到的新帧当旧帧丢掉，表现为「消息少了后半段」 |
+| toolResult 严格按 assistant 的 tool_calls 顺序回填 | OpenAI 兼容协议靠下标配对，错位会被上游判 400，整轮作废 |
+| 工具实现必须捕获 `Throwable` 并转成结构化失败结果 | 单个工具抛异常会顺着 CompletableFuture 吞掉整次运行，用户只看到「没有输出」且无堆栈 |
+| token 累积一律 `StringBuilder`，禁止循环内字符串 `+=` | 每 token 复制整段正文，长回答末尾退化为 O(n²)，表现为「越往后越卡」 |
+| 中间帧只带增量，累积正文只在收尾帧给全文；丢帧检测靠恒定大小的水位快照，200ms 节流 | 每帧附带完整累积正文会让长回答退化为每帧 O(n)，SSE 带宽与序列化双双爆炸；水位快照只带 seq 与长度，代价恒定 |
+| 终端事件（`run.completed` / `run.failed` / `run.aborted`）不允许静默丢弃 | 丢中心事件会让前端永远停在「运行中」，且无任何报错可追；缓冲区满应先挤增量帧，仍放不下则断连并发 gap 帧让前端拉快照对账 |
+| Python 脚本必须落临时文件再把文件名传给解释器 | 拼 `-c "..."` 在代码含换行或中文路径时必炸，且 Windows 下还会被 shell 引号规则改写 |
+| 取消或超时必须杀进程树，不能只杀直接子进程 | Python 起的 multiprocessing 子进程会变孤儿持续吃 CPU，容器里没有 reaper 回收 |
+| 子进程 PATH 首位必须是内置解释器目录，并强制 UTF-8 | 服务器上装着另一个 Python 时 `pip install` 会装到系统环境，重启后内置运行时 ModuleNotFound；不强制编码时中文输出乱码且不可复现 |
+| 工具输出必须 sanitize 后入库与下发 | 一个 ANSI 转义序列就能打崩整条 SSE 帧或 JSON 序列化，且只在有色输出时出现，极难复现 |
+| 同一工具同一参数在一次 run 内累计第 4 次直接判失败 | 模型卡在同一调用上打转比撞轮数上限更难排查；计数不衰减，被策略拒绝的调用同样计一次，否则一张审批卡能无限重发 |
+| 失败必须回滚本轮追加的上下文 | 先记下 `contextSize`，异常时弹回到该位置；不回滚会让半截消息污染下一轮，模型看到不完整的工具结果继续推理 |
+| 幂等键必须包含 userId | 只含参数摘要时，不同用户提交同样内容会互相排掉，表现为「别人点了我就失败」 |
+
+## 19. Agent 内核实现约定
+
+内核全部在 `agent` 包，不引任何 Agent 框架；同步文本路径复用 hutool-ai（见 §15.1），流式与编排自研。
+
+### 19.1 Session 与 Run 是二级粒度
+
+`Session`（长生命周期，承载上下文）与 `Run`（一次 turn：prompt → assistant 工作 → 结算）严格区分。一个 Session 产生多个 Run，Run 绝不替代 Session。用量、耗时、产物、诊断全部挂在 Run 上，Session 只负责上下文叠加与归属。
+
+| 表 | 承载 |
+|---|---|
+| `wb_session` | 标题、默认模型、归属用户、最后活跃时间 |
+| `wb_run` | `relation`（original / retry / recovery / rerun）、`parent_run_id`、`state`、用量、耗时、轮数、终态原因 |
+| `wb_event` | 归一后的事件流，带 `seq`，一次 Run 内单调递增 |
+
+没有 Run 这一层，「这一次回答花了多少 token、卡在第几轮」永远答不上来。
+
+### 19.2 事件协议
+
+事件分两层：内核侧 `AgentEvent` + `AgentEventType` 是**封闭枚举**，工作台侧 `RunEventDTO` + `EventTypeEnum` 是对外的**点分命名**（`run.*` / `text.*` / `thinking.*` / `tool.*` / `model.*` / `plan.*`）。
+
+- 内核类型不做 `default` 兜底：归一 switch 穷举全部类型，新增内核事件必须在适配器补分支，由编译器保证不漏。
+- 入口只有一处：内核对 `AgentEvent` 交给 `AgentEventAdapter` 适配成 `RunEventDTO` 并分配 `seq`。
+- **单一账本**：用量只在 `MODEL_CALL_END` 入账一次，Service 禁止手写 UPDATE 累加——两套管账必然对不齐。
+- 工具起止事件严格按下标分批发出（起 → 执行 → 止 → 结果），并发执行也不改变顺序，保证 assistant 的 `tool_calls` 与 tool 结果一一配对。
+- 事件出进程前必须是裁剪过的 DTO：禁止把实体、内部句柄或未声明字段直接丢进 `SseEmitter`。
+- 设计细节与完整事件表见 `specs/01-agent-core.md`。
+
+### 19.3 取消语义
+
+`abort` 与 `run.completed` 存在竞态，裁决规则固定为 **abort 赢**：已结算但未最终化的 Run 改写为 `aborted`。取消信号同时要：模型出站客户端立即关闭连接（`HttpModelSupport` 持有请求引用），工具子进程树立即 kill。
+
+### 19.4 工具契约
+
+工具走「POJO 实现类 + `@AgentTool` / `@AgentToolParam` 方法注解 + `ToolRegistry` 反射注册」，JSON Schema 由注册期反射生成，不自造 table-driven 清单——清单与实现会漂移。
+
+| 注解属性 | 语义 |
+|---|---|
+| `risk` | `safe` / `confirm` / `danger`：`confirm` 及以上在页面手工调用时必须显式确认，Agent 路径由平台级启停统一闸门 |
+| `parallelSafe` | 声明能否并发执行；批内任一为 false 则整批退化为串行，写类工具靠这条保证永不并发，无需额外锁 |
+| `emitsPlan` | 输出是结构化计划，内核据此额外产出一条 `plan.updated`，界面不必解析工具输出文本 |
+
+- 工具失败一律返回 `ERROR: ` 前缀的结构化文本而不是抛异常：模型能据此换路径，抛异常只会让整轮对话崩掉。
+- 输出统一过 `OutputSanitizer`（剥控制字符、**保尾**截断——异常栈与结论在最后一行），并受 `wb_tool.enabled` 闸门约束。
+- 重复调用护栏在 `AgentLoop`：同一（工具名 + 参数）在一次 run 内超限即返回结构化失败并提示换路径；计数不衰减。
+- 工具池满时返回结构化失败而不是阻塞：池满说明并发已经到顶，让模型换路径比排队更安全。
+
+### 19.5 规划器 / 长期记忆 / 子运行
+
+三项能力都按「内核只认端口，规则在 service」落地，`agent` 包不出现 mapper。
+
+| 能力 | 内核侧 | 规则归属 |
+|---|---|---|
+| 规划器 | `task_plan` 工具（`emitsPlan`）+ `PlanNormalizer` 解析行式清单 | 步数与单步长度上限在 `PlanConst`；计划以 `plan.updated` 覆盖式下发，界面不做增量合并 |
+| 长期记忆 | `memory_write` / `memory_search` 工具 + `MemoryPort` | 容量闸门、同 key 覆盖、权重淘汰、注入条数与字符上限全部在 `MemoryService` |
+| 子运行 | `task_delegate` 工具 + `SubRunPort` | `SubRunService` 落 `parent_run_id` + `relation=child`，同步等产出；中间帧不推送、收尾后一次性落库 |
+
+- 记忆注入放在系统提示**末尾**：越靠近本轮输入越容易被遵守；只取权重最高的少量，避免挤占上下文。
+- `task_delegate` 默认在 `wb_tool` 里 **disabled**：子运行会真实消耗 token，必须由管理员显式开启。
+- 子任务描述必须自带全部上下文——子运行看不到当前对话，这是能力边界不是实现缺陷。
+
+## 20. 内置 Python 运行时约定
+
+容器内唯一脚本运行时是 Python（`apk add python3`），不嵌发行包、不做 venv、不做多版本管理——确定性来自镜像本身。
+
+| 约定 | 理由 |
+|---|---|
+| 解释器探测四级回退：显式配置路径 → 数据目录内置解释器 `{data-dir}/runtime/python/bin/` → `PATH` 的 `python3` → `python` | 允许私有部署换路径，缺省情况开箱即用 |
+| 探测结果进程内缓存，命中走 volatile 读不取锁，首次探测用双检锁串行化 | 每次工具调用都探测一遍，会把「首次启动等一会」变成「每次调用都卡一下」 |
+| 脚本必须落地成临时文件，禁止拼 `-c "..."` | 见不变量表 |
+| 执行必须带超时控制 + `ProcessHandle.descendants()` 递归 kill + `waitFor` 收尾窗口 | 见不变量表进程树条目 |
+| 子进程环境必须把解释器所在目录置 `PATH` 首位并强制 UTF-8 | 脚本内 `pip install` 会装到系统环境，重启后内置运行时 ModuleNotFound |
+| 超时按结构化失败回报（含已有输出与超时原因），不中断整次运行 | 模型能据此缩短脚本或分批处理，而不是只知道「不能用」 |
+| 输出统一 UTF-8 解码 + `OutputSanitizer` 清洗 + 保尾截断（8000 字符） | 见不变量表 sanitize 条目 |
+| 不可用只告警不阻断启动，失败原因写清并在健康检查中单独暴露 | 没有 Python 不影响除该类工具外的全部能力，不该整机起不来 |

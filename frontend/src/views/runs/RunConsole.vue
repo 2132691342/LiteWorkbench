@@ -2,16 +2,19 @@
 import { computed, onBeforeUnmount, ref, shallowRef } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { runApi } from '@/api'
-import type { RunEvent, RunVO } from '@/types/api'
+import { runApi, traceApi } from '@/api'
+import type { RunEvent, RunVO, TraceRunVO, TraceSpanVO, UsageStatsVO } from '@/types/api'
 import LwButton from '@/components/ui/LwButton.vue'
 import LwMarkdown from '@/components/ui/LwMarkdown.vue'
 import LwPageState from '@/components/ui/LwPageState.vue'
 import LwSegmented from '@/components/ui/LwSegmented.vue'
 import LwTag from '@/components/ui/LwTag.vue'
+import RunTree from '@/components/runs/RunTree.vue'
+import TraceWaterfall from '@/components/runs/TraceWaterfall.vue'
+import UsagePanel from '@/components/runs/UsagePanel.vue'
 import { formatTime } from '@/utils/const'
 
-/** 运行记录：左侧运行列表（状态/时间过滤 + 分页），右侧详情（时间线 / 工具链 / 用量 + 回放） */
+/** 运行记录：左侧运行列表（状态/时间过滤 + 分页），右侧详情（时间线 / 工具链 / 链路 / Run 树 / 用量 + 回放） */
 
 interface ToolBlock {
   name: string
@@ -46,7 +49,15 @@ const events = shallowRef<RunEvent[]>([])
 const loadingDetail = ref(false)
 const detailError = ref('')
 const aborting = ref(false)
-const view = ref<'timeline' | 'tools' | 'usage'>('timeline')
+const view = ref<'timeline' | 'tools' | 'trace' | 'tree' | 'usage'>('timeline')
+
+const spans = shallowRef<TraceSpanVO[]>([])
+const tree = shallowRef<TraceRunVO[]>([])
+const loadingTrace = ref(false)
+const traceError = ref('')
+const usageStats = ref<UsageStatsVO | null>(null)
+const loadingUsage = ref(false)
+const usageDays = ref('30')
 
 const replaying = ref(false)
 const replayCursor = ref(0)
@@ -64,7 +75,15 @@ const stateOptions = computed(() => [
 const viewOptions = computed(() => [
   { value: 'timeline', label: t('runs.viewTimeline') },
   { value: 'tools', label: t('runs.viewTools') },
+  { value: 'trace', label: t('runs.viewTrace') },
+  { value: 'tree', label: t('runs.viewTree') },
   { value: 'usage', label: t('runs.viewUsage') },
+])
+
+const usageRangeOptions = computed(() => [
+  { value: '7', label: t('trace.range7') },
+  { value: '30', label: t('trace.range30') },
+  { value: '90', label: t('trace.range90') },
 ])
 
 const speedOptions = [
@@ -144,11 +163,9 @@ const blocks = computed<TimelineBlock[]>(() => {
   return result
 })
 
-/** 回放中按游标截断，实时态全量 */
 const visibleBlocks = computed(() =>
   replaying.value ? blocks.value.slice(0, replayCursor.value) : blocks.value)
 
-/** 工具链视图：全部工具块按序 */
 const toolBlocks = computed(() =>
   blocks.value.filter((block) => block.kind === 'tool').map((block) => block.tool as ToolBlock))
 
@@ -249,15 +266,66 @@ async function selectRun(runId: string): Promise<void> {
   detailError.value = ''
   detail.value = null
   events.value = []
+  spans.value = []
+  tree.value = []
+  traceError.value = ''
   try {
-    const [detailVO, eventList] = await Promise.all([runApi.detail(runId), runApi.events(runId)])
+    const [detailVO, eventList, spanList] = await Promise.all([
+      runApi.detail(runId),
+      runApi.events(runId),
+      traceApi.spans(runId),
+    ])
     detail.value = detailVO
     events.value = eventList
+    spans.value = spanList
     view.value = 'timeline'
+    // Run 树按会话聚合，拿到 sessionId 后再补一次，失败不影响详情浏览
+    void loadTree(detailVO.sessionId)
   } catch (error) {
     detailError.value = (error as Error).message
   } finally {
     loadingDetail.value = false
+  }
+}
+
+/** 会话内的 Run 树，与详情并行加载，失败只在链路页内联提示 */
+async function loadTree(sessionId?: string): Promise<void> {
+  if (!sessionId) return
+  loadingTrace.value = true
+  traceError.value = ''
+  try {
+    tree.value = await traceApi.tree(sessionId)
+  } catch (error) {
+    traceError.value = (error as Error).message
+  } finally {
+    loadingTrace.value = false
+  }
+}
+
+async function loadUsage(): Promise<void> {
+  loadingUsage.value = true
+  try {
+    usageStats.value = await traceApi.usage({ days: Number(usageDays.value) })
+  } catch {
+    usageStats.value = null
+  } finally {
+    loadingUsage.value = false
+  }
+}
+
+function changeUsageDays(value: string): void {
+  usageDays.value = value
+  void loadUsage()
+}
+
+/** 视图切换：链路 / 用量页首次进入时按需补拉 */
+function changeView(next: string): void {
+  view.value = next as typeof view.value
+  if (next === 'tree' && tree.value.length === 0) {
+    void loadTree(detail.value?.sessionId)
+  }
+  if (next === 'usage' && usageStats.value === null) {
+    void loadUsage()
   }
 }
 
@@ -339,7 +407,6 @@ void loadRuns()
     </div>
 
     <div class="flex flex-col lg:flex-row gap-4 items-start">
-      <!-- 左列：过滤 + 运行列表 -->
       <div class="lw-card w-full lg:w-80 shrink-0 flex flex-col gap-3">
         <LwSegmented :model-value="stateFilter" :options="stateOptions" equal @update:model-value="changeFilter" />
 
@@ -387,7 +454,6 @@ void loadRuns()
         </div>
       </div>
 
-      <!-- 右列：运行详情 -->
       <div class="flex-1 flex flex-col gap-4 min-w-0 w-full">
         <LwPageState
           :loading="loadingDetail"
@@ -398,7 +464,6 @@ void loadRuns()
           @retry="reloadDetail"
         >
           <template v-if="detail">
-            <!-- 头部 -->
             <div class="lw-card flex flex-wrap items-center gap-3">
               <LwTag :tone="statusTone(detail.status)">{{ statusLabel(detail.status) }}</LwTag>
               <span class="text-sm font-bold" style="color: var(--lw-ink)">{{ detail.modelName || '-' }}</span>
@@ -417,7 +482,6 @@ void loadRuns()
               </div>
             </div>
 
-            <!-- 指标条 -->
             <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div class="lw-card flex flex-col gap-1 py-3">
                 <span class="text-xs" style="color: var(--lw-ink-muted)">{{ t('runs.metricDuration') }}</span>
@@ -437,10 +501,9 @@ void loadRuns()
               </div>
             </div>
 
-            <!-- 详情内容 -->
             <div class="lw-card flex flex-col gap-4">
               <div class="flex flex-wrap items-center justify-between gap-3">
-                <LwSegmented v-model="view" :options="viewOptions" />
+                <LwSegmented :model-value="view" :options="viewOptions" @update:model-value="changeView" />
                 <div v-if="view === 'timeline'" class="flex items-center gap-2">
                   <LwButton variant="ghost" @click="toggleReplay">
                     {{ replaying ? t('runs.replayPause') : t('runs.replayPlay') }}
@@ -515,7 +578,19 @@ void loadRuns()
                 </div>
               </template>
 
-              <!-- 用量 -->
+              <!-- 链路：瀑布图 -->
+              <template v-else-if="view === 'trace'">
+                <div v-if="traceError" class="text-sm" style="color: var(--lw-error-ink)">{{ traceError }}</div>
+                <TraceWaterfall :spans="spans" />
+              </template>
+
+              <!-- Run 树 -->
+              <template v-else-if="view === 'tree'">
+                <div v-if="traceError" class="text-sm" style="color: var(--lw-error-ink)">{{ traceError }}</div>
+                <RunTree :tree="tree" :active-run-id="detail.runId" @select="selectRun" />
+              </template>
+
+              <!-- 用量：本次运行账目 + 窗口内归因 -->
               <template v-else>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div class="lw-card flex flex-col gap-1">
@@ -534,6 +609,16 @@ void loadRuns()
                   </div>
                 </div>
                 <p class="text-xs leading-relaxed" style="color: var(--lw-ink-muted)">{{ detail.prompt }}</p>
+
+                <div class="flex items-center justify-between gap-3 pt-2">
+                  <span class="text-sm font-bold" style="color: var(--lw-ink)">{{ t('trace.attribution') }}</span>
+                  <LwSegmented
+                    :model-value="usageDays"
+                    :options="usageRangeOptions"
+                    @update:model-value="changeUsageDays"
+                  />
+                </div>
+                <UsagePanel :stats="usageStats" :loading="loadingUsage" />
               </template>
             </div>
           </template>

@@ -6,15 +6,11 @@ import LwSkeleton from './LwSkeleton.vue'
 /** 异步三态外壳：loading 骨架 / error 重试 / empty 空态，命中则接管内容；三态间淡入过渡 */
 withDefaults(
   defineProps<{
-    /** 加载中 */
     loading?: boolean
     /** 错误文案，非空即错误态 */
     error?: string
-    /** 是否空数据 */
     empty?: boolean
-    /** 骨架行数 */
     skeletonRows?: number
-    /** 空态说明 */
     emptyText?: string
   }>(),
   { loading: false, error: '', empty: false, skeletonRows: 4, emptyText: '' },

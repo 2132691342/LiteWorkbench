@@ -12,7 +12,6 @@ public class PublicKeyVO implements Serializable {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    /** 公钥标识 */
     private String keyId;
     /** 加密算法，前端据此选择实现 */
     private String algorithm;

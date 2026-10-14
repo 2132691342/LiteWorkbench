@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.liteworkbench.mapper.WbTraceMapper">
+
+    <!-- 平台级账号可跨用户看用量；userId 为空即全量，与日志检索的视角判定口径一致 -->
+    <sql id="Usage_Scope">
+        <where>
+            <if test="userId != null and userId != ''">
+                AND user_id = #{userId}
+            </if>
+            <if test="from != null and from > 0">
+                AND created_at &gt;= to_timestamp(#{from} / 1000.0)
+            </if>
+            <if test="to != null and to > 0">
+                AND created_at &lt; to_timestamp(#{to} / 1000.0)
+            </if>
+        </where>
+    </sql>
+
+    <select id="selectRunsBySession" resultType="com.liteworkbench.domain.entity.WbRunDO">
+        SELECT * FROM wb_run
+        WHERE session_id = #{sessionId} AND user_id = #{userId}
+        ORDER BY created_at ASC
+    </select>
+
+    <select id="selectEventCounts" resultType="java.util.Map">
+        SELECT run_id AS "runId", count(*) AS "eventCount"
+        FROM wb_event
+        WHERE session_id = #{sessionId}
+        GROUP BY run_id
+    </select>
+
+    <select id="selectUsageTotals" resultType="com.liteworkbench.domain.vo.UsageStatsVO$Totals">
+        SELECT count(*)                                  AS run_count,
+               coalesce(sum(input_tokens), 0)            AS input_tokens,
+               coalesce(sum(output_tokens), 0)           AS output_tokens,
+               coalesce(round(avg(duration_ms)), 0)      AS avg_duration_ms
+        FROM wb_run
+        <include refid="Usage_Scope"/>
+    </select>
+
+    <select id="selectUsageDaily" resultType="com.liteworkbench.domain.vo.UsageStatsVO$DailyPoint">
+        SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD')          AS day,
+               count(*)                                                       AS run_count,
+               coalesce(sum(input_tokens), 0)                                 AS input_tokens,
+               coalesce(sum(output_tokens), 0)                                AS output_tokens,
+               round(coalesce(avg(CASE WHEN state = 'success' THEN 100.0 ELSE 0 END), 0), 1)
+                                                                              AS success_rate
+        FROM wb_run
+        <include refid="Usage_Scope"/>
+        GROUP BY date_trunc('day', created_at)
+        ORDER BY date_trunc('day', created_at) ASC
+    </select>
+
+    <select id="selectUsageByModel" resultType="com.liteworkbench.domain.vo.UsageStatsVO$ModelSlice">
+        <!-- 模型名可能为空：返回空串，展示文案由前端 i18n 决定，SQL 不产出用户可见文案 -->
+        SELECT coalesce(model_name, '')                    AS model_name,
+               count(*)                                     AS run_count,
+               coalesce(sum(input_tokens), 0)               AS input_tokens,
+               coalesce(sum(output_tokens), 0)              AS output_tokens
+        FROM wb_run
+        <include refid="Usage_Scope"/>
+        GROUP BY coalesce(model_name, '')
+        ORDER BY coalesce(sum(input_tokens), 0) + coalesce(sum(output_tokens), 0) DESC
+    </select>
+
+    <select id="selectUsageByState" resultType="com.liteworkbench.domain.vo.UsageStatsVO$StateSlice">
+        SELECT state            AS state,
+               count(*)         AS run_count
+        FROM wb_run
+        <include refid="Usage_Scope"/>
+        GROUP BY state
+        ORDER BY count(*) DESC
+    </select>
+</mapper>

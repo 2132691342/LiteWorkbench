@@ -13,7 +13,6 @@ public class LoginREQ implements Serializable {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    /** 登录名 */
     @NotBlank(message = "登录名不能为空")
     private String username;
     /** 密码密文（RSA/PKCS#1 v1.5，Base64） */

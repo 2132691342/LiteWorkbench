@@ -20,12 +20,9 @@ public class RoleREQ implements Serializable {
     /** 角色码，仅新建时使用 */
     @Pattern(regexp = "^[a-z][a-z0-9_]{2,31}$", message = "角色码须为小写字母开头，可含数字与下划线，长度 3-32")
     private String roleCode;
-    /** 角色名 */
     @NotBlank(message = "角色名不能为空")
     @Size(max = 64, message = "角色名不能超过 64 字符")
     private String roleName;
-    /** 排序号 */
     private Integer sortNo;
-    /** 备注 */
     private String remark;
 }

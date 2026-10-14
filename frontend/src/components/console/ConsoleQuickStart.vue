@@ -6,7 +6,6 @@ import { useRouter } from 'vue-router'
 const { t } = useI18n()
 const router = useRouter()
 
-/** 创作闭环的三个入口：图标为线性描边，与全站图标纪律一致 */
 const entries = [
   {
     route: '/writer',
@@ -35,7 +34,7 @@ const entries = [
       <div class="w-12 h-12 rounded-card mx-auto flex items-center justify-center lw-shadow-sm transition-transform duration-200 hover:scale-105"
            style="background: var(--lw-secondary)">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" stroke-linejoin="round" style="color: #ffffff">
+             stroke-linecap="round" stroke-linejoin="round" style="color: var(--lw-on-primary)">
           <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
         </svg>
       </div>

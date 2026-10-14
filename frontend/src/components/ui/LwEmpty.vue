@@ -4,7 +4,6 @@ import { useI18n } from 'vue-i18n'
 
 /** 空态：插画 + 说明 + 可选主操作 */
 defineProps<{
-  /** 自定义说明文案 */
   description?: string
 }>()
 

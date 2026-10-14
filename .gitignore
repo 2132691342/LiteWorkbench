@@ -13,6 +13,7 @@ frontend/node_modules/
 *.iml
 .vscode/
 *.swp
+.codebuddy/
 
 # 系统
 .DS_Store
@@ -21,6 +22,12 @@ Thumbs.db
 # 本地环境
 .env.local
 *.local
+
+# 部署机密（由 deploy/gen-secrets.sh 生成，禁止入库）
+.env.infra
+.env.app
+deploy/.env.infra
+deploy/.env.app
 
 # 运行时数据目录
 backend/data/

@@ -12,19 +12,15 @@ public class KbDocVO implements Serializable {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    /** 文档 ID */
     private String docId;
     /** 归属知识库 */
     private String kbId;
-    /** 文档名 */
     private String docName;
-    /** 字节数 */
     private Long fileSize;
     /** MIME 类型 */
     private String contentType;
     /** 提取正文总字符数 */
     private Integer charCount;
-    /** 分块数 */
     private Integer chunkCount;
     /** 解析状态 pending / processing / ready / failed */
     private String state;

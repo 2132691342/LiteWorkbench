@@ -1,12 +1,14 @@
 # ERROR-CODES
 
-错误码分段、抛出方式、前端映射。
+错误码唯一事实源：分段、每个码的标识与 HTTP 状态、抛出方式、全局异常处理器映射、前端消费方式。
 
 ---
 
 ## 1. 定位
 
-错误码是前后端的契约，不是日志。每个错误码对应一个确定的用户可见提示与一个 HTTP 状态码。业务代码只抛 `BizException`，不自行拼装响应。
+本文回答错误码是什么与怎么用：每个码对应确定的用户可见提示与 HTTP 状态码，业务代码只抛 `BizException`，不自行拼装响应。
+
+不回答：错误码枚举的实现（见 `common/ErrorCodeEnum`），异常抛出与控制器注解的方法约定（见 `AGENTS.md §11`），响应信封字段（见 `API-CONTRACT.md §2`）。
 
 ## 2. 分段
 
@@ -28,6 +30,7 @@
 | 8600 | 知识库 |
 | 8700 | 创作文档 |
 | 8800 | 提示词 |
+| 8900 | 长期记忆 |
 | 9000 | 系统与中间件 |
 
 ## 3. 通用 1000（0 为成功保留码）
@@ -134,7 +137,7 @@
 | 码 | 标识 | HTTP | 提示 |
 |---|---|---|---|
 | 7001 | `PYTHON_NOT_READY` | 503 | Python 运行时未就绪 |
-| 7002 | `PYTHON_BUNDLE_MISSING` | 503 | 内置解释器目录缺失 |
+| 7002 | `PYTHON_BUNDLE_MISSING` | 503 | 内置运行时包缺失 |
 | 7003 | `PYTHON_EXEC_FAILED` | 500 | 脚本执行失败 |
 | 7004 | `PYTHON_UNSAFE_PATH` | 400 | 脚本包含不安全的路径引用 |
 
@@ -174,7 +177,15 @@
 | 8803 | `PROMPT_TITLE_CONFLICT` | 409 | 同名提示词已存在 |
 | 8804 | `PROMPT_VARIABLE_MISSING` | 400 | 变量未填写完整 |
 
-## 18. 系统 9000
+## 18. 长期记忆 8900
+
+| 码 | 标识 | HTTP | 提示 |
+|---|---|---|---|
+| 8901 | `MEMORY_NOT_FOUND` | 404 | 记忆不存在 |
+| 8902 | `MEMORY_EMPTY` | 400 | 记忆键与内容不能为空 |
+| 8903 | `MEMORY_LIMIT_REACHED` | 409 | 记忆条数已达上限 |
+
+## 19. 系统 9000
 
 | 码 | 标识 | HTTP | 提示 |
 |---|---|---|---|
@@ -183,29 +194,32 @@
 | 9003 | `STORAGE_UNAVAILABLE` | 503 | 对象存储不可用 |
 | 9004 | `MQ_UNAVAILABLE` | 503 | 消息队列不可用 |
 
-## 20. 处理约定
+## 20. 抛出与消费
 
-后端抛出：
+抛出方式（统一抛 `common.BizException`，由全局处理器转换）见 `AGENTS.md §11`。
 
-```java
-throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
-```
+`code` 一律为 `String`（如 `"0"`、`"3001"`），与 HTTP 状态码的 int 区分；网络交互字段全部使用包装类型。
 
 全局处理器 `GlobalExceptionHandler` 统一转换：
 
-| 异常 | 处理 |
+| 触发 | 处理 |
 |---|---|
-| `BizException` | 按错误码输出，记录 warn |
-| `NotLoginException`（Sa-Token） | 转 `UNAUTHORIZED` / `TOKEN_EXPIRED` |
+| `BizException` | 按其错误码输出，记 warn |
+| `NotLoginException`（Sa-Token） | 令牌超时转 `TOKEN_EXPIRED`，其余转 `UNAUTHORIZED` |
 | `NotPermissionException` / `NotRoleException`（Sa-Token） | 转 `FORBIDDEN` |
-| `MethodArgumentNotValidException` | 转 `PARAM_INVALID`，附带字段错误 |
-| 其他异常 | 转 `INTERNAL_ERROR`，记录 error 含堆栈 |
+| `MethodArgumentNotValidException` / `ConstraintViolationException` / `MissingServletRequestParameterException` / `HttpMessageNotReadableException` | 转 `PARAM_INVALID`（400），取首条字段错误作为 message |
+| `HttpRequestMethodNotSupportedException` | 转 `METHOD_NOT_ALLOWED`（405） |
+| `HttpMediaTypeNotSupportedException` | 转 `UNSUPPORTED_MEDIA_TYPE`（415） |
+| `NoResourceFoundException` / `NoHandlerFoundException` | 转 `RESOURCE_NOT_FOUND`（404） |
+| 其他异常 | 转 `INTERNAL_ERROR`（500），记 error 含堆栈，不把堆栈返回前端 |
 
-信封 `code` 一律为 `String`（如 `"0"`、`"3001"`），与 HTTP 状态码的 int 区分；网络交互字段全部使用包装类型。
+前端消费（`frontend/src/api/index.ts`）：
 
-前端映射（`frontend/src/api/index.ts`）：按 `code` 取 `locales` 中的提示文案，`401` 触发重新登录，`403` 提示无权限并停留当前页，`5xx` 允许重试一次。
-
-特殊分支：`2006`（`PASSWORD_RESET_REQUIRED`）直接跳强制改密页，不弹 toast；`2009`（`PAYLOAD_DECRYPT_FAILED`）清空密码输入框并提示重新输入，不重试。
+- 响应拦截器只在信封 `code !== '0'` 时提示，文案取后端 `message`，不按 `code` 映射本地文案。
+- HTTP `401` 清本地令牌并跳 `/login`。
+- HTTP `403` 提示 `body.message`（缺省用 `locales` 的 `api.noPermission`），停留当前页。
+- 其余状态取 `body.message`，缺省用 `locales` 的 `api.networkError`；无按状态码自动重试。
+- 首登强制改密不由拦截器处理：登录响应携带 `pwdResetRequired`，路由守卫据此把用户锁在 `/force-password`，其余业务接口由后端回 `2006` 阻止越权访问。
 
 ## 21. 取舍
 
@@ -216,3 +230,7 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 | code 用 String | 与 HTTP int 状态码天然区分，序列化不丢精度 | 前端比较须用字符串 |
 | 内部错误不回传堆栈 | 不泄露实现细节 | 排障需查日志 |
 | 登录失败统一提示 | 不暴露用户是否存在 | 排查需依赖日志 |
+
+---
+
+错误码定义实现：`backend/src/main/java/com/liteworkbench/common/ErrorCodeEnum.java`

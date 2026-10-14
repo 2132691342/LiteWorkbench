@@ -42,6 +42,8 @@ public enum IdPrefixConst {
     DOC_VERSION("DOCV"),
     /** 提示词 */
     PROMPT("PRPT"),
+    /** 长期记忆 */
+    MEMORY("MEMO"),
     /** 日志文档 */
     LOG("LOGD"),
     ;

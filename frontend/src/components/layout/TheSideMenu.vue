@@ -14,17 +14,14 @@ const userStore = useUserStore()
 
 const expandedDirs = ref<string[]>([])
 
-/** 一级可见菜单 */
 const primaryMenus = computed(() =>
   userStore.menus.filter((item) => item.menuType !== 'button' && item.visible),
 )
 
-/** 目录是否展开 */
 function isExpanded(menu: MenuVO): boolean {
   return expandedDirs.value.includes(menu.menuId) || isBranchActive(menu)
 }
 
-/** 分支内是否有命中路由 */
 function isBranchActive(menu: MenuVO): boolean {
   if (isActive(menu)) {
     return true
@@ -32,12 +29,10 @@ function isBranchActive(menu: MenuVO): boolean {
   return (menu.children ?? []).some((child) => isBranchActive(child))
 }
 
-/** 菜单是否命中当前路由 */
 function isActive(menu: MenuVO): boolean {
   return Boolean(menu.routePath) && route.path.startsWith(menu.routePath as string)
 }
 
-/** 目录点击：展开或收起 */
 function handleClick(menu: MenuVO): void {
   if (menu.children?.length) {
     const index = expandedDirs.value.indexOf(menu.menuId)

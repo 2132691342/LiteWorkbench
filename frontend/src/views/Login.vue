@@ -8,7 +8,7 @@ import LwErrorBar from '@/components/ui/LwErrorBar.vue'
 import { useUserStore } from '@/stores/user'
 import { fetchPublicKey } from '@/utils/crypto'
 
-/** 登录页：左品牌 hero + 右凭证卡（DESIGN.md §12.3，案例规范级布局），进入即预热公钥，失败内联提示不降级明文 */
+/** 登录页：左品牌 hero + 右凭证卡，进入即预热公钥，取不到公钥不降级明文 */
 const { t } = useI18n()
 const router = useRouter()
 const route = useRoute()
@@ -36,7 +36,6 @@ async function loadPublicKey(): Promise<void> {
 
 onMounted(loadPublicKey)
 
-/** 品牌区三条能力说明，文案走 i18n；图标为线性描边，与设计规范的图标纪律一致 */
 const features = computed(() => [
   {
     title: t('login.featureObserve'),
@@ -61,7 +60,6 @@ function safeRedirect(): string {
   return raw && raw.startsWith('/') && !raw.startsWith('//') ? raw : '/dashboard'
 }
 
-/** 提交登录，成功后回到来源页或仪表盘 */
 async function handleSubmit(): Promise<void> {
   if (loading.value) return
   errorMessage.value = ''
@@ -98,20 +96,18 @@ async function handleSubmit(): Promise<void> {
 
 <template>
   <div class="min-h-full flex items-center justify-center p-6 relative overflow-hidden" style="background-color: var(--lw-surface)">
-    <!-- 案例规范：两团紫色弥散光斑，低透明度不抢内容 -->
     <div class="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] rounded-full blur-[100px] opacity-20 pointer-events-none"
          style="background-color: var(--lw-secondary)" />
     <div class="absolute bottom-[-10%] right-[-10%] w-[400px] h-[400px] rounded-full blur-[100px] opacity-20 pointer-events-none"
          style="background-color: var(--lw-surface-subtle)" />
 
     <div class="w-full max-w-[1080px] flex flex-col lg:flex-row items-center gap-10 lg:gap-16 relative z-10">
-      <!-- 品牌 hero：徽标 pill + 双色标题 + 定位描述 + 三条能力 -->
       <section class="flex-1 flex flex-col items-center lg:items-start text-center lg:text-left">
         <div class="flex items-center gap-3">
           <div class="w-12 h-12 rounded-card flex items-center justify-center lw-shadow-sm transition-transform duration-200 hover:scale-105"
                style="background: var(--lw-secondary)">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                 stroke-linecap="round" stroke-linejoin="round" style="color: #ffffff">
+                 stroke-linecap="round" stroke-linejoin="round" style="color: var(--lw-on-primary)">
               <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
               <line x1="3" x2="21" y1="9" y2="9" />
               <line x1="9" x2="9" y1="21" y2="9" />
@@ -157,7 +153,6 @@ async function handleSubmit(): Promise<void> {
         </div>
       </section>
 
-      <!-- 凭证卡：欢迎语 + 登录名 + 密码 + 五态登录按钮 + 安全提示 -->
       <section class="w-full max-w-[400px] lw-card p-6 flex flex-col gap-5">
         <div>
           <h2 class="text-lg font-bold tracking-tight" style="color: var(--lw-ink)">{{ t('login.welcome') }}</h2>

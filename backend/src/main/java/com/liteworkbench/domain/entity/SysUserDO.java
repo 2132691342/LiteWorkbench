@@ -27,30 +27,20 @@ public class SysUserDO implements Serializable {
     private String username;
     /** 密码摘要：SHA-256(密码 + 盐) */
     private String passwordHash;
-    /** 密码盐 */
     private String passwordSalt;
-    /** 显示名 */
     private String nickname;
-    /** 邮箱 */
     private String email;
-    /** 头像地址 */
     private String avatarUrl;
-    /** 最近登录时间 */
     private LocalDateTime lastLoginAt;
     /** 是否必须先改密 */
     private Boolean pwdResetRequired;
     /** 状态：normal / disabled / locked */
     private String state;
-    /** 创建人 */
     private String createdBy;
-    /** 创建时间 */
     private LocalDateTime createdAt;
-    /** 更新人 */
     private String updatedBy;
-    /** 更新时间 */
     private LocalDateTime updatedAt;
     /** 逻辑删除 */
     private Boolean deleted;
-    /** 备注 */
     private String remark;
 }

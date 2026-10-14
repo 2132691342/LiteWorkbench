@@ -15,8 +15,10 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.io.File;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
@@ -90,8 +92,12 @@ public class LocalPythonRuntime implements PythonRuntime {
             builder.directory(workDir.toFile());
             builder.redirectOutput(stdoutFile.toFile());
             builder.redirectError(stderrFile.toFile());
-            builder.environment().put("PYTHONDONTWRITEBYTECODE", "1");
-            builder.environment().put("PYTHONIOENCODING", "utf-8");
+            Map<String, String> env = builder.environment();
+            env.put("PYTHONDONTWRITEBYTECODE", "1");
+            env.put("PYTHONIOENCODING", "utf-8");
+            // 解释器目录置于 PATH 首位：否则脚本里 pip install 会装到系统环境，重启后必 ModuleNotFound
+            env.put("PATH", interpreterBinDir(status.source()) + File.pathSeparator
+                    + env.getOrDefault("PATH", StrUtil.EMPTY));
             Process process = builder.start();
             boolean finished = process.waitFor(timeout, TimeUnit.SECONDS);
             if (!finished) {
@@ -190,6 +196,13 @@ public class LocalPythonRuntime implements PythonRuntime {
         long fallback = properties.getPython().getTimeoutSeconds();
         long request = timeoutSeconds <= 0 ? fallback : Math.min(timeoutSeconds, fallback);
         return Math.min(request, MAX_TIMEOUT_SECONDS);
+    }
+
+    /** 解释器可执行文件所在目录，用于子进程 PATH 首位隔离 */
+    private String interpreterBinDir(String source) {
+        Path exe = Paths.get(source).toAbsolutePath().normalize();
+        Path parent = Objects.isNull(exe.getParent()) ? exe : exe.getParent();
+        return parent.toString();
     }
 
     /** 拒绝显式路径穿越 */

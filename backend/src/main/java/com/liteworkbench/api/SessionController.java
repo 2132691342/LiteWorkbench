@@ -28,13 +28,11 @@ public class SessionController {
 
     private final SessionService sessionService;
 
-    /** 分页查询 */
     @GetMapping("/page")
     public R<PageResult<SessionVO>> page(SessionPageREQ req) {
         return R.ok(sessionService.page(req, LoginContext.userId()));
     }
 
-    /** 详情 */
     @GetMapping("/detail/{sessionId}")
     public R<SessionVO> detail(@PathVariable String sessionId) {
         return R.ok(sessionService.detail(sessionId, LoginContext.userId()));

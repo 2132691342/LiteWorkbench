@@ -17,9 +17,7 @@ public class R<T> implements Serializable {
 
     /** 业务码，"0" 成功；String 类型与 HTTP 状态码的 int 区分 */
     private String code;
-    /** 面向人的提示 */
     private String message;
-    /** 业务数据 */
     private T data;
     /** 链路标识，与日志 traceId 一致 */
     private String requestId;

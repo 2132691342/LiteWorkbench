@@ -213,7 +213,6 @@ onMounted(load)
       </LwPageState>
     </LwCard>
 
-    <!-- 在线预览 -->
     <el-drawer v-model="previewOpen" :title="t('files.preview')" size="60%">
       <div class="flex flex-col gap-3 h-full">
         <img v-if="previewKind === 'image'" :src="previewUrl" class="max-h-full object-contain rounded-control" />

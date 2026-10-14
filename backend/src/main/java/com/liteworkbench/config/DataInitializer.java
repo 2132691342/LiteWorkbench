@@ -37,11 +37,8 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class DataInitializer implements ApplicationRunner {
 
-    /** 管理员登录名 */
     private static final String ADMIN_USERNAME = "admin";
-    /** 演示用户登录名 */
     private static final String DEMO_USERNAME = "demo";
-    /** 系统操作人 */
     private static final String SYSTEM = "system";
 
     private final SysUserMapper sysUserMapper;

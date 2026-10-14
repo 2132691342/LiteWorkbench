@@ -38,7 +38,6 @@ public class DocService {
     /** 富文本里需要整块剔除的片段 */
     private static final Pattern BLOCK_PATTERN =
             Pattern.compile("(?is)<(script|style)[^>]*>.*?</\\1>");
-    /** 所有标签 */
     private static final Pattern TAG_PATTERN = Pattern.compile("(?s)<[^>]+>");
     /** 常见实体，转义后影响可读性 */
     private static final String[] ENTITY_SOURCES = {"&nbsp;", "&amp;", "&lt;", "&gt;", "&quot;", "&#39;"};
@@ -224,7 +223,6 @@ public class DocService {
         return plain.replaceAll("\\s+", " ").trim();
     }
 
-    /** 写一条版本快照 */
     private void insertVersion(WbDocDO doc, int versionNo, String changeNote) {
         WbDocVersionDO version = new WbDocVersionDO()
                 .setVersionId(IdGenerator.generate(IdPrefixConst.DOC_VERSION))
@@ -255,7 +253,6 @@ public class DocService {
         }
     }
 
-    /** 用户内文档标题唯一 */
     private void requireUniqueTitle(String userId, String docTitle, String excludeId) {
         if (docMapper.countByTitle(userId, docTitle, excludeId) > 0) {
             throw new BizException(ErrorCodeEnum.DOC_TITLE_CONFLICT, docTitle);

@@ -36,7 +36,6 @@ const resetVisible = ref(false)
 const resetLoading = ref(false)
 const resetForm = reactive({ userId: '', newPassword: '' })
 
-/** 拉取用户分页 */
 async function load(): Promise<void> {
   loading.value = true
   error.value = ''
@@ -60,20 +59,17 @@ async function loadRoles(): Promise<void> {
   }
 }
 
-/** 条件查询后回到第一页 */
 function handleSearch(): void {
   query.page = 1
   void load()
 }
 
-/** 重置检索条件 */
 function handleReset(): void {
   query.keyword = ''
   query.state = ''
   handleSearch()
 }
 
-/** 打开新建或编辑弹窗 */
 function openDialog(user?: UserVO): void {
   isEdit.value = Boolean(user)
   form.userId = user?.userId ?? ''
@@ -85,7 +81,7 @@ function openDialog(user?: UserVO): void {
   dialogVisible.value = true
 }
 
-/** 保存用户：新建走 create（初始密码必填且加密提交），编辑走 update（不提交密码字段） */
+/** 保存用户：新建 create（初始密码必填且加密），编辑 update（不提交密码字段） */
 async function submitDialog(): Promise<void> {
   if (!isEdit.value && (form.password ?? '').length < 8) {
     ElMessage.warning(t('system.user.initPasswordTip'))
@@ -114,7 +110,6 @@ async function submitDialog(): Promise<void> {
   }
 }
 
-/** 启停用户，二次确认 */
 async function toggleState(user: UserVO): Promise<void> {
   const action = user.state === USER_STATE.NORMAL ? t('common.disable') : t('common.enable')
   await ElMessageBox.confirm(t('common.confirmToggle', { action, name: user.nickname }), t('common.confirm'), {
@@ -127,7 +122,6 @@ async function toggleState(user: UserVO): Promise<void> {
   void load()
 }
 
-/** 删除用户，二次确认 */
 async function removeUser(user: UserVO): Promise<void> {
   await ElMessageBox.confirm(t('common.confirmDelete', { name: user.nickname }), t('common.delete'), {
     confirmButtonText: t('common.delete'),
@@ -139,14 +133,13 @@ async function removeUser(user: UserVO): Promise<void> {
   void load()
 }
 
-/** 打开重置密码弹窗 */
 function openReset(user: UserVO): void {
   resetForm.userId = user.userId
   resetForm.newPassword = ''
   resetVisible.value = true
 }
 
-/** 提交重置密码：同样加密提交 */
+/** 重置密码同样走 RSA 密文提交 */
 async function submitReset(): Promise<void> {
   resetLoading.value = true
   try {
@@ -159,7 +152,6 @@ async function submitReset(): Promise<void> {
   }
 }
 
-/** 角色 ID 转名称 */
 function roleNames(roleIds?: string[]): string {
   if (!roleIds?.length) return '-'
   return roleIds

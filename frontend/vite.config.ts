@@ -26,8 +26,11 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          'element-plus': ['element-plus'],
+          'element-plus': ['element-plus', '@element-plus/icons-vue'],
           echarts: ['echarts'],
+          // 富文本与编辑器体积大且只在创作台使用，独立成块避免拖慢主包
+          'wang-editor': ['@wangeditor/editor', '@wangeditor/editor-for-vue'],
+          markdown: ['markdown-it', 'highlight.js'],
         },
       },
     },

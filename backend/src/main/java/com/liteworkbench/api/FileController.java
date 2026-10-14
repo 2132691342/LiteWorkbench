@@ -31,7 +31,6 @@ public class FileController {
 
     private final FileService fileService;
 
-    /** 分页列表 */
     @GetMapping("/page")
     public R<PageResult<FileVO>> page(@RequestParam(defaultValue = "1") long page,
                                       @RequestParam(defaultValue = "20") long size,

@@ -8,13 +8,10 @@ import lombok.Data;
 @Builder
 public class AgentEvent {
 
-    /** 事件类型 */
     private AgentEventType type;
     /** 增量正文或思考 */
     private String textDelta;
-    /** 工具名 */
     private String toolName;
-    /** 工具调用 ID */
     private String toolCallId;
     /** 工具入参 JSON */
     private String arguments;
@@ -22,9 +19,7 @@ public class AgentEvent {
     private String output;
     /** 工具是否失败 */
     private Boolean error;
-    /** 输入 token */
     private Long inputTokens;
-    /** 输出 token */
     private Long outputTokens;
     /** 模型调用耗时，毫秒 */
     private Long durationMs;
@@ -32,4 +27,6 @@ public class AgentEvent {
     private Integer maxIters;
     /** 完整正文（AGENT_RESULT）或错误信息（AGENT_ERROR） */
     private String message;
+    /** 计划快照 JSON（PLAN_UPDATED），由规划工具归一化产出 */
+    private String planJson;
 }

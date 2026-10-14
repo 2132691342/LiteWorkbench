@@ -237,8 +237,7 @@ public class LogSearchMapper {
         return result;
     }
 
-    /** 时间直方图：DIV 整数除分桶（`/` 在 Manticore 是浮点除，桶起点会漂移），桶起点毫秒时间戳升序；
-     *  小时分桶上限 168 个（7 天），天分桶上限 90 个 */
+    /** 时间直方图：DIV 整数除分桶（`/` 是浮点除会漂移桶起点），桶起点毫秒时间戳升序；小时桶上限 168、天桶上限 90 */
     private List<LogStatsVO.HourCount> histogram(String userId, String filter, long from, long to,
                                                  boolean dayBucket) {
         long bucketMs = dayBucket ? 86_400_000L : 3_600_000L;

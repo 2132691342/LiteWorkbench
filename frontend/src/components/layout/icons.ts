@@ -43,7 +43,6 @@ export const MENU_ICONS: Record<string, Component> = {
   connection: Connection,
 }
 
-/** 按名称取图标组件 */
 export function menuIcon(name?: string): Component {
   if (!name) {
     return Grid

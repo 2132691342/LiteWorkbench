@@ -26,6 +26,8 @@ import type {
   LogStatsVO,
   LoginREQ,
   LoginRESP,
+  MemoryREQ,
+  MemoryVO,
   MenuREQ,
   MenuVO,
   MessageVO,
@@ -47,6 +49,9 @@ import type {
   SessionPageREQ,
   SessionREQ,
   SessionVO,
+  TraceRunVO,
+  TraceSpanVO,
+  UsageStatsVO,
   SkillREQ,
   SkillVO,
   ToolVO,
@@ -57,25 +62,20 @@ import type {
 
 /** 请求唯一出口：注入令牌、统一解包、统一错误提示 */
 
-/** 按当前语言取提示文案 */
 function t(key: string, params?: Record<string, unknown>): string {
   return i18n.global.t(key, params ?? {})
 }
 
-/** 本地存储的键名，与请求头名（Authorization）区分 */
 const TOKEN_KEY = 'lw-token'
 
-/** 读取本地令牌 */
 export function getToken(): string {
   return localStorage.getItem(TOKEN_KEY) ?? ''
 }
 
-/** 写入本地令牌 */
 export function setToken(token: string): void {
   localStorage.setItem(TOKEN_KEY, token)
 }
 
-/** 清除本地令牌 */
 export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY)
 }
@@ -121,13 +121,11 @@ http.interceptors.response.use(
   },
 )
 
-/** 统一请求入口，返回解包后的业务数据 */
 async function request<T>(config: AxiosRequestConfig): Promise<T> {
   const response = await http.request<ApiResult<T>>(config)
   return response.data.data
 }
 
-/** GET 查询 */
 export function get<T>(url: string, params?: object): Promise<T> {
   return request<T>({ method: 'GET', url, params })
 }
@@ -201,6 +199,24 @@ export const runApi = {
   detail: (runId: string) => get<RunVO>(`/run/detail/${runId}`),
   events: (runId: string, afterSeq = 0) => get<RunEvent[]>(`/run/events/${runId}`, { afterSeq }),
   abort: (runId: string) => post<void>(`/run/abort/${runId}`),
+}
+
+/* ===== 可观测性 ===== */
+
+export const traceApi = {
+  spans: (runId: string) => get<TraceSpanVO[]>(`/trace/spans/${runId}`),
+  tree: (sessionId: string) => get<TraceRunVO[]>(`/trace/tree/${sessionId}`),
+  usage: (params: { from?: number; to?: number; days?: number } = {}) =>
+    get<UsageStatsVO>('/trace/usage', params),
+}
+
+/* ===== 长期记忆 ===== */
+
+export const memoryApi = {
+  page: (params: MemoryREQ) => get<PageResult<MemoryVO>>('/memory/page', params),
+  create: (data: MemoryREQ) => post<string>('/memory/create', data),
+  update: (data: MemoryREQ) => post<void>('/memory/update', data),
+  remove: (memoryId: string) => post<void>(`/memory/delete/${memoryId}`),
 }
 
 /* ===== 工具 ===== */
@@ -344,6 +360,25 @@ export function openRunStream(body: ChatStreamREQ, handlers: RunStreamHandlers):
       const decoder = new TextDecoder('utf-8')
       let buffer = ''
       let aborted = false
+      // 已投递给 reducer 的最大 seq：水位快照超过它即说明丢过帧，从库里补齐
+      let lastSeq = 0
+      let backfilling = false
+      /** 丢帧补齐：按 afterSeq 拉回缺失事件后按序投递，失败不阻断实时流 */
+      const backfill = async (runId: string, afterSeq: number): Promise<void> => {
+        if (backfilling || !runId) return
+        backfilling = true
+        try {
+          const missing = await runApi.events(runId, afterSeq)
+          for (const item of missing) {
+            lastSeq = Math.max(lastSeq, Number(item.seq ?? 0))
+            handlers.onEvent(item)
+          }
+        } catch {
+          // 补齐是兜底能力，失败时以 run.end 的权威结果为准
+        } finally {
+          backfilling = false
+        }
+      }
       for (;;) {
         const { done, value } = await reader.read()
         if (done) break
@@ -358,12 +393,19 @@ export function openRunStream(body: ChatStreamREQ, handlers: RunStreamHandlers):
             if (!payload) continue
             try {
               const event = JSON.parse(payload) as RunEvent
-              if (event.eventType === 'run.end') {
+              if (event.eventType === 'run.snapshot') {
+                const watermark = Number(event.payload?.watermark ?? 0)
+                if (watermark > lastSeq) {
+                  void backfill(event.runId, lastSeq)
+                }
+              } else if (event.eventType === 'run.end') {
+                lastSeq = Math.max(lastSeq, Number(event.seq ?? 0))
                 aborted = event.payload?.status === 'aborted'
                 handlers.onEvent(event)
               } else if (event.eventType === 'error') {
                 handlers.onError(String(event.payload?.message ?? t('api.runFailed')))
               } else {
+                lastSeq = Math.max(lastSeq, Number(event.seq ?? 0))
                 handlers.onEvent(event)
               }
             } catch {

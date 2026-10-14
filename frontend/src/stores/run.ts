@@ -1,9 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref, shallowRef } from 'vue'
 import { runApi } from '@/api'
-import type { MessageVO, RunEvent, RunVO } from '@/types/api'
+import type { MessageVO, PlanStep, RunEvent, RunVO } from '@/types/api'
 
-/** 时间线上的工具步骤 */
 export interface ToolStep {
   name: string
   phase: 'start' | 'end'
@@ -17,40 +16,38 @@ export interface ChatMessage {
   content: string
   thinking: string
   tools: ToolStep[]
+  /** 规划器写下的计划，新帧整体覆盖旧计划 */
+  plan: PlanStep[]
   streaming?: boolean
 }
 
 /** 运行状态：当前会话的运行列表 + 唯一时间线 reducer，实时与回放同路径 */
 export const useRunStore = defineStore('run', () => {
-  /** 当前会话的历史运行 */
   const runs = shallowRef<RunVO[]>([])
-  /** 渲染时间线：实时流与回放共用的唯一数据源 */
   const timeline = shallowRef<ChatMessage[]>([])
   const streaming = ref(false)
   const replaying = ref(false)
   const replayRunId = ref('')
-  /** 当前进行中的运行 ID，供中断使用 */
   const currentRunId = ref('')
 
-  /** 用已落库的消息重建时间线（会话切换 / 回到实时） */
   function loadTimeline(messages: MessageVO[]): void {
     timeline.value = messages.map((item) => ({
       role: item.roleCode === 'assistant' ? 'assistant' : 'user',
       content: item.content ?? '',
       thinking: '',
       tools: [],
+      plan: [],
     }))
     replaying.value = false
     replayRunId.value = ''
     currentRunId.value = ''
   }
 
-  /** 发起流式对话：追加用户消息与流式助手占位 */
   function beginStream(prompt: string): void {
     timeline.value = [
       ...timeline.value,
-      { role: 'user', content: prompt, thinking: '', tools: [] },
-      { role: 'assistant', content: '', thinking: '', tools: [], streaming: true },
+      { role: 'user', content: prompt, thinking: '', tools: [], plan: [] },
+      { role: 'assistant', content: '', thinking: '', tools: [], plan: [], streaming: true },
     ]
     streaming.value = true
     replaying.value = false
@@ -80,6 +77,10 @@ export const useRunStore = defineStore('run', () => {
       case 'run.result':
         if (payload.text) target.content = String(payload.text)
         break
+      case 'plan.updated':
+        // 计划是覆盖式快照：新帧整体替换，不做增量拼接
+        target.plan = Array.isArray(payload.steps) ? (payload.steps as PlanStep[]) : []
+        break
       case 'tool.call':
         if (payload.phase === 'start') {
           target.tools.push({ name: String(payload.toolName ?? ''), phase: 'start' })
@@ -105,7 +106,6 @@ export const useRunStore = defineStore('run', () => {
     }
   }
 
-  /** 流式结束 */
   function finishStream(aborted: boolean, abortedSuffix: string): void {
     streaming.value = false
     const target = lastAssistant()
@@ -116,7 +116,6 @@ export const useRunStore = defineStore('run', () => {
     timeline.value = [...timeline.value]
   }
 
-  /** 服务端返回错误终态 */
   function failStream(message: string): void {
     streaming.value = false
     const target = lastAssistant()
@@ -146,8 +145,8 @@ export const useRunStore = defineStore('run', () => {
   async function replay(runId: string): Promise<void> {
     const [detail, events] = await Promise.all([runApi.detail(runId), runApi.events(runId)])
     const rebuilt: ChatMessage[] = [
-      { role: 'user', content: detail.prompt ?? '', thinking: '', tools: [] },
-      { role: 'assistant', content: '', thinking: '', tools: [], streaming: false },
+      { role: 'user', content: detail.prompt ?? '', thinking: '', tools: [], plan: [] },
+      { role: 'assistant', content: '', thinking: '', tools: [], plan: [], streaming: false },
     ]
     timeline.value = rebuilt
     replaying.value = true
@@ -158,7 +157,6 @@ export const useRunStore = defineStore('run', () => {
     timeline.value = [...rebuilt]
   }
 
-  /** 回到实时视图 */
   function backToLive(): void {
     replaying.value = false
     replayRunId.value = ''

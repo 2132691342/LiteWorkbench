@@ -1,6 +1,5 @@
 /** 后端接口类型定义，与 Java VO/REQ 严格对齐 */
 
-/** 统一响应信封 */
 export interface ApiResult<T> {
   code: string
   message: string
@@ -9,7 +8,6 @@ export interface ApiResult<T> {
   timestamp: number
 }
 
-/** 分页结果 */
 export interface PageResult<T> {
   list: T[]
   total: number
@@ -17,7 +15,6 @@ export interface PageResult<T> {
   size: number
 }
 
-/** 分页请求基参数 */
 export interface PageREQ {
   page?: number
   size?: number
@@ -208,6 +205,105 @@ export interface RunEvent {
   textDelta?: string
   payload?: Record<string, unknown>
   occurredAt: number
+}
+
+/* ===== 可观测性：链路片段 / Run 树 / 用量归因 ===== */
+
+export interface TraceSpanVO {
+  spanId: string
+  kind: 'model' | 'tool' | 'plan'
+  name: string
+  iteration?: number
+  offsetMs: number
+  durationMs?: number
+  status: 'ok' | 'error' | 'pending'
+  inputTokens?: number
+  outputTokens?: number
+  outputChars?: number
+  arguments?: string
+}
+
+export interface TraceRunVO {
+  runId: string
+  parentRunId?: string
+  relation?: string
+  prompt?: string
+  modelName?: string
+  status?: string
+  stopReason?: string
+  iterCount?: number
+  inputTokens?: number
+  outputTokens?: number
+  durationMs?: number
+  startedAt?: number
+  eventCount?: number
+  children?: TraceRunVO[]
+}
+
+export interface UsageTotals {
+  runCount?: number
+  inputTokens?: number
+  outputTokens?: number
+  avgDurationMs?: number
+}
+
+export interface UsageDailyPoint {
+  day: string
+  runCount?: number
+  inputTokens?: number
+  outputTokens?: number
+  successRate?: number
+}
+
+export interface UsageModelSlice {
+  modelName: string
+  runCount?: number
+  inputTokens?: number
+  outputTokens?: number
+}
+
+export interface UsageStateSlice {
+  state: string
+  runCount?: number
+}
+
+export interface UsageStatsVO {
+  totals: UsageTotals
+  daily: UsageDailyPoint[]
+  byModel: UsageModelSlice[]
+  byState: UsageStateSlice[]
+}
+
+/* ===== 长期记忆 ===== */
+
+export interface MemoryVO {
+  memoryId: string
+  memoryKey: string
+  memoryValue: string
+  category: string
+  weight?: number
+  hitCount?: number
+  updatedAt?: number
+  createdAt?: number
+}
+
+export interface MemoryREQ {
+  memoryId?: string
+  memoryKey?: string
+  memoryValue?: string
+  category?: string
+  weight?: number
+  page?: number
+  size?: number
+  keyword?: string
+}
+
+/* ===== 任务计划 ===== */
+
+export interface PlanStep {
+  index: number
+  content: string
+  status: 'pending' | 'doing' | 'done'
 }
 
 /* ===== 工具 ===== */

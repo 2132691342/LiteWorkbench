@@ -5,7 +5,6 @@ import LwButton from './LwButton.vue'
 
 /** 错误条：内联展示 + 重试，不弹全屏遮罩 */
 defineProps<{
-  /** 错误文案 */
   message?: string
 }>()
 

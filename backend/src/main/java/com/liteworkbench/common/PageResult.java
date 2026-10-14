@@ -19,13 +19,10 @@ public class PageResult<T> implements Serializable {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    /** 当前页数据 */
     private List<T> list;
-    /** 总记录数 */
     private Long total;
     /** 页码，从 1 开始 */
     private Long page;
-    /** 每页条数 */
     private Long size;
 
     /** 构造分页结果，空列表时返回不可变空集合 */

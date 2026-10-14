@@ -24,7 +24,6 @@ const submitting = ref(false)
 const testing = ref('')
 const form = ref<ProviderREQ>(emptyForm())
 
-/** 预设选项：label 走 i18n，后端下发端点与默认模型 */
 const presetOptions = computed(() =>
   presets.value.map((preset) => ({
     value: preset.providerCode,
@@ -35,7 +34,6 @@ function emptyForm(): ProviderREQ {
   return { providerCode: 'openai', providerName: '', baseUrl: '', apiKey: '', defaultModel: '', enabled: true }
 }
 
-/** 选择预设即填充端点与默认模型，仍可手工调整 */
 function applyPreset(code: string): void {
   form.value.providerCode = code
   const preset = presets.value.find((item) => item.providerCode === code)

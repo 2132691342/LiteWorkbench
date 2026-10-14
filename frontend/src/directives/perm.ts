@@ -12,7 +12,6 @@ const perm: Directive<HTMLElement, string | string[]> = {
   },
 }
 
-/** 注册全站权限指令 */
 export function setupPermDirective(app: App): void {
   app.directive('perm', perm)
 }

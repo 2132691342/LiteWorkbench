@@ -6,11 +6,8 @@ import { chartTooltip, token } from '@/utils/theme'
 /** 环形图：主色与辅助色两序列起步，其余走中性色 */
 const props = withDefaults(
   defineProps<{
-    /** 分片名称 */
     labels: string[]
-    /** 分片数值 */
     values: number[]
-    /** 画布高度 */
     height?: number
   }>(),
   { height: 260 },
@@ -20,7 +17,7 @@ const container = ref<HTMLDivElement | null>(null)
 let chart: echarts.ECharts | null = null
 
 function buildOption(): echarts.EChartsOption {
-  /** 分片配色：主色 → 辅助色 → 深字 → 禁用字 → 语义色 */
+  /** 分片配色顺序：主色 → 辅助色 → 深字 → 禁用字 → 语义色 */
   const palette = [
     token('--lw-primary'),
     token('--lw-secondary'),

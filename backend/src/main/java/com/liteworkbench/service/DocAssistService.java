@@ -1,7 +1,5 @@
 package com.liteworkbench.service;
 
-import cn.hutool.core.thread.ExecutorBuilder;
-import cn.hutool.core.thread.ThreadUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONObject;
 import com.liteworkbench.agent.ModelFactory;
@@ -12,6 +10,7 @@ import com.liteworkbench.common.BizException;
 import com.liteworkbench.common.ErrorCodeEnum;
 import com.liteworkbench.common.LoginContext;
 import com.liteworkbench.config.AgentProperties;
+import com.liteworkbench.config.ExecutorConfig;
 import com.liteworkbench.domain.constant.AppConst;
 import com.liteworkbench.domain.constant.DocConst;
 import com.liteworkbench.domain.dto.DocAssistREQ;
@@ -20,6 +19,7 @@ import com.liteworkbench.domain.entity.WbProviderDO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -41,11 +41,9 @@ public class DocAssistService {
     private final KbDocService kbDocService;
     private final AgentProperties agentProperties;
 
-    /** 辅助执行线程池：一次辅助一个线程，阻塞在模型流上；队列无界，入口限流由上游控制 */
-    private final ExecutorService executor = ExecutorBuilder.create()
-            .setCorePoolSize(2).setMaxPoolSize(16)
-            .setThreadFactory(ThreadUtil.newNamedThreadFactory("lw-assist", true))
-            .build();
+    /** 辅助流借用运行编排池：一次辅助一个线程，阻塞在模型流上 */
+    @Qualifier(ExecutorConfig.RUN_EXECUTOR)
+    private final ExecutorService executor;
 
     /** 发起一次流式辅助：请求线程只做校验与派发，模型流在独立线程执行 */
     public void assistStream(DocAssistREQ req, DocAssistSink sink) {

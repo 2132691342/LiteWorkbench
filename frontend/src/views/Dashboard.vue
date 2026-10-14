@@ -23,7 +23,7 @@ const overview = computed(() => monitorStore.overview)
 const loading = computed(() => monitorStore.loading)
 const error = computed(() => monitorStore.error)
 
-/** 主图表视图：运行趋势 / Token 趋势，分段切换全站统一 LwSegmented */
+/** 主图表视图：运行趋势 / Token 趋势 */
 const view = ref<'runs' | 'tokens'>('runs')
 const viewOptions = computed(() => [
   { value: 'runs', label: t('dashboard.viewRuns') },

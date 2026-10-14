@@ -30,13 +30,11 @@ export const useUserStore = defineStore('user', () => {
     apply(resp)
   }
 
-  /** 拉取当前用户，用于刷新后恢复会话 */
   async function loadCurrent(): Promise<void> {
     const resp = await authApi.current()
     apply(resp)
   }
 
-  /** 登出并清空本地状态 */
   async function logout(): Promise<void> {
     try {
       await authApi.logout()

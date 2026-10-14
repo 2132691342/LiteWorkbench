@@ -6,15 +6,10 @@ import { chartAxis, chartTooltip, token } from '@/utils/theme'
 /** 面积图：主序列走品牌主色，渐变填充与网格按 DESIGN.md 约定 */
 const props = withDefaults(
   defineProps<{
-    /** x 轴类目 */
     categories: string[]
-    /** 序列数据 */
     values: number[]
-    /** 序列名 */
     name?: string
-    /** 画布高度 */
     height?: number
-    /** 使用辅助色第二序列 */
     secondary?: boolean
   }>(),
   { name: 'value', height: 300, secondary: false },
@@ -23,7 +18,6 @@ const props = withDefaults(
 const container = ref<HTMLDivElement | null>(null)
 let chart: echarts.ECharts | null = null
 
-/** 按设计令牌组装配置 */
 function buildOption(): echarts.EChartsOption {
   const color = props.secondary ? token('--lw-secondary') : token('--lw-primary')
   return {
@@ -61,7 +55,6 @@ function buildOption(): echarts.EChartsOption {
   }
 }
 
-/** 十六进制色值转 rgba，用于渐变填充 */
 function withAlpha(color: string, alpha: number): string {
   const hex = color.replace('#', '')
   const r = parseInt(hex.slice(0, 2), 16)

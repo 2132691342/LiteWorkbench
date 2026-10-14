@@ -39,21 +39,18 @@ public class KbController {
     private final KbService kbService;
     private final KbDocService kbDocService;
 
-    /** 知识库分页 */
     @SaCheckPermission(PermConst.WB_KB_LIST)
     @GetMapping("/page")
     public R<PageResult<KbVO>> page(PageREQ req) {
         return R.ok(kbService.page(req, LoginContext.userId()));
     }
 
-    /** 知识库详情 */
     @SaCheckPermission(PermConst.WB_KB_LIST)
     @GetMapping("/detail/{kbId}")
     public R<KbVO> detail(@PathVariable String kbId) {
         return R.ok(kbService.detail(kbId, LoginContext.userId()));
     }
 
-    /** 新建知识库 */
     @SaCheckPermission(PermConst.WB_KB_CREATE)
     @Idempotent(prefix = "kb:create")
     @PostMapping("/create")
@@ -61,7 +58,6 @@ public class KbController {
         return R.ok(kbService.create(req, LoginContext.userId()));
     }
 
-    /** 修改知识库 */
     @SaCheckPermission(PermConst.WB_KB_UPDATE)
     @Idempotent(prefix = "kb:update")
     @PostMapping("/update")
@@ -79,7 +75,6 @@ public class KbController {
         return R.ok();
     }
 
-    /** 文档分页 */
     @SaCheckPermission(PermConst.WB_KB_LIST)
     @GetMapping("/doc/page")
     public R<PageResult<KbDocVO>> docPage(@RequestParam String kbId,
@@ -105,7 +100,6 @@ public class KbController {
         }
     }
 
-    /** 删除文档 */
     @SaCheckPermission(PermConst.WB_KB_DELETE)
     @Idempotent(prefix = "kb:doc:delete")
     @PostMapping("/doc/delete/{docId}")

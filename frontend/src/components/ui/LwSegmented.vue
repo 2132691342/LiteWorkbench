@@ -3,7 +3,6 @@
 interface SegmentedOption {
   value: string
   label: string
-  /** 计数徽标，可选 */
   count?: number
   disabled?: boolean
 }

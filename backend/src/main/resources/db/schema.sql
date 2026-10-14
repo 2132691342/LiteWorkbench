@@ -317,6 +317,27 @@ CREATE TABLE IF NOT EXISTS wb_prompt (
 );
 CREATE INDEX IF NOT EXISTS idx_wb_prompt_owner ON wb_prompt (user_id, created_at DESC) WHERE deleted = false;
 
+-- 长期记忆：用户显式沉淀的事实与偏好，跨会话注入系统提示，按用户隔离
+CREATE TABLE IF NOT EXISTS wb_memory (
+    memory_id    varchar(40)  PRIMARY KEY,
+    user_id      varchar(40)  NOT NULL,
+    memory_key   varchar(128) NOT NULL,
+    memory_value text         NOT NULL,
+    category     varchar(32)  NOT NULL DEFAULT 'fact',
+    weight       int          NOT NULL DEFAULT 0,
+    hit_count    int          NOT NULL DEFAULT 0,
+    created_by   varchar(40),
+    created_at   timestamptz  NOT NULL DEFAULT now(),
+    updated_by   varchar(40),
+    updated_at   timestamptz,
+    deleted      boolean      NOT NULL DEFAULT false,
+    state        varchar(16),
+    remark       varchar(512)
+);
+-- 同一用户同 key 只留一行有效记忆：写入走 upsert，避免模型重复记忆堆成噪音
+CREATE UNIQUE INDEX IF NOT EXISTS uk_wb_memory_user_key ON wb_memory (user_id, memory_key) WHERE deleted = false;
+CREATE INDEX IF NOT EXISTS idx_wb_memory_owner ON wb_memory (user_id, weight DESC, updated_at DESC) WHERE deleted = false;
+
 -- ============================== 内置工具种子 ==============================
 
 -- 工具种子用固定 ID 而非 ULID：upsert 幂等重放，重启不产生重复行，标签与风险等级变更随版本回写
@@ -326,7 +347,11 @@ VALUES
     ('TOOL_00000000000000000000000002', 'file_read', '读取文件', 'file', 'safe', true),
     ('TOOL_00000000000000000000000003', 'file_write', '写入文件', 'file', 'confirm', true),
     ('TOOL_00000000000000000000000004', 'http_get', 'HTTP 请求', 'network', 'safe', true),
-    ('TOOL_00000000000000000000000005', 'kb_search', '知识库检索', 'knowledge', 'safe', true)
+    ('TOOL_00000000000000000000000005', 'kb_search', '知识库检索', 'knowledge', 'safe', true),
+    ('TOOL_00000000000000000000000006', 'task_plan', '任务规划', 'agent', 'safe', true),
+    ('TOOL_00000000000000000000000007', 'memory_search', '记忆检索', 'agent', 'safe', true),
+    ('TOOL_00000000000000000000000008', 'memory_write', '记忆写入', 'agent', 'confirm', true),
+    ('TOOL_00000000000000000000000009', 'task_delegate', '子任务委派', 'agent', 'confirm', false)
 ON CONFLICT (tool_id) DO UPDATE SET
     tool_label = EXCLUDED.tool_label,
     category = EXCLUDED.category,
@@ -339,6 +364,6 @@ ALTER TABLE wb_run ADD COLUMN IF NOT EXISTS state varchar(16) NOT NULL DEFAULT '
 ALTER TABLE wb_event ADD COLUMN IF NOT EXISTS user_id varchar(40) NOT NULL DEFAULT '';
 
 -- ============================== 已下线表清理 ==============================
--- 可视化编排画布（wb_flow）与异步任务预留表（wb_task）随创作台定位调整移除，无存量数据需保留
+-- 已下线表：wb_flow（可视化编排画布）与 wb_task（异步任务预留），DROP 幂等
 DROP TABLE IF EXISTS wb_flow;
 DROP TABLE IF EXISTS wb_task;

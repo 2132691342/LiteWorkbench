@@ -97,7 +97,6 @@ public class MenuService {
         return sysMenuMapper.selectPermCodesByUserId(userId);
     }
 
-    /** 菜单详情 */
     public MenuVO detail(String menuId) {
         return toVO(require(menuId));
     }

@@ -1,17 +1,19 @@
 package com.liteworkbench.agent;
 
-import cn.hutool.core.thread.ExecutorBuilder;
-import cn.hutool.core.thread.ThreadUtil;
 import com.liteworkbench.agent.event.AgentEvent;
 import com.liteworkbench.agent.event.AgentEventType;
 import com.liteworkbench.agent.loop.AgentLoop;
 import com.liteworkbench.agent.model.ModelClient;
 import com.liteworkbench.agent.model.ModelTypes.Msg;
 import com.liteworkbench.agent.spi.KbSearchPort;
+import com.liteworkbench.agent.spi.MemoryPort;
+import com.liteworkbench.agent.spi.SubRunPort;
 import com.liteworkbench.agent.spi.ToolGate;
+import com.liteworkbench.agent.tool.ToolOwner;
 import com.liteworkbench.agent.tool.ToolRegistry;
 import com.liteworkbench.agent.tool.WorkbenchTools;
 import com.liteworkbench.config.AgentProperties;
+import com.liteworkbench.config.ExecutorConfig;
 import com.liteworkbench.config.RuntimeProperties;
 import com.liteworkbench.domain.constant.AppConst;
 import com.liteworkbench.domain.constant.RunConst;
@@ -21,6 +23,7 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -36,26 +39,28 @@ public class AgentKernelRuntime implements AgentRuntime {
 
     private final ModelFactory modelFactory;
     private final ToolGate toolGate;
+    private final MemoryPort memoryPort;
+    private final SubRunPort subRunPort;
     private final AgentProperties agentProperties;
     private final RuntimeProperties runtimeProperties;
     private final PythonRuntime pythonRuntime;
     private final KbSearchPort kbSearchPort;
     private final AgentEventAdapter adapter;
 
-    /** 运行执行线程池：一次运行一个线程，阻塞在模型与工具上 */
-    private final ExecutorService executor = ExecutorBuilder.create()
-            .useSynchronousQueue()
-            .setThreadFactory(ThreadUtil.newNamedThreadFactory("lw-agent", true))
-            .build();
+    /** 编排池：一次运行一个任务，阻塞在模型与工具上；线程由 ExecutorConfig 统一回收 */
+    @Qualifier(ExecutorConfig.RUN_EXECUTOR)
+    private final ExecutorService executor;
+    /** 工具池：注册表每次运行都新建，共享同一池避免线程数随运行数增长 */
+    @Qualifier(ExecutorConfig.TOOL_EXECUTOR)
+    private final ExecutorService toolExecutor;
 
     /** 启动期干跑注册：工具 Schema 错误在启动时暴露，不留到首次运行 */
     @PostConstruct
     public void validateToolsAtStartup() {
-        ToolRegistry registry = new ToolRegistry();
-        registry.register(new WorkbenchTools(toolGate, kbSearchPort, pythonRuntime, runtimeProperties,
-                "startup-check"));
+        ToolRegistry registry = new ToolRegistry(toolExecutor);
+        registry.register(new WorkbenchTools(toolGate, kbSearchPort, memoryPort, subRunPort,
+                pythonRuntime, runtimeProperties, ToolOwner.startupCheck()));
         int count = registry.names().size();
-        registry.shutdown();
         log.info("[agent.tools] 工具 Schema 启动校验通过 count={}", count);
     }
 
@@ -64,9 +69,10 @@ public class AgentKernelRuntime implements AgentRuntime {
         RunHandle handle = new RunHandle(context.runId());
         AtomicLong seq = new AtomicLong(RunConst.EVENT_SEQ_START);
         ModelClient client = modelFactory.client(context.providerCode(), context.modelName());
-        ToolRegistry registry = new ToolRegistry();
-        registry.register(new WorkbenchTools(toolGate, kbSearchPort, pythonRuntime, runtimeProperties,
-                context.userId()));
+        ToolRegistry registry = new ToolRegistry(toolExecutor);
+        registry.register(new WorkbenchTools(toolGate, kbSearchPort, memoryPort, subRunPort,
+                pythonRuntime, runtimeProperties,
+                new ToolOwner(context.userId(), context.runId(), context.sessionId())));
         List<Msg> messages = AgentMemory.assemble(context.history(), context.systemPrompt(), context.prompt(),
                 agentProperties.getModel().getContextWindow(), agentProperties.getModel().getReserveTokens());
         AgentLoop loop = new AgentLoop(client, registry, toolGate,
@@ -98,7 +104,6 @@ public class AgentKernelRuntime implements AgentRuntime {
             log.error("[agent.run] runId={} 运行异常 {}", context.runId(), e.getMessage(), e);
             handle.fail(e);
         } finally {
-            registry.shutdown();
             log.info("[agent.run] runId={} 内核结束 cost={}ms", context.runId(),
                     System.currentTimeMillis() - started);
             MDC.remove(AppConst.MDC_USER_ID);

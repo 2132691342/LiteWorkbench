@@ -25,7 +25,6 @@ public class WbEventDO implements Serializable {
     private String eventId;
     /** 归属用户 */
     private String userId;
-    /** 运行 ID */
     private String runId;
     /** 会话 ID，冗余便于检索 */
     private String sessionId;
@@ -35,7 +34,6 @@ public class WbEventDO implements Serializable {
     private String eventType;
     /** 内容块类型 text / thinking / tool_call / tool_result */
     private String blockType;
-    /** 增量文本 */
     private String textDelta;
     /** 完整事件体，jsonb */
     private String payload;

@@ -1,79 +1,73 @@
 # LiteWorkbench
 
-一个自托管的企业级个人 AI 创作工作台：多用户、多角色、多菜单权限。Agent 负责干活，工作台负责让你**看见并控制**它是怎么干的，并把产出沉淀为可复用的创作资产。
+自托管的企业级个人 AI 创作工作台：多用户、多角色、多菜单权限。Agent 负责干活，工作台负责让人**看见并控制**它是怎么干的，并把产出沉淀为可复用的创作资产。
 
-- 后端：JDK 17 + Spring Boot 3.5.12 + MyBatis 3.0.4 + Hutool 5.8.46（含 hutool-ai）+ Sa-Token 1.42.0 + ULID
-- Agent：**自研内核**，模型出站只依赖 hutool-ai，供应方预设与 hutool-ai 对齐（OpenAI / DeepSeek / Doubao / Grok / Ollama），不引任何 Agent 框架
-- 前端：Vue 3.4.34 + TypeScript 5.4.5 + Vite 5.2.12 + Element Plus 2.9.0 + UnoCSS 0.58.6 + Pinia 2.1.7 + ECharts 5.5.0 + WangEditor
-- 存储：PostgreSQL 16（镜像内置 pgvector 扩展，预留）+ Manticore 25.0.0（全文检索）+ Redis 8 + MinIO + RabbitMQ
-- 运行形态：容器，内置 Python 运行时，对外端口 `24399`
-- 设计语言：紫色序列四色 `#F2F0F7 / #CBC9E2 / #9E9AC8 / #6A51A3`，极简风格，全站五态交互
+一个应用容器 + 五个中间件容器，对外只开一个端口。
 
 ---
 
 ## 1. 定位
 
-LiteWorkbench 解决的是两件事：**"Agent 跑起来之后我看不见它在干什么"**，以及**"AI 聊完即忘，创作产出留不下来"**。
+LiteWorkbench 解决两件事：**Agent 跑起来之后看不见它在干什么**，**AI 聊完即忘、创作产出留不下来**。
 
-它不是一个聊天界面，而是一个**创作工作台**：
+它不是一个聊天界面，而是一个创作工作台：提示词与技能约束 Agent 的行为，知识库给它资料，工作台看它怎么干，创作台把结果落成文档与版本。
 
 | 能力 | 说明 |
 |---|---|
-| 多角色 | 内置超级管理员 / 平台管理员 / 普通用户三类角色，支持自定义角色 |
+| 多角色 | 内置超级管理员 / 平台管理员 / 普通用户，支持自定义角色 |
 | 用户与权限 | 用户 / 角色 / 菜单三段式 RBAC，按钮级权限点，Sa-Token 会话 |
 | 安全登录 | 密码 RSA 加密传输、失败锁定、首登强制改密、凭据零回显 |
-| 会话工作台 | 多轮对话，流式输出，随时中断；一次对话产生一条可回放、可审计的 Run |
-| 运行可观测 | 独立运行记录页：Run / Event 时间线、工具调用链、Token 与耗时统计、回放播放器，工具调用输入输出可见，可中断可回放 |
-| 创作台 | 文档创作（Markdown / 富文本 / 代码）、版本快照与回滚、AI 续写润色摘要扩写翻译（流式）、全站全文检索 |
+| 会话工作台 | 多轮对话、流式输出、随时中断；一次对话产生一条可回放可审计的 Run |
+| 运行可观测 | 运行记录页：时间线、工具链、链路瀑布、Run 树、用量归因、回放播放器 |
+| 创作台 | Markdown / 富文本 / 代码三种文档，版本快照与回滚，AI 续写润色摘要扩写翻译（流式），全站全文检索 |
 | 提示词库 | 内置模板 + 自定义模板，`{{变量}}` 渲染，一键应用到会话 |
-| 知识库 | 原件存 MinIO，切片分块存 Manticore，页面检索与 Agent 工具共用同一份索引 |
-| 工具系统 | Python 运行时、文件读写、HTTP 请求、知识库检索，均带超时与输出裁剪 |
-| 技能 | 存 `wb_skill` 表，两段式：摘要常驻提示词，命中触发词才展开正文，节省上下文 |
+| 知识库 | 原件存 MinIO，分块存 Manticore，页面检索与 Agent 工具共用同一份索引 |
+| 工具系统 | Python 执行、文件读写、HTTP 请求、知识库检索、任务规划、记忆读写、子任务委派，均带超时与输出裁剪 |
+| 技能 | 两段式：摘要常驻提示词，命中触发词才展开正文，节省上下文 |
+| 长期记忆 | Agent 跨会话记住的偏好与事实，按键覆盖，自动注入后续对话 |
 | 文件空间 | MinIO 对象存储，按用户隔离前缀，支持在线预览与预签名下载 |
-| 日志中心 | 应用日志自动汇聚 Manticore（traceId / userId / sessionId / runId 全链路标识），管理员看全局视角，普通用户看本人视角，带分布概览与时间直方图 |
+| 日志中心 | 应用日志汇聚 Manticore（traceId / userId / sessionId / runId 全链路标识），管理员看全局、普通用户看本人，带分布概览与时间直方图 |
 | 健康监控 | 数据库、Redis、Manticore、MinIO、RabbitMQ、Python 运行时逐项探测 |
 | 仪表盘 | 运行量、Token 消耗、工具调用分布的可视化统计 |
-| 组件库 | 设计规范的可视化样例，五态按钮、语义色、异步三态、图表全量可点 |
+| 组件库 | 设计规范的可视化样例：五态按钮、语义色、异步三态、图表 |
 
-创作闭环：**提示词与技能约束 Agent 的行为，知识库给它资料，工作台看它怎么干，创作台把结果落成文档与版本**。
+## 2. 设计取舍
 
-## 2. 为什么这样设计
+只列贯穿全项目的决策，模块内部的取舍见 `specs/` 对应文档。
 
 | 选择 | 换来什么 | 代价 |
 |---|---|---|
-| 共享库 + `user_id` 行级隔离 | 单实例 Postgres 即可支撑多用户，运维零增量 | 查询必须带用户条件，靠规范与代码审查兜底 |
-| 事件流作为唯一事实来源 | 运行可回放、可审计，前端只需一个 reducer | 事件量大，需要裁剪与批量写 |
-| Agent 无状态，上下文由 Manticore 消息表 `lw_msg` 显式组装 | 模型实例可跨会话复用，会话状态只有一份（索引） | 每轮要读一次历史消息 |
-| 阻塞式 MVC + SseEmitter，不用 WebFlux | MyBatis/JDBC/进程执行都是阻塞的，不用来回切调度器 | 单实例并发受线程池限制 |
-| 日志同时落文件与 Manticore | 排查有完整原文，检索有索引 | 写入路径变长，用异步队列兜底 |
-| 知识库原件 MinIO + 分块 Manticore | 原件可重解析，检索零 embedding 成本 | 双处清理，靠级联删除保证一致 |
-| 文档正文 PG + 索引 Manticore | 编辑强一致，全站检索复用同一套设施 | 双写，索引以 PG 为准可重建 |
-| 不做可视化编排画布 | 创作场景是"对话 + 文档"，线性步骤用一次对话表达，不为小众需求背上画布执行器与图校验的长期维护成本 | 批量固定的多步流程需要拆成多次对话 |
-| 不引 Qiankun 微前端 | 单仓单实例，路由由后端菜单驱动已足够 | 未来多团队并行交付时需再拆分 |
-| 按业务前缀 + ULID 做主键 | ID 自带类型信息，分布式可生成，字典序近似时间序 | 比雪花 ID 长，索引体积略大 |
-| Sa-Token 做认证鉴权 | 注解式权限、多种会话存储、与 Spring Boot 3 原生适配 | 登录态依赖 Redis，需保证缓存可用 |
+| 共享库 + `user_id` 行级隔离 | 单实例 Postgres 支撑多用户，不做多租户运维 | 查询必须显式带用户条件，靠规范与代码审查兜底 |
+| 事件流作为运行态的唯一事实来源 | 运行可回放、可审计，前端只需一个归约器 | 事件量大，需要裁剪与批量写 |
+| 会话上下文由消息索引显式组装，内核无状态 | 模型客户端可跨会话复用，会话状态只有一份 | 每轮要读一次历史消息 |
+| 阻塞式 MVC + `SseEmitter` | MyBatis / JDBC / 子进程都是阻塞的，不需要来回切调度器 | 单实例并发受线程池限制 |
+| 消息、知识块、日志、创作文档检索副本进 Manticore | 一套检索设施支撑四处全文场景，无需 embedding | 与 PG 双写，需按"以 PG 为准可重建"兜底 |
+| 单容器内置 Python 运行时 | 用户无需自建执行环境，脚本能力开箱可用 | 解释器随镜像走，装包需落在数据卷 |
+| 不做可视化编排画布 | 创作场景是"对话 + 文档"，线性步骤用一次对话表达，不为小众需求背上画布执行器与图校验的长期维护成本 | 固定多步流程需要拆成多次对话 |
+| 不做微前端拆分 | 单仓单实例，路由由后端菜单驱动已足够 | 多团队并行交付时需再拆分 |
+| 主键 = 业务前缀 + ULID | ID 自带类型信息，可分布式生成，字典序近似时间序 | 比雪花 ID 长，索引体积略大 |
 
 ## 3. 技术栈
 
 | 层 | 选型 | 版本 | 用途 |
 |---|---|---|---|
-| 运行时 | JDK | 17.0.17 | — |
-| Web | Spring Boot Web | 3.5.12 | MVC + SseEmitter |
-| 持久 | MyBatis Spring Boot Starter | 3.0.4 | SQL 映射，XML 管理 |
-| 工具 | Hutool | 5.8.46 | 字符串/集合/日期/加解密，含 `hutool-ai` 模型出站 |
-| Agent | 自研内核 | — | 推理循环、工具注册、事件归一、上下文压缩 |
-| 模型 | `agent/model` 协议客户端 | — | OpenAI 兼容（覆盖 OpenAI / DeepSeek / Doubao / Grok）与 Ollama（含 SSE 增量解析、工具调用累积与取消） |
+| 运行时 | JDK | 17 | — |
+| Web | Spring Boot Web | 3.5.12 | MVC + `SseEmitter` |
+| 持久 | MyBatis Spring Boot Starter | 3.0.4 | SQL 映射，注解优先、XML 兜底 |
+| 工具 | Hutool（含 `hutool-ai`） | 5.8.46 | 字符串 / 集合 / 日期 / 加解密 / 模型出站 |
+| Agent | 自研内核 | — | 推理循环、工具注册、事件归一、规划、记忆、子运行，无第三方 Agent 框架依赖 |
+| 模型出站 | `agent/model` | — | OpenAI 兼容通道（OpenAI / DeepSeek / Doubao / Grok）与 Ollama 本地通道，含增量解析、工具调用累积与取消 |
 | 认证 | Sa-Token | 1.42.0 | 登录、权限注解、会话管理 |
 | ID | ulid-creator | 5.1.0 | ULID 生成 |
-| 数据库 | PostgreSQL + pgvector | 16 | 业务数据；pgvector 扩展预留，本期不建向量列 |
+| 数据库 | PostgreSQL（pgvector 镜像） | 16 | 业务数据；pgvector 扩展已就位，当前不建向量列 |
 | 检索 | Manticore | 25.0.0 | 消息 / 知识块 / 日志 / 创作文档全文检索 |
-| 对象存储 | MinIO | 8.5.17（SDK） | 文件空间 |
-| 消息 | RabbitMQ | 4 | 异步任务与日志投递 |
-| 前端 | Vue / Vite / TS | 3.4.34 / 5.2.12 / 5.4.5 | — |
+| 对象存储 | MinIO | 8.5.17（SDK） | 文件空间与知识库原件 |
+| 消息 | RabbitMQ | 4 | 日志投递与知识库解析任务 |
+| 前端 | Vue / TypeScript / Vite | 3.4.34 / 5.4.5 / 5.2.12 | — |
 | 状态 / 路由 | Pinia / Vue Router | 2.1.7 / 4.3.2 | 状态与动态路由 |
 | UI | Element Plus + 图标 | 2.9.0 / 2.3.1 | 基础控件 |
-| CSS | UnoCSS | 0.58.6 | 原子类 |
-| 请求 | Axios | 1.6.8 | 唯一出口 `src/api/index.ts` |
+| 样式 | UnoCSS | 0.58.6 | 原子类 + 设计令牌 |
+| 请求 | Axios | 1.6.8 | 唯一出口 `frontend/src/api/index.ts` |
 | 图表 | ECharts | 5.5.0 | 仪表盘与日志中心可视化 |
 | 富文本 | WangEditor | 5.1.23 | 创作台富文本模式 |
 | 渲染 | markdown-it + highlight.js | 14.1.0 / 11.10.0 | 会话消息 Markdown 与代码高亮 |
@@ -87,43 +81,47 @@ LiteWorkbench 解决的是两件事：**"Agent 跑起来之后我看不见它在
 LiteWorkbench/
 ├── backend/                     后端（Maven 单模块）
 │   └── src/main/java/com/liteworkbench/
-│       ├── api/                 控制器，只做参数校验与响应封装
-│       ├── service/             业务流程编排
-│       ├── mapper/              MyBatis / Manticore / Redis / MinIO 数据访问
+│       ├── api/                 控制器：参数校验、调用 service、封装响应
+│       ├── service/             业务编排、事务边界、日志
+│       ├── mapper/              数据库 / Manticore / Redis / MinIO 访问
 │       ├── domain/
-│       │   ├── entity/              实体（库表、Redis、Manticore 映射）
+│       │   ├── entity/          实体映射（库表、Redis、Manticore）
 │       │   ├── dto/             XxxREQ / XxxDTO
 │       │   ├── vo/              XxxRESP / XxxVO
-│       │   └── constant/        XxxEnum / XxxConst（静态常量用接口）
-│       ├── config/              配置类 + @ConfigurationProperties 内部类
-│       ├── anno/                自定义注解（@Idempotent 等）
-│       ├── aspect/              切面实现
-│       ├── mq/{producer,consumer}/
-│       ├── agent/               自研 Agent 内核：模型协议、推理循环、工具、事件归一
-│       ├── runtime/             内置 Python 运行时
-│       ├── observability/       日志汇聚、健康指标
-│       └── common/              统一响应、异常、分页、ULID、登录上下文
+│       │   └── constant/        XxxEnum / XxxConst
+│       ├── config/              配置类与 @ConfigurationProperties、线程池、路由兜底
+│       ├── anno/ aspect/        自定义注解（幂等、限流）与切面实现
+│       ├── mq/{producer,consumer}/  RabbitMQ 生产与消费
+│       ├── agent/               自研 Agent 内核：模型协议、推理循环、工具、规划、事件归一
+│       ├── runtime/             内置 Python 运行时的探测与执行
+│       ├── observability/       日志汇聚与健康指标
+│       └── common/              统一响应、异常、分页、ULID、登录上下文、加解密
 │   └── src/main/resources/
-│       ├── mapper/*.xml
-│       ├── db/schema.sql
-│       ├── application.yaml
-│       └── logback-spring.xml
+│       ├── mapper/*.xml         仅动态 SQL 与长 SQL；单表增删改查走注解
+│       ├── db/schema.sql        建表与索引，启动期幂等执行
+│       ├── application.yaml     全部外部化配置的默认值
+│       └── logback-spring.xml   日志滚动与落盘策略
 ├── frontend/                    前端
-│   └── src/{api,views,components,stores,composables,styles,locales,router,types,utils}
-├── docs/                        项目级文档：架构、数据模型、接口契约、错误码、部署、开发
-├── specs/                       子系统设计：一篇一个域，含模块设计、关键流程与取舍
+│   └── src/{api,views,components,stores,composables,directives,styles,locales,router,types,utils}
+├── docs/                        项目级事实：架构、数据模型、接口契约、错误码、部署、开发
+├── specs/                       子系统设计：一篇一个域，讲怎么实现与为什么
 └── deploy/                      容器与编排（Dockerfile、应用编排、中间件编排、发布脚本）
 ```
+
+后端目录的详细职责与依赖方向见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)；包命名与编码规则见 [AGENTS.md](AGENTS.md)。
 
 ## 5. 快速开始
 
 ### 5.1 中间件
 
 ```bash
-docker compose -f deploy/docker-compose.yaml up -d
+cd deploy
+./gen-secrets.sh                                    # 生成 .env.infra（字段清单见 .env.infra.example）
+set -a && . ./.env.infra && set +a
+podman-compose -f docker-compose.yaml up -d         # 或 docker compose -f docker-compose.yaml up -d
 ```
 
-包含 PostgreSQL、Manticore、Redis、MinIO、RabbitMQ（镜像取自华为云 SWR，国内网络友好）。
+包含 PostgreSQL、Manticore、Redis、MinIO、RabbitMQ。本地开发若需让本机后端直连 Manticore，追加 `-f docker-compose.local.yaml` 把 9306 / 9308 发布到宿主机。
 
 ### 5.2 后端
 
@@ -133,56 +131,58 @@ mvn -DskipTests package
 java -jar target/lite-workbench-server.jar
 ```
 
-默认监听 `8080`，健康检查 `/actuator/health`。
+默认监听 `8080`，健康检查 `/actuator/health`。启动时建表、写入种子数据、创建 Manticore 索引，全部幂等。
 
 ### 5.3 前端
 
 ```bash
 cd frontend
 npm install
-npm run dev      # http://localhost:5173，已代理 /api 到 8080（生产对外端口 24399）
+npm run dev      # http://localhost:5173，已把 /api 代理到 8080
 npm run build    # 产物在 frontend/dist
 ```
 
+生产环境由应用容器直接托管前端产物，对外端口 `24399`。
+
 ### 5.4 初始账号
 
-首次启动自动建表并写入种子数据，内置 `admin`（超级管理员）与 `demo`（普通用户）两个账号。
+首次启动写入 `admin`（超级管理员）与 `demo`（普通用户）两个种子账号。
 
-`deploy/docker-compose.app.yaml` 给定了默认初始口令 `admin@123`（可用环境变量 `LITEWORKBENCH_ADMIN_PASSWORD` 覆盖）；**该口令只对未激活账号生效**，首次登录后必须立即改密，改密完成即失效、配置项也不再覆盖。页面、接口响应与运行日志中不出现任何明文口令。
+编排文件里**不带任何默认口令**：未配置 `LITEWORKBENCH_ADMIN_PASSWORD` 时，应用在启动期随机生成初始口令并**仅在日志中 WARN 打印一次**，同时置 `pwd_reset_required = true`（首次登录强制改密，改密完成即失效）。页面、接口响应与运行日志中不出现任何明文口令。
 
-```bash
-export LITEWORKBENCH_ADMIN_PASSWORD='<your-strong-password>'   # 可选，覆盖编排默认值
-```
+想自己指定初始口令时，先改 `.env.infra` 里的 `LITEWORKBENCH_ADMIN_PASSWORD` 再启动；它只对尚未激活的种子账号生效。
 
-登录与改密请求中的密码字段为 `RSA/ECB/PKCS1Padding` 密文（浏览器端 JSEncrypt），公钥由 `GET /api/v1/auth/public-key` 下发且定期轮换，明文密码不出浏览器。
+登录与改密请求中的密码字段为 `RSA/ECB/PKCS1Padding` 密文（浏览器端 JSEncrypt），公钥由 `GET /api/v1/auth/public-key` 下发并定期轮换，明文密码不出浏览器。
 
 ## 6. 文档索引
 
-| 文档 | 内容 |
+| 文档 | 回答什么 |
 |---|---|
-| [AGENTS.md](AGENTS.md) | 工程规范，唯一权威：分层、命名、API 约定、错误码 |
-| [DESIGN.md](DESIGN.md) | 视觉语言、设计令牌、交互状态机 |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 分层设计、模块职责、关键流程 |
-| [docs/DATA-MODEL.md](docs/DATA-MODEL.md) | 库表、Manticore 检索表、ID 规范、审计字段 |
-| [docs/API-CONTRACT.md](docs/API-CONTRACT.md) | REST 与 SSE 接口契约 |
-| [docs/ERROR-CODES.md](docs/ERROR-CODES.md) | 错误码分段与处理约定 |
-| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | 本地开发、构建、测试 |
-| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | 容器部署、配置、运维与排障 |
-| [specs/01-agent-core.md](specs/01-agent-core.md) | Agent 内核：推理循环、事件流、工具系统、Python 运行时 |
-| [specs/02-conversation.md](specs/02-conversation.md) | 会话与运行状态机、模型供应方与协议出站 |
-| [specs/03-workspace-assets.md](specs/03-workspace-assets.md) | 技能、文件存储、提示词库 |
+| [AGENTS.md](AGENTS.md) | 工程强制规范：分层依赖、包与命名、API / ID / 字段 / 日志 / 配置约定、不变量、测试约定 |
+| [DESIGN.md](DESIGN.md) | 前端视觉与交互规范：设计令牌、按钮五态、异步三态、页面范式、禁止清单 |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 总体架构：分层与依赖方向、跨模块主链路、对外依赖边界、并发与性能 |
+| [docs/DATA-MODEL.md](docs/DATA-MODEL.md) | 数据模型：PG 表结构与索引、Manticore 检索表、Redis 键、ID 与审计字段 |
+| [docs/API-CONTRACT.md](docs/API-CONTRACT.md) | 接口契约：响应信封、各资源接口、SSE 帧结构、分页约定 |
+| [docs/ERROR-CODES.md](docs/ERROR-CODES.md) | 错误码分段、每码语义与 HTTP 状态、异常处理约定 |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | 本地开发：前置条件、起服务、测试、常见改动入口 |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | 部署运维：拓扑、镜像、环境变量、升级回滚、备份、排障 |
+| [specs/01-agent-core.md](specs/01-agent-core.md) | Agent 内核：推理循环、事件协议、工具契约、规划器、长期记忆、子运行、Python 运行时 |
+| [specs/02-conversation.md](specs/02-conversation.md) | 会话与运行：状态机、并发控制、模型供应方与出站 |
+| [specs/03-workspace-assets.md](specs/03-workspace-assets.md) | 工作台资产：技能、文件空间、提示词库 |
 | [specs/04-knowledge-doc.md](specs/04-knowledge-doc.md) | 知识库解析与检索、创作台与 AI 辅助写作 |
-| [specs/05-observability.md](specs/05-observability.md) | 日志采集与检索、运行记录与回放、健康监控 |
-| [specs/06-security.md](specs/06-security.md) | 角色权限（RBAC）与登录安全 |
-| [specs/07-frontend.md](specs/07-frontend.md) | 前端外壳：技术栈、路由、状态、关键流程 |
+| [specs/05-observability.md](specs/05-observability.md) | 可观测：日志双写与检索、运行记录、链路瀑布、Run 树、用量归因、健康监控 |
+| [specs/06-security.md](specs/06-security.md) | 安全：数据归属、RBAC 与赋权守门、登录安全 |
+| [specs/07-frontend.md](specs/07-frontend.md) | 前端外壳：目录划分、动态路由、状态管理、关键流程 |
 
-阅读顺序：**README（是什么） → ARCHITECTURE（整体分层与流程） → specs（每个子系统怎么设计与实现、为什么、代价） → AGENTS.md（写代码前查规范） → DESIGN.md（写页面前查视觉）**。
+阅读顺序：**README（是什么）→ docs/ARCHITECTURE（整体分层与链路）→ specs（每个模块怎么实现、为什么、代价）→ AGENTS.md（写代码前查规范）→ DESIGN.md（写页面前查视觉）**。
 
 ## 7. 构建与交付
 
-代码托管在 GitHub（`2132691342/LiteWorkbench`），`main` 为唯一主干。CI 由 GitHub Actions 执行：后端 `mvn package`（含测试）、前端类型检查与构建，通过后构建镜像推送到容器仓库，再 SSH 到目标主机 `47.108.73.153` 执行 `deploy/deploy-app.sh` 完成发布与就绪自检。
+代码托管在 GitHub，`main` 为唯一主干。CI 由 GitHub Actions 执行三个 job：后端 `mvn package`（含测试）、前端类型检查与构建、以及仅在 `main` 推送时执行的发布——构建镜像推送到容器仓库，把应用编排与发布脚本同步到目标主机，再 SSH 执行 `deploy/deploy-app.sh` 完成拉取、重建、健康自检与失败回滚。
 
-中间件不随应用重建，由 `deploy/docker-compose.yaml` 单独维护，凭据走环境变量，不进仓库。
+目标主机地址、账号与应用目录全部来自 GitHub Secrets；部署机密由目标主机上的 `deploy/.env.infra` 提供，CI 不注入任何口令。
+
+中间件不随应用重建，由 `deploy/docker-compose.yaml` 单独维护，凭据同样走环境变量。详见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
 
 ## 8. 约束
 
@@ -190,4 +190,4 @@ export LITEWORKBENCH_ADMIN_PASSWORD='<your-strong-password>'   # 可选，覆盖
 - 内置运行时只有 Python，不内置 Node / Go / Shell 发行版。
 - 接口方法只用 GET 与 POST；路径参数一律放在末尾。
 - 所有 ID 为 `业务前缀_ULID`，不使用雪花 ID 与 UUID。
-- 用户拥有的业务表带 `user_id`，查询必须显式携带用户条件。
+- 用户拥有的业务数据带 `user_id`，查询必须显式携带用户条件。

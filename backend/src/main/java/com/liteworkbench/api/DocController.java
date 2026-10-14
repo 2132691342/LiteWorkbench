@@ -35,7 +35,6 @@ public class DocController {
     private final DocService docService;
     private final DocAssistService docAssistService;
 
-    /** 文档分页 */
     @SaCheckPermission(PermConst.WB_DOC_LIST)
     @GetMapping("/page")
     public R<PageResult<DocVO>> page(PageREQ req,
@@ -51,7 +50,6 @@ public class DocController {
         return R.ok(docService.detail(docId));
     }
 
-    /** 新建文档 */
     @SaCheckPermission(PermConst.WB_DOC_CREATE)
     @Idempotent(prefix = "doc:create")
     @PostMapping("/create")
@@ -85,7 +83,6 @@ public class DocController {
         return R.ok(docService.search(req, category));
     }
 
-    /** 版本列表 */
     @SaCheckPermission(PermConst.WB_DOC_LIST)
     @GetMapping("/version/page")
     public R<PageResult<DocVersionVO>> versionPage(@RequestParam String docId,
@@ -97,14 +94,12 @@ public class DocController {
         return R.ok(docService.versions(docId, req));
     }
 
-    /** 版本快照详情 */
     @SaCheckPermission(PermConst.WB_DOC_LIST)
     @GetMapping("/version/detail/{versionId}")
     public R<DocVersionVO> versionDetail(@PathVariable String versionId) {
         return R.ok(docService.versionDetail(versionId));
     }
 
-    /** 回滚到指定版本 */
     @SaCheckPermission(PermConst.WB_DOC_UPDATE)
     @Idempotent(prefix = "doc:restore")
     @PostMapping("/version/restore/{versionId}")

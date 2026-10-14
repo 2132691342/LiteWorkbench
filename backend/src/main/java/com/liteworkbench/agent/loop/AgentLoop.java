@@ -12,6 +12,7 @@ import com.liteworkbench.agent.model.ModelTypes.Request;
 import com.liteworkbench.agent.model.ModelTypes.StreamResult;
 import com.liteworkbench.agent.model.ModelTypes.ToolCall;
 import com.liteworkbench.agent.spi.ToolGate;
+import com.liteworkbench.agent.tool.ToolCallTask;
 import com.liteworkbench.agent.tool.ToolRegistry;
 import lombok.extern.slf4j.Slf4j;
 
@@ -92,12 +93,7 @@ public class AgentLoop {
                 // 只有思考没有正文不收敛：继续下一轮，由迭代上限兜底
                 log.info("[agent.loop] iter={} 无正文产出，继续下一轮", iter);
             }
-            for (ToolCall call : calls) {
-                if (cancelled.getAsBoolean()) {
-                    return result.getText();
-                }
-                executeTool(context, call, sink);
-            }
+            executeToolBatch(context, calls, sink);
         }
         sink.emit(AgentEvent.builder().type(AgentEventType.EXCEED_MAX_ITERS).maxIters(maxIters).build());
         log.warn("[agent.loop] 达到迭代上限 {}，收敛", maxIters);
@@ -125,25 +121,64 @@ public class AgentLoop {
         }, cancelled);
     }
 
-    /** 执行一次工具：重复调用护栏 → 注册表调用 → 结果按调用下标回填 */
-    private void executeTool(List<Msg> context, ToolCall call, EventSink sink) {
-        sink.emit(AgentEvent.builder().type(AgentEventType.TOOL_CALL_START)
-                .toolCallId(call.getId()).toolName(call.getName()).arguments(call.getArguments()).build());
+    /** 执行一批工具调用：起止事件与结果严格按下标保序，内部按工具自声明决定是否并发 */
+    private void executeToolBatch(List<Msg> context, List<ToolCall> calls, EventSink sink) {
+        if (CollUtil.isEmpty(calls)) {
+            return;
+        }
+        calls.forEach(call -> sink.emit(AgentEvent.builder().type(AgentEventType.TOOL_CALL_START)
+                .toolCallId(call.getId()).toolName(call.getName()).arguments(call.getArguments()).build()));
+
+        List<String> outputs = new ArrayList<>(calls.size());
+        for (ToolCall call : calls) {
+            outputs.add(repeatGuard(call));
+        }
+        // 未被重复护栏拦下的调用交给注册表：可并发的整体并发，结果按下标回填
+        List<ToolCallTask> tasks = new ArrayList<>();
+        List<Integer> slots = new ArrayList<>();
+        for (int i = 0; i < calls.size(); i++) {
+            if (Objects.isNull(outputs.get(i))) {
+                tasks.add(new ToolCallTask(calls.get(i).getName(), calls.get(i).getArguments()));
+                slots.add(i);
+            }
+        }
+        long start = System.currentTimeMillis();
+        List<String> executed = tools.invokeBatch(tasks, toolTimeoutSeconds);
+        for (int i = 0; i < slots.size(); i++) {
+            outputs.set(slots.get(i), executed.get(i));
+        }
+        log.info("[agent.tools] batch={} parallel={} cost={}ms", calls.size(), tasks.size() > 1,
+                System.currentTimeMillis() - start);
+
+        for (int i = 0; i < calls.size(); i++) {
+            ToolCall call = calls.get(i);
+            if (cancelled.getAsBoolean() && Objects.isNull(outputs.get(i))) {
+                // 取消抵达时未回填的调用必须占位，否则 assistant 声明的 tool_calls 缺少配对结果会被上游判 400
+                outputs.set(i, "ERROR: 运行已中断，工具未执行");
+            }
+            String output = outputs.get(i);
+            boolean failed = Objects.nonNull(output) && output.startsWith(ERROR_PREFIX);
+            sink.emit(AgentEvent.builder().type(AgentEventType.TOOL_CALL_END)
+                    .toolCallId(call.getId()).toolName(call.getName()).build());
+            sink.emit(AgentEvent.builder().type(AgentEventType.TOOL_RESULT)
+                    .toolCallId(call.getId()).toolName(call.getName()).output(output).error(failed).build());
+            if (!failed && tools.isPlanTool(call.getName())) {
+                // 计划类工具额外产出一条结构化计划事件，界面不必去解析工具输出文本
+                sink.emit(AgentEvent.builder().type(AgentEventType.PLAN_UPDATED).planJson(output).build());
+            }
+            context.add(Msg.tool(call.getId(), call.getName(), output));
+        }
+    }
+
+    /** 重复调用护栏：超限返回结构化文本，未超限返回 null 交由注册表执行 */
+    private String repeatGuard(ToolCall call) {
         String key = call.getName() + '|' + StrUtil.nullToEmpty(call.getArguments());
         int count = callCounter.merge(key, 1, Integer::sum);
-        String output;
-        if (count > repeatGuard) {
-            output = StrUtil.format("ERROR: 同一调用已重复 {} 次仍未推进，请更换参数或改用其他方式",
-                    count - 1);
-        } else {
-            output = tools.invoke(call.getName(), call.getArguments(), toolTimeoutSeconds);
+        if (count <= repeatGuard) {
+            return null;
         }
-        boolean failed = Objects.nonNull(output) && output.startsWith(ERROR_PREFIX);
-        sink.emit(AgentEvent.builder().type(AgentEventType.TOOL_CALL_END)
-                .toolCallId(call.getId()).toolName(call.getName()).build());
-        sink.emit(AgentEvent.builder().type(AgentEventType.TOOL_RESULT)
-                .toolCallId(call.getId()).toolName(call.getName()).output(output).error(failed).build());
-        context.add(Msg.tool(call.getId(), call.getName(), output));
+        log.warn("[agent.loop] tool={} 同一调用累计 {} 次，判定为打转", call.getName(), count);
+        return StrUtil.format("ERROR: 同一调用已重复 {} 次仍未推进，请更换参数或改用其他方式", count - 1);
     }
 
     /** 取最后一条有正文的助手消息，用于取消或超限时兜底产出 */

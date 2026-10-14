@@ -18,6 +18,5 @@ public class PythonStatusVO implements Serializable {
     private String version;
     /** 解释器来源路径 */
     private String source;
-    /** 版本是否满足最低要求 */
     private Boolean ok;
 }

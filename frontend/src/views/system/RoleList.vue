@@ -36,7 +36,6 @@ const menuTree = ref<MenuVO[]>([])
 const checkedMenuIds = ref<string[]>([])
 const treeRef = ref()
 
-/** 拉取角色分页 */
 async function load(): Promise<void> {
   loading.value = true
   error.value = ''
@@ -60,7 +59,6 @@ function openDialog(role?: RoleVO): void {
   dialogVisible.value = true
 }
 
-/** 保存角色 */
 async function submitDialog(): Promise<void> {
   dialogLoading.value = true
   try {
@@ -77,7 +75,6 @@ async function submitDialog(): Promise<void> {
   }
 }
 
-/** 打开授权抽屉：加载菜单树与已授权集合 */
 async function openGrant(role: RoleVO): Promise<void> {
   grantRole.value = role
   grantVisible.value = true
@@ -93,7 +90,7 @@ async function openGrant(role: RoleVO): Promise<void> {
   }
 }
 
-/** 提交授权，勾选父级时带出子级 */
+/** 提交授权：勾选父级时带出子级，半选父级也一并提交 */
 async function submitGrant(): Promise<void> {
   if (!grantRole.value) return
   grantLoading.value = true

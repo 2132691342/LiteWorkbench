@@ -26,15 +26,11 @@ public class UserREQ implements Serializable {
     private String password;
     /** 初始密码加密所用公钥标识，与 password 成对出现 */
     private String passwordKeyId;
-    /** 显示名 */
     @NotBlank(message = "显示名不能为空")
     @Size(max = 64, message = "显示名不能超过 64 字符")
     private String nickname;
-    /** 邮箱 */
     @Email(message = "邮箱格式不正确")
     private String email;
-    /** 角色 ID 列表 */
     private List<String> roleIds;
-    /** 备注 */
     private String remark;
 }

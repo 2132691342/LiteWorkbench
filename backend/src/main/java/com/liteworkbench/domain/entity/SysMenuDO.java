@@ -33,26 +33,18 @@ public class SysMenuDO implements Serializable {
     private String routePath;
     /** 前端组件路径 */
     private String component;
-    /** 图标名 */
     private String icon;
     /** 权限标识 system:user:create */
     private String permCode;
-    /** 排序号 */
     private Integer sortNo;
-    /** 是否显示 */
     private Boolean visible;
     /** 状态：normal / disabled */
     private String state;
-    /** 创建人 */
     private String createdBy;
-    /** 创建时间 */
     private LocalDateTime createdAt;
-    /** 更新人 */
     private String updatedBy;
-    /** 更新时间 */
     private LocalDateTime updatedAt;
     /** 逻辑删除 */
     private Boolean deleted;
-    /** 备注 */
     private String remark;
 }

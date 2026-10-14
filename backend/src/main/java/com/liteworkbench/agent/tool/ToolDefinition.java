@@ -10,25 +10,27 @@ import java.lang.reflect.Method;
 @Getter
 public class ToolDefinition {
 
-    /** 调用名 */
     private final String name;
-    /** 面向模型的说明 */
     private final String description;
-    /** 风险等级 */
     private final ToolRiskEnum risk;
     /** JSON Schema */
     private final JSONObject parameters;
     /** 工具实现实例 */
     private final Object target;
-    /** 工具方法 */
     private final Method method;
     /** 参数名，顺序与方法签名一致 */
     private final String[] paramNames;
     /** 参数类型，顺序与方法签名一致 */
     private final Class<?>[] paramTypes;
+    /** 是否与同批调用并发执行 */
+    private final boolean parallelSafe;
+    /** 是否为计划类工具，输出需额外转成计划事件 */
+    private final boolean planTool;
 
     public ToolDefinition(String name, String description, ToolRiskEnum risk, JSONObject parameters,
-                          Object target, Method method, String[] paramNames, Class<?>[] paramTypes) {
+                          Object target, Method method, String[] paramNames, Class<?>[] paramTypes,
+                          boolean parallelSafe, boolean planTool) {
+        this.planTool = planTool;
         this.name = name;
         this.description = description;
         this.risk = risk;
@@ -37,5 +39,6 @@ public class ToolDefinition {
         this.method = method;
         this.paramNames = paramNames;
         this.paramTypes = paramTypes;
+        this.parallelSafe = parallelSafe;
     }
 }

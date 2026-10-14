@@ -1,12 +1,12 @@
 package com.liteworkbench.service;
 
-import cn.hutool.core.thread.ThreadUtil;
 import cn.hutool.core.util.StrUtil;
 import com.liteworkbench.agent.ModelCaller;
 import com.liteworkbench.common.BizException;
 import com.liteworkbench.common.ErrorCodeEnum;
 import com.liteworkbench.common.IdGenerator;
 import com.liteworkbench.common.PageResult;
+import com.liteworkbench.config.ExecutorConfig;
 import com.liteworkbench.common.TimeUtil;
 import com.liteworkbench.domain.constant.IdPrefixConst;
 import com.liteworkbench.domain.constant.SessionConst;
@@ -21,6 +21,7 @@ import com.liteworkbench.mapper.MessageIndexMapper;
 import com.liteworkbench.mapper.WbSessionMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -39,9 +40,9 @@ public class SessionService {
     private final WbSessionMapper sessionMapper;
     private final MessageIndexMapper messageIndexMapper;
     private final ModelCaller modelCaller;
-
-    /** 标题生成线程池：低频、静默、失败不影响对话 */
-    private final ExecutorService renameExecutor = ThreadUtil.newFixedExecutor(1, 4, "lw-title", true);
+    /** 标题生成走观测池：低频、静默，失败不影响对话；线程由 ExecutorConfig 统一回收 */
+    @Qualifier(ExecutorConfig.EVENT_EXECUTOR)
+    private final ExecutorService renameExecutor;
 
     /** 分页查询，仅返回归属用户的会话 */
     public PageResult<SessionVO> page(SessionPageREQ req, String userId) {
@@ -59,7 +60,6 @@ public class SessionService {
         return toVO(getOwned(sessionId, userId));
     }
 
-    /** 新建会话 */
     public String create(SessionREQ req, String userId) {
         WbSessionDO session = new WbSessionDO();
         session.setSessionId(IdGenerator.generate(IdPrefixConst.SESSION));

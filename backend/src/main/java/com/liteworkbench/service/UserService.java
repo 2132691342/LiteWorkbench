@@ -46,7 +46,6 @@ public class UserService {
     private final SecretCodec secretCodec;
     private final LoginUserAssembler loginUserAssembler;
 
-    /** 分页查询 */
     public PageResult<UserVO> page(UserPageREQ req) {
         long total = sysUserMapper.countPage(req);
         if (total <= 0) {
@@ -57,12 +56,10 @@ public class UserService {
         return PageResult.of(list, total, req.pageNo(), req.pageSize());
     }
 
-    /** 用户详情 */
     public UserVO detail(String userId) {
         return toVO(require(userId));
     }
 
-    /** 新建用户 */
     @Transactional(rollbackFor = Exception.class)
     public String create(UserREQ req, String operatorId) {
         if (StrUtil.isBlank(req.getUsername())) {

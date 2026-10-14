@@ -27,7 +27,6 @@ public class WbSkillDO implements Serializable {
     private String userId;
     /** 技能标识，用户内唯一 */
     private String skillCode;
-    /** 技能名称 */
     private String skillName;
     /** 摘要，常驻系统提示词 */
     private String summary;
@@ -35,7 +34,6 @@ public class WbSkillDO implements Serializable {
     private String content;
     /** 触发词，逗号分隔 */
     private String triggerWords;
-    /** 是否启用 */
     private Boolean enabled;
     private String createdBy;
     private LocalDateTime createdAt;

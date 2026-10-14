@@ -27,19 +27,15 @@ public class WbKbDocDO implements Serializable {
     private String userId;
     /** 归属知识库 */
     private String kbId;
-    /** 文档名 */
     private String docName;
     /** MinIO 对象键，含用户前缀 */
     private String objectKey;
-    /** 桶名 */
     private String bucketName;
-    /** 字节数 */
     private Long fileSize;
     /** MIME 类型 */
     private String contentType;
     /** 提取正文总字符数 */
     private Integer charCount;
-    /** 分块数 */
     private Integer chunkCount;
     /** 解析状态 pending / processing / ready / failed */
     private String state;
@@ -51,6 +47,5 @@ public class WbKbDocDO implements Serializable {
     private LocalDateTime updatedAt;
     /** 逻辑删除 */
     private Boolean deleted;
-    /** 备注 */
     private String remark;
 }

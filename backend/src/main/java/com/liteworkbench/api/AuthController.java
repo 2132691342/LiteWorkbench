@@ -38,7 +38,6 @@ public class AuthController {
         return R.ok(authService.login(req));
     }
 
-    /** 登出 */
     @Idempotent(prefix = "logout", ttl = 3)
     @PostMapping("/logout")
     public R<Void> logout() {

@@ -8,7 +8,6 @@ import TheSideMenu from './TheSideMenu.vue'
 const route = useRoute()
 const appStore = useAppStore()
 
-/** 路由变化即收起移动抽屉 */
 watch(
   () => route.path,
   () => appStore.closeSidebar(),
@@ -16,7 +15,6 @@ watch(
 </script>
 
 <template>
-  <!-- 桌面固定侧栏 -->
   <aside
     v-show="!appStore.sidebarCollapsed"
     class="border-r hidden lg:flex flex-col shrink-0 overflow-hidden"

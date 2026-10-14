@@ -95,7 +95,7 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
+          # 密钥不来自 CI：deploy-app.sh 在目标主机 source .env.infra，那里是部署机密的唯一来源
           script: |
             cd ${{ secrets.SSH_APP_DIR }}
-            export LITEWORKBENCH_SECURITY_SECRET=${{ secrets.LITEWORKBENCH_SECURITY_SECRET }}
             bash deploy-app.sh ghcr.io/${{ github.repository_owner }}/liteworkbench:latest

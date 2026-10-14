@@ -18,6 +18,11 @@ public @interface AgentTool {
     /** 面向模型的用途说明，越具体越好 */
     String description() default "";
 
-    /** 风险等级 */
     ToolRiskEnum risk() default ToolRiskEnum.SAFE;
+
+    /** 是否与同批调用并发执行；false 会让所在批次整体退化为串行，写类工具靠这条避免竞态 */
+    boolean parallelSafe() default true;
+
+    /** 是否为计划类工具：其输出是结构化计划，内核额外产出一条 plan.updated 供界面渲染 */
+    boolean emitsPlan() default false;
 }

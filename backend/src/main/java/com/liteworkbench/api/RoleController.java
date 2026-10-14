@@ -30,7 +30,6 @@ public class RoleController {
 
     private final RoleService roleService;
 
-    /** 分页查询 */
     @SaCheckPermission(PermConst.SYSTEM_ROLE_LIST)
     @GetMapping("/page")
     public R<PageResult<RoleVO>> page(PageREQ req) {
@@ -44,7 +43,6 @@ public class RoleController {
         return R.ok(roleService.list());
     }
 
-    /** 详情 */
     @SaCheckPermission(PermConst.SYSTEM_ROLE_LIST)
     @GetMapping("/detail/{roleId}")
     public R<RoleVO> detail(@PathVariable String roleId) {
@@ -58,7 +56,6 @@ public class RoleController {
         return R.ok(roleService.menuIds(roleId));
     }
 
-    /** 新建角色 */
     @SaCheckPermission(PermConst.SYSTEM_ROLE_CREATE)
     @Idempotent(prefix = "role:create")
     @PostMapping("/create")
@@ -66,7 +63,6 @@ public class RoleController {
         return R.ok(roleService.create(req, LoginContext.userId()));
     }
 
-    /** 修改角色 */
     @SaCheckPermission(PermConst.SYSTEM_ROLE_UPDATE)
     @Idempotent(prefix = "role:update")
     @PostMapping("/update")

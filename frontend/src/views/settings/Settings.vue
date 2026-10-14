@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import LwButton from '@/components/ui/LwButton.vue'
 import LwCard from '@/components/ui/LwCard.vue'
 import LwTag from '@/components/ui/LwTag.vue'
+import MemoryPanel from '@/components/settings/MemoryPanel.vue'
 import ProviderPanel from '@/components/settings/ProviderPanel.vue'
 import ToolPanel from '@/components/settings/ToolPanel.vue'
 import { usePermission } from '@/composables/usePermission'
@@ -56,6 +57,9 @@ const passwordVisible = ref(false)
         </div>
       </LwCard>
     </div>
+
+    <!-- 记忆是用户私有资产，所有登录用户都能管自己的 -->
+    <MemoryPanel />
 
     <ProviderPanel v-if="hasPerm('wb:provider:list')" />
     <ToolPanel v-if="hasPerm('wb:tool:list')" />

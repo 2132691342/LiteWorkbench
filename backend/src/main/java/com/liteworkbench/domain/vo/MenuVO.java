@@ -13,7 +13,6 @@ public class MenuVO implements Serializable {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    /** 菜单 ID */
     private String menuId;
     /** 父菜单 ID，根为 0 */
     private String parentId;
@@ -25,14 +24,9 @@ public class MenuVO implements Serializable {
     private String routePath;
     /** 前端组件路径 */
     private String component;
-    /** 图标名 */
     private String icon;
-    /** 权限标识 */
     private String permCode;
-    /** 排序号 */
     private Integer sortNo;
-    /** 是否显示 */
     private Boolean visible;
-    /** 子节点 */
     private List<MenuVO> children;
 }

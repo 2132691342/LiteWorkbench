@@ -33,7 +33,6 @@ public class WbDocVersionDO implements Serializable {
     private String docTitle;
     /** 快照正文 */
     private String content;
-    /** 变更说明 */
     private String changeNote;
     private String createdBy;
     private LocalDateTime createdAt;

@@ -25,7 +25,6 @@ public class WbProviderDO implements Serializable {
     private String providerId;
     /** 供应方编码，预设 openai / deepseek / doubao / grok / ollama，全局唯一 */
     private String providerCode;
-    /** 展示名 */
     private String providerName;
     /** 端点，OpenAI 兼容方必填 */
     private String baseUrl;
@@ -33,7 +32,6 @@ public class WbProviderDO implements Serializable {
     private String apiKeyEnc;
     /** 默认模型名，可空 */
     private String defaultModel;
-    /** 是否启用 */
     private Boolean enabled;
     private String createdBy;
     private LocalDateTime createdAt;
@@ -41,6 +39,5 @@ public class WbProviderDO implements Serializable {
     private LocalDateTime updatedAt;
     /** 逻辑删除 */
     private Boolean deleted;
-    /** 备注 */
     private String remark;
 }
