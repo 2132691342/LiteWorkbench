@@ -10,6 +10,9 @@ COMPOSE="${COMPOSE:-docker-compose.app.yaml}"
 export LITEWORKBENCH_PORT="${LITEWORKBENCH_PORT:-24399}"
 PORT="$LITEWORKBENCH_PORT"
 HEALTH_URL="http://127.0.0.1:${PORT}/actuator/health"
+# podman-compose 会把完整 podman run 命令（含全部 -e 明文口令）打到 stdout，CI 日志只脱敏 Secret 不脱敏这些值，
+# 因此编排输出只落服务器本地文件，失败时才回显尾部
+COMPOSE_LOG="${COMPOSE_LOG:-/var/log/liteworkbench-compose.log}"
 # 就绪等待：最长 3 分钟（36 × 5s），需覆盖 JVM 启动 + schema 初始化
 READY_TRIES=36
 READY_INTERVAL=5
@@ -66,7 +69,13 @@ wait_ready() {
 recreate() {
   podman rm -f "$CONTAINER" 2>/dev/null || true
   drop_stale_dnat
-  podman-compose -f "$COMPOSE" up -d
+  : > "$COMPOSE_LOG" 2>/dev/null || true
+  chmod 600 "$COMPOSE_LOG" 2>/dev/null || true
+  if ! podman-compose -f "$COMPOSE" up -d >>"$COMPOSE_LOG" 2>&1; then
+    echo "编排启动失败，尾部日志（已滤掉环境变量明文）：" >&2
+    tail -30 "$COMPOSE_LOG" | grep -av -- ' -e LITEWORKBENCH' >&2 || true
+    return 1
+  fi
 }
 
 log "拉取镜像 $IMAGE"
@@ -94,7 +103,8 @@ fi
 
 echo "=== 新版本未就绪，打印现场 ==="
 podman ps --format '{{.Names}} | {{.Status}} | {{.Ports}}'
-podman logs --tail 80 "$CONTAINER" || true
+# 滤掉 data.init.user 行：种子账号初始口令只允许出现在服务器日志，不得随 CI 日志外泄
+podman logs --tail 80 "$CONTAINER" 2>&1 | grep -av 'data.init.user' || true
 ss -lntp 2>/dev/null | grep "$PORT" || echo "$PORT 未监听"
 
 if [ -z "$PREV_IMAGE" ]; then
@@ -110,6 +120,6 @@ if wait_ready; then
   echo "=== 已回滚到 $PREV_IMAGE，站点恢复；本次发布判定失败 ==="
 else
   echo "=== 回滚后仍未就绪，需要人工介入 ==="
-  podman logs --tail 80 "$CONTAINER" || true
+  podman logs --tail 80 "$CONTAINER" 2>&1 | grep -av 'data.init.user' || true
 fi
 exit 1
