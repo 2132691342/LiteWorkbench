@@ -59,9 +59,9 @@ podman exec -it pgvector psql -U postgres -c "ALTER USER postgres PASSWORD '<新
 bash deploy-app.sh <镜像:tag>
 ```
 
-Redis 与 RabbitMQ 未挂数据卷，凭据每次启动按环境变量生效，改完 `.env.infra` 重启容器即可。
+Redis 与 RabbitMQ 的凭据由环境变量在每次启动时重放，改完 `.env.infra` 重启容器即可；RabbitMQ 的账号定义落在镜像声明的匿名卷里，卷存在时以卷内定义为准。
 
-编排同时挂在 `postgres`、`redis`、`manticore`、`minio`、`rabbitmq` 五个服务上，容器崩溃自动重启。应用容器必须加入中间件所在网络才能按主机名互访；网络名以 `podman network ls` 实际为准（共享栈上为 `infra_default`）。
+编排同时挂在 `postgres`、`redis`、`manticore`、`minio`、`rabbitmq` 五个服务上，容器崩溃自动重启。应用容器必须加入中间件所在网络才能按主机名互访：中间件栈在宿主机上由本仓库的 `deploy/docker-compose.yaml` 启动（同步到 `/opt/liteworkbench`），项目名取目录名，故网络为 `liteworkbench_default`、命名卷为 `liteworkbench_pgdata` / `liteworkbench_minio_data`。应用编排以 `${LITEWORKBENCH_NETWORK:-liteworkbench_default}` 引用同一网络，换目录部署时用该变量对齐。
 
 Manticore 的 9308（HTTP JSON API）只对同网络容器暴露，不发布宿主机端口；应用以 `manticore:9308` 直连，运维排障经 9306 MySQL 协议（容器内 `mysql -h0 -P9306`）执行 SQL。
 
@@ -69,7 +69,7 @@ RabbitMQ 拓扑由应用声明：`lw.log.exchange` / `lw.log.index.queue`（死�
 
 ### 3.1 共享中间件的所有权与禁改清单
 
-中间件是**跨项目共享基础设施**，云主机上编排原件在 `/root/infra/docker-compose.yaml`（只读参照），数据卷为 `infra_pgdata` / `infra_minio_data`；Manticore 的数据目录 `/var/lib/manticore` 挂在编排生成的匿名卷上，因此**禁止执行 `podman volume prune`**——那会一次性抹掉全部会话消息、知识块与日志索引。任何部署与运维操作必须遵守：
+中间件是**跨项目共享基础设施**，一旦重建，同主机上其它项目的连接会一起断。数据落点分两类：`pgdata` / `minio_data` 是编排声明的命名卷；Manticore 的 `/var/lib/manticore`、RabbitMQ 的 `/var/lib/rabbitmq`、Redis 的 `/data` 由镜像自身声明为卷，落到项目命名空间下的**匿名卷**——容器重建不会删掉它们，但 **`podman volume prune` 会一次性抹掉全部会话消息、知识块与日志索引**，故禁止执行。任何部署与运维操作必须遵守：
 
 | 规则 | 说明 |
 |---|---|
@@ -90,7 +90,7 @@ podman build -f deploy/Dockerfile -t liteworkbench:latest .
 
 ```bash
 podman run -d --name liteworkbench -p ${LITEWORKBENCH_PORT:-24399}:8080 \
-  --network infra_default \
+  --network ${LITEWORKBENCH_NETWORK:-liteworkbench_default} \
   --memory 1152m \
   --env-file deploy/.env.infra \
   -e LITEWORKBENCH_DATASOURCE_URL=jdbc:postgresql://postgres:5432/postgres \
@@ -133,6 +133,7 @@ podman run -d --name liteworkbench -p ${LITEWORKBENCH_PORT:-24399}:8080 \
 | `LITEWORKBENCH_RUNTIME_PYTHON_PATH` | 空 | 空 | 空则按 数据目录 → PATH 顺序探测解释器 |
 | `LITEWORKBENCH_DEGRADATION_ALLOW_START` | true | true | 中间件不可用时是否允许降级启动 |
 | `LITEWORKBENCH_PORT` | 24399 | 注入编排 | **宿主端口**，由 `deploy-app.sh` 单点定义；容器内固定 8080 |
+| `LITEWORKBENCH_NETWORK` | `liteworkbench_default` | `liteworkbench_default` | 应用加入的中间件网络名；中间件栈换目录部署时需对齐 |
 | `LITEWORKBENCH_IMAGE` | 无 | 必填 | 应用镜像地址，由 `deploy-app.sh <镜像:tag>` 注入 |
 
 本地默认值面向本地容器中间件；容器部署时主机名与两个目录由编排改写，密钥类一律走 `.env.infra`，不落到配置文件、不进镜像层。
@@ -289,7 +290,7 @@ CI **不注入任何部署密钥**：应用密钥、中间件口令只来自目�
 | 选择 | 换来什么 | 代价 |
 |---|---|---|
 | 静态资源内置到 jar | 少一个 Nginx 容器，部署简单 | 前端更新需重新打镜像 |
-| 应用与中间件分成两个编排 | 发布应用不动数据库 | 需要跨 compose 共享网络，网络名依赖编排项目名 |
+| 应用与中间件分成两个编排 | 发布应用不动数据库 | 需要跨 compose 共享网络，网络名随中间件栈的项目名变化，故用 `LITEWORKBENCH_NETWORK` 显式指定而非依赖默认值 |
 | 单实例 | 无分布式一致性问题 | 无法水平扩展，升级有短暂中断 |
 | 启动自动建表 | 首次部署零手工步骤 | 需要 DDL 保持幂等 |
 | 发布脚本自带回滚 | 起不来不会把站点留在宕机状态 | 需要保留上一版镜像，回滚有额外等待 |

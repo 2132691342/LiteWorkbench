@@ -50,11 +50,12 @@ public interface WbProviderMapper {
     @Select("SELECT * FROM wb_provider WHERE deleted = false ORDER BY created_at ASC")
     List<WbProviderDO> selectAll();
 
-    /** 编码冲突计数 */
+    /** 编码冲突计数；excludeId 为空即不做排除，避免 `<> NULL` 让条件恒为 NULL 从而绕过重名校验 */
     @Select("""
             SELECT count(*) FROM wb_provider
             WHERE provider_code = #{providerCode}
-              AND deleted = false AND provider_id <> #{excludeId}
+              AND deleted = false
+              AND (CAST(#{excludeId} AS varchar) IS NULL OR #{excludeId} = '' OR provider_id <> #{excludeId})
             """)
     long countByCodeExclude(@Param("providerCode") String providerCode,
                             @Param("excludeId") String excludeId);

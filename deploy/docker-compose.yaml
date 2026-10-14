@@ -1,6 +1,10 @@
 # LiteWorkbench 中间件编排：PostgreSQL(pgvector) / Manticore / Redis / MinIO / RabbitMQ
 # 镜像取自华为云 SWR，国内网络友好；端口与 docs/DEPLOYMENT.md 对齐
 # 凭据一律由环境提供，仓库内不保留任何可用口令：先执行 ./gen-secrets.sh 生成 .env.infra
+#
+# 该文件部署到宿主机的应用目录（/opt/liteworkbench）后由 podman-compose 启动，
+# 项目名取目录名，因此默认网络为 liteworkbench_default、卷名为 liteworkbench_<卷>；
+# 应用编排按同一名字加入网络，改名会直接让应用连不上中间件。
 services:
   postgres:
     image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/pgvector/pgvector:pg16
@@ -79,7 +83,8 @@ services:
     container_name: rabbitmq
     restart: always
     environment:
-      RABBITMQ_DEFAULT_USER: ${LITEWORKBENCH_MQ_USERNAME:-admin}
+      # 账号与口令同时必填：中间件用兜底值、应用侧必填，会出现「队列已起而应用连不上」的半启动状态
+      RABBITMQ_DEFAULT_USER: ${LITEWORKBENCH_MQ_USERNAME:?未设置消息队列账号，请先执行 deploy/gen-secrets.sh}
       RABBITMQ_DEFAULT_PASS: ${LITEWORKBENCH_MQ_PASSWORD:?未设置消息队列口令，请先执行 deploy/gen-secrets.sh}
     ports:
       - "5672:5672"
@@ -90,6 +95,8 @@ services:
       timeout: 10s
       retries: 3
 
+# Manticore / RabbitMQ / Redis 的数据目录由各自镜像声明为 VOLUME，
+# 落到项目命名空间下的匿名卷，容器重建时不被删除；只有 podman volume prune 会清掉它们。
 volumes:
   pgdata: { }
   minio_data: { }

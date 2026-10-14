@@ -6,9 +6,9 @@ services:
     image: ${LITEWORKBENCH_IMAGE:?未指定镜像，请执行 deploy-app.sh <镜像:tag>}
     container_name: liteworkbench
     restart: always
-    # 与中间件编排同一网络，postgres / redis / manticore / minio / rabbitmq 主机名可直接解析
+    # 加入中间件所在网络后，postgres / redis / manticore / minio / rabbitmq 主机名可直接解析
     networks:
-      - infra_default
+      - infra
     # 2GB 小主机：容器限内存，JVM 的 MaxRAMPercentage 据此收敛堆上限
     mem_limit: 1152m
     environment:
@@ -39,8 +39,11 @@ services:
       - app_data:/var/lib/liteworkbench
 
 networks:
-  infra_default:
+  # 中间件栈在宿主机的项目名为 liteworkbench（目录名），其默认网络即下方的默认值。
+  # 不自己创建网络，只作为 guest 加入，避免动到中间件容器的网络归属。
+  infra:
     external: true
+    name: ${LITEWORKBENCH_NETWORK:-liteworkbench_default}
 
 volumes:
   app_logs: { }

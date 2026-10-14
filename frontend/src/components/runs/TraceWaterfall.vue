@@ -25,9 +25,11 @@ function barStyle(span: TraceSpanVO): Record<string, string> {
   return { left: `${left}%`, width: `${width}%`, backgroundColor: barColor(span) }
 }
 
+/** 模型段主紫、工具段辅助紫、计划点深色前景；错误与未收尾用语义色覆盖前两者 */
 function barColor(span: TraceSpanVO): string {
   if (span.status === 'error') return 'var(--lw-error-ink)'
   if (span.status === 'pending') return 'var(--lw-warning-ink)'
+  if (span.kind === 'plan') return 'var(--lw-ink)'
   return span.kind === 'model' ? 'var(--lw-primary)' : 'var(--lw-secondary)'
 }
 

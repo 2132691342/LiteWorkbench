@@ -1,0 +1,23 @@
+fix: 修正编排网络引用与三处运行期缺陷
+
+编排（会导致应用容器起不来）：
+- docker-compose.app.yaml 原引用 external 网络 infra_default，但中间件栈在宿主机由本仓库
+  docker-compose.yaml 启动、项目名取目录名，实际网络是 liteworkbench_default，应用永远加不进去。
+  改为 ${LITEWORKBENCH_NETWORK:-liteworkbench_default}，与真实环境一致且可覆盖。
+- docker-compose.local.yaml 只补 9308：ports 是列表合并语义，重复声明 9306 会冲突。
+- 中间件 MQ 账号由兜底值改为必填，避免中间件起得来、应用连不上的半启动状态。
+
+后端：
+- WbProviderMapper.countByCodeExclude 补 CAST 空值兜底：excludeId 为空时 `<> NULL` 让条件恒为 NULL，
+  计数恒 0，重名校验被绕过。
+- RunService.abort 孤儿运行分支补释放会话锁：不释放则该会话在 LOCK_TTL_SECONDS 内一直回 SESSION_BUSY。
+- KbDocService 上传与重解析的 MQ 投递失败就地置 failed：留在 pending 会被 reparse 的 STATE_CONFLICT
+  挡住，既处理不了也不能重放，只能删了重传；失败原因统一走 markFailed 截断到 500 字符。
+
+前端：
+- Login.vue 地球图标路径第二段圆弧未闭合（终点写成 0 20 而非 0-20）且缺外圈，补正。
+- TraceWaterfall 计划片段改用深色前景，原先与工具段同色无法区分。
+- Console.vue 运行元信息注释与实现对齐（耗时必有，Token 有才追加）。
+
+文档：DEPLOYMENT 修正中间件栈实际位置、网络名与卷的落点（命名卷 vs 镜像声明匿名卷），
+补 LITEWORKBENCH_NETWORK；specs/04 的知识库投递失败行为按修正后的代码改写。

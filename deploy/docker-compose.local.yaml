@@ -1,7 +1,8 @@
-# 本地开发覆盖：把 Manticore HTTP JSON API 9308 发布到宿主机，供本机运行的 Spring Boot 直连
-# 仅本地开发使用，不参与服务器部署
+# 本地开发覆盖：叠加在 docker-compose.yaml 之上，把 Manticore HTTP JSON API 9308 发布到宿主机，
+# 供本机运行的 Spring Boot 直连。仅本地开发使用，不参与服务器部署。
+# 用法：podman-compose -f docker-compose.yaml -f docker-compose.local.yaml up -d
+# 只补 9308：9306 已在基础文件里发布，ports 为列表合并语义，重复声明会冲突。
 services:
   manticore:
     ports:
-      - "9306:9306"
       - "9308:9308"

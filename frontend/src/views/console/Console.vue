@@ -190,7 +190,7 @@ function runStatusText(run: RunVO): string {
   return t(`console.runStatus_${run.status}`)
 }
 
-/** 运行元信息：耗时与 Token 用量，两者都有才展示 */
+/** 运行元信息：耗时必有，Token 用量有才追加 */
 function runMeta(run: RunVO): string {
   const durationMs = run.durationMs ?? 0
   const duration =

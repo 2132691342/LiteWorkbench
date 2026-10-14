@@ -121,7 +121,7 @@ set -a && . ./.env.infra && set +a
 podman-compose -f docker-compose.yaml up -d         # 或 docker compose -f docker-compose.yaml up -d
 ```
 
-包含 PostgreSQL、Manticore、Redis、MinIO、RabbitMQ。本地开发若需让本机后端直连 Manticore，追加 `-f docker-compose.local.yaml` 把 9306 / 9308 发布到宿主机。
+包含 PostgreSQL、Manticore、Redis、MinIO、RabbitMQ。本地开发若需让本机后端直连 Manticore，叠加 `-f docker-compose.local.yaml` 把 9308 也发布到宿主机。
 
 ### 5.2 后端
 

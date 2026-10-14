@@ -88,8 +88,15 @@ public class KbDocService implements KbSearchPort {
             removeObjectQuietly(objectKey);
             throw new BizException(ErrorCodeEnum.FILE_UPLOAD_FAILED, e.getMessage());
         }
-        parseProducer.publish(new KbDocParseDTO(docId, userId, kbId,
-                doc.getBucketName(), objectKey, fileName));
+        try {
+            parseProducer.publish(new KbDocParseDTO(docId, userId, kbId,
+                    doc.getBucketName(), objectKey, fileName));
+        } catch (Exception e) {
+            // 投递失败必须落 failed：留在 pending 会被 reparse 的 STATE_CONFLICT 挡住，只能删了重传
+            markFailed(docId, userId, "解析任务投递失败：" + e.getMessage());
+            doc.setState(KbDocStateEnum.FAILED.getCode());
+            log.warn("[kb.doc.upload] 解析任务投递失败 docId={} {}", docId, e.getMessage());
+        }
         kbService.syncDocCounts(kbId);
         log.info("[kb.doc.upload] userId={} kbId={} docId={} size={}", userId, kbId, docId, file.fileSize());
         return toVO(doc);
@@ -118,8 +125,15 @@ public class KbDocService implements KbSearchPort {
             throw new BizException(ErrorCodeEnum.STATE_CONFLICT, doc.getState());
         }
         kbDocMapper.updateState(docId, userId, KbDocStateEnum.PENDING.getCode(), null, userId);
-        parseProducer.publish(new KbDocParseDTO(docId, userId, doc.getKbId(),
-                doc.getBucketName(), doc.getObjectKey(), doc.getDocName()));
+        try {
+            parseProducer.publish(new KbDocParseDTO(docId, userId, doc.getKbId(),
+                    doc.getBucketName(), doc.getObjectKey(), doc.getDocName()));
+        } catch (Exception e) {
+            // 与上传同处理：投递不通就落 failed，让用户能再点一次而不是卡在 pending
+            markFailed(docId, userId, "解析任务投递失败：" + e.getMessage());
+            log.warn("[kb.doc.reparse] 解析任务投递失败 docId={} {}", docId, e.getMessage());
+            return;
+        }
         log.info("[kb.doc.reparse] userId={} docId={}", userId, docId);
     }
 
@@ -176,8 +190,7 @@ public class KbDocService implements KbSearchPort {
                     task.docId(), docs.size(), content.length(), System.currentTimeMillis() - start);
         } catch (Exception e) {
             log.warn("[kb.parse] 解析失败 docId={} {}", task.docId(), e.getMessage());
-            kbDocMapper.updateState(task.docId(), task.userId(),
-                    KbDocStateEnum.FAILED.getCode(), StrUtil.maxLength(e.getMessage(), 500), task.userId());
+            markFailed(task.docId(), task.userId(), e.getMessage());
         }
     }
 
@@ -250,6 +263,12 @@ public class KbDocService implements KbSearchPort {
         String clean = StrUtil.blankToDefault(name, "doc");
         clean = clean.replaceAll("[\\\\/]", "_").replaceAll("[\\x00-\\x1F]", "");
         return StrUtil.maxLength(clean, 200);
+    }
+
+    /** 置文档失败态并截断原因，reason 列宽 500 */
+    private void markFailed(String docId, String userId, String reason) {
+        kbDocMapper.updateState(docId, userId, KbDocStateEnum.FAILED.getCode(),
+                StrUtil.maxLength(reason, 500), userId);
     }
 
     /** 对象删除失败仅告警 */

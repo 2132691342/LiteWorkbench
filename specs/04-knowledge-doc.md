@@ -84,7 +84,7 @@ SSE 单通道 `assist.event`，帧负载是 `{type, ...}` 结构（`type` 与业
   ├─ 1 校验归属与文件（非空 / ≤20MB / 扩展名白名单）                    KbDocService
   ├─ 2 原件写 MinIO user/{userId}/kbdoc/...，失败抛 FILE_UPLOAD_FAILED
   ├─ 3 落库 wb_kb_doc(state=pending)；元数据写失败则删对象后同抛
-  ├─ 4 发 MQ lw.kb.parse（削峰，解析不占请求线程），并同步知识库计数
+  ├─ 4 发 MQ lw.kb.parse（削峰，解析不占请求线程）；投递失败就地置 failed，随后同步知识库计数
   └─ 5 消费端 → KbDocParseConsumer → KbDocService.parse()
         ├─ 置 processing；已是 ready 则直接跳过
         ├─ MinIO 拉原件，DocTextExtractor 提取纯文本（超 500000 字截断）
@@ -139,4 +139,4 @@ AI 辅助（SSE）
 - 文档标题用户内唯一，重名抛 `DOC_TITLE_CONFLICT`。
 - AI 辅助不得写入 `wb_run` / `wb_event`；用量必须打日志（`[doc.assist]` 前缀）。
 - 文档原件与分块索引必须级联清理：删知识库清全部文档与分块，删文档清分块；原件删除失败只告警（行与索引已清，孤儿对象可按 `user/{userId}/kbdoc` 前缀清扫）。
-- 解析失败必须落库原因且可重解析；MQ 投递失败直接上抛（不做本地降级），投递前文档已落 `pending`，须靠页面重解析补齐。
+- 解析失败必须落库原因且可重解析；MQ 投递失败由上传与重解析链路就地置 `failed`（不做本地降级、不入队重试），因此不会留下既处理不了又拒绝重放的 `pending` 文档。

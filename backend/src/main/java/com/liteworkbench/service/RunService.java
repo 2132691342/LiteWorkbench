@@ -186,10 +186,13 @@ public class RunService {
             log.info("[run.abort] runId={} 已下发取消", runId);
             return;
         }
-        // 无活动实例（如进程重启后的孤儿运行）：直接落终态
+        // 无活动实例（如进程重启后的孤儿运行）：直接落终态，并立即释放会话锁
+        // 不走 cleanup 就没人释放锁，该会话会在整个 LOCK_TTL_SECONDS 内一直回 SESSION_BUSY
         settleTerminal(run, RunStatusEnum.ABORTED.getCode(), StopReasonEnum.ABORTED.getCode(),
                 run.getIterCount(), new long[2]);
-        log.info("[run.abort] runId={} 孤儿运行直接置终态", runId);
+        releaseLock(run.getSessionId());
+        log.info("[run.abort] runId={} sessionId={} 孤儿运行直接置终态并释放会话锁",
+                runId, run.getSessionId());
     }
 
     /** 启动内核：事件入批缓冲，终态由句柄完成通知收尾，postSettle 在终态后触发（自动命名） */

@@ -56,7 +56,7 @@ set -a && . ./.env.infra && set +a
 docker compose -f docker-compose.yaml up -d          # 或 podman-compose
 ```
 
-本机后端要直连 Manticore 时追加 `-f docker-compose.local.yaml`，把 9306 / 9308 发布到宿主机。
+本机后端要直连 Manticore 时叠加 `-f docker-compose.local.yaml`，把 9308 也发布到宿主机（9306 基础文件已发布）。
 
 ### 4.2 后端
 

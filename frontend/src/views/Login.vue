@@ -50,7 +50,8 @@ const features = computed(() => [
   {
     title: t('login.featureModel'),
     desc: t('login.featureModelDesc'),
-    icon: 'M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0 20M2 12h20',
+    // 地球：外圈 + 经线 + 赤道，三段子路径合成一条 d
+    icon: 'M12 2a10 10 0 1 0 0 20 10 10 0 1 0 0-20M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20M2 12h20',
   },
 ])
 
