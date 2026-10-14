@@ -83,7 +83,7 @@ public class MonitorService {
     private final StorageProperties storageProperties;
 
     /** 探测走入库池：探测多为阻塞 IO，宁可慢也不让健康检查假阳性 */
-    @Qualifier(ExecutorConfig.INDEX_EXECUTOR)
+    @Qualifier(ExecutorConfig.PROBE_EXECUTOR)
     private final ExecutorService probeExecutor;
 
     /** Manticore 日志检索：视角非全局时锁定本人，未传时间范围默认近 7 天，索引不可用时降级为空结果 */
@@ -269,7 +269,10 @@ public class MonitorService {
         } catch (Exception e) {
             future.cancel(true);
             component.setStatus("DOWN");
-            component.setDetail(e.getCause() == null ? e.getClass().getSimpleName() : e.getCause().getMessage());
+            // Future.get 的异常多被 ExecutionException 包装一层，取根因才能给出可读原因
+            Throwable cause = e.getCause();
+            component.setDetail(Objects.isNull(cause) ? e.getClass().getSimpleName()
+                    : Objects.toString(cause.getMessage(), cause.getClass().getSimpleName()));
         }
         component.setCostMs(System.currentTimeMillis() - start);
         return component;

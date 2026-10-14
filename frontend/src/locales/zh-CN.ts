@@ -11,6 +11,7 @@ export default {
     roleSuperAdmin: '超级管理员',
     roleAdmin: '平台管理员',
     roleUser: '普通用户',
+    roleCustom: '自定义角色',
   },
   common: {
     confirm: '确认',
@@ -174,6 +175,7 @@ export default {
     metricSuccess: '运行成功率',
     trendTitle: '运行趋势',
     trendDesc: '近 7 天运行量',
+    rangeRecent: '近 7 天',
     viewRuns: '运行趋势',
     viewTokens: 'Token 趋势',
     tokenTrendTitle: 'Token 趋势',

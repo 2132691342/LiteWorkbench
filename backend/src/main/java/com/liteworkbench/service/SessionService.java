@@ -40,7 +40,7 @@ public class SessionService {
     private final WbSessionMapper sessionMapper;
     private final MessageIndexMapper messageIndexMapper;
     private final ModelCaller modelCaller;
-    /** 标题生成走观测池：低频、静默，失败不影响对话；线程由 ExecutorConfig 统一回收 */
+    /** 标题生成走低频后台池：静默、失败不影响对话；线程由 ExecutorConfig 统一回收 */
     @Qualifier(ExecutorConfig.EVENT_EXECUTOR)
     private final ExecutorService renameExecutor;
 

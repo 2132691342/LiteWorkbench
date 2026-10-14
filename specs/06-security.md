@@ -70,10 +70,11 @@
 |---|---|
 | 传输 | 密码字段为 `RSA/ECB/PKCS1Padding` 密文，公钥由 `GET /auth/public-key` 下发（SPKI 的 Base64） |
 | 存储 | `PBKDF2-HMAC-SHA256`，十万次迭代 + 随机盐，摘要与盐分列存 `sys_user` |
-| 初值 | 种子账号初始口令取环境变量 `LITEWORKBENCH_ADMIN_PASSWORD`（`liteworkbench.auth.admin-password`，默认空）；缺失时随机生成并仅在启动日志 WARN 打印一次。已激活（`pwd_reset_required = false`）的账号不再被配置项覆盖 |
+| 初值 | 种子账号初始口令取环境变量 `LITEWORKBENCH_ADMIN_PASSWORD`（`liteworkbench.auth.admin-password`，默认空）；缺失时随机生成并仅在启动日志 WARN 打印一次。已激活（`pwd_reset_required = false`）的账号不再被配置项覆盖；两个种子账号都存在时不再解析口令，避免每次启动都重新生成并打印 |
 | 首登 | 种子账号与管理员新建用户的 `pwd_reset_required = true`，改密前只放行 `/api/v1/auth/current`、`/api/v1/auth/password`、`/api/v1/auth/logout`、`/api/v1/auth/public-key`，其余接口返回 `PASSWORD_RESET_REQUIRED` |
 | 失败 | 同用户名连续 5 次失败锁 10 分钟，另有登录接口按 IP 限流 |
 | 会话 | Sa-Token 存 Redis，令牌走 `Authorization` 头（裸令牌，不加 `Bearer`），有效期 7200 秒，令牌风格 ULID |
+| 加密因子 | 供应方密钥的 AES 因子来自 `LITEWORKBENCH_SECURITY_SECRET`；容器镜像内置 `SPRING_PROFILES_ACTIVE=prod`，仍为内置开发因子时启动自检直接拒绝启动（`StartupGuardService`），本地无 profile 运行只打 WARN |
 
 - 密钥对进程内存持有，**每 6 小时或每 1000 次解密调用轮换**（解密路径也参与轮换判定，否则前端纯登录缓存公钥时会漏计）。`keyId` 形如 `k_` + 16 位随机串，`/auth/public-key` 返回当前 `keyId`，登录请求带上 `keyId`，服务端按 ID 查私钥，过期 ID 与解密失败都返回 null；轮换时旧钥保留一把兜住在途请求。密钥不落盘、不进日志。
 - 密码字段不做长度校验（RSA-2048 密文 Base64 后 344 字符，`@Size` 加在密文字段必然误判），口令强度一律在服务端解密后的明文上判定（≥8 位且含字母与数字）。

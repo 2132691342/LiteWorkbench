@@ -8,6 +8,7 @@ import LwBarChart from '@/components/charts/LwBarChart.vue'
 import LwDonutChart from '@/components/charts/LwDonutChart.vue'
 import LwButton from '@/components/ui/LwButton.vue'
 import LwCard from '@/components/ui/LwCard.vue'
+import LwMetricCard from '@/components/ui/LwMetricCard.vue'
 import LwPageState from '@/components/ui/LwPageState.vue'
 import LwSegmented from '@/components/ui/LwSegmented.vue'
 import { useMonitorStore } from '@/stores/monitor'
@@ -42,27 +43,40 @@ const successRate = computed(() => {
   return `${Math.round((success / total) * 100)}%`
 })
 
+/** 成功率语义色：低于 70% 视为异常，70%~90% 警示，达标为成功 */
+const rateTone = computed<'muted' | 'success' | 'warning' | 'error'>(() => {
+  const total = overview.value?.runCount ?? 0
+  if (total <= 0) return 'muted'
+  const rate = (overview.value?.successRunCount ?? 0) / total
+  if (rate >= 0.9) return 'success'
+  if (rate >= 0.7) return 'warning'
+  return 'error'
+})
+
 const metrics = computed(() => [
   {
     key: 'metricRuns',
     value: String(overview.value?.todayRunCount ?? 0),
-    delta: `${t('dashboard.totalRuns')}: ${overview.value?.runCount ?? 0}`,
+    hint: `${t('dashboard.totalRuns')}: ${overview.value?.runCount ?? 0}`,
+    hintTone: 'muted' as const,
     icon: DataLine,
-    tone: 'var(--lw-primary)',
+    tone: 'primary' as const,
   },
   {
     key: 'metricTokens',
     value: formatTokens(overview.value?.totalTokens ?? 0),
-    delta: `${t('dashboard.sessionCount')}: ${overview.value?.sessionCount ?? 0}`,
+    hint: `${t('dashboard.sessionCount')}: ${overview.value?.sessionCount ?? 0}`,
+    hintTone: 'muted' as const,
     icon: Coin,
-    tone: 'var(--lw-secondary)',
+    tone: 'secondary' as const,
   },
   {
     key: 'metricSuccess',
     value: successRate.value,
-    delta: `${t('dashboard.successCount')}: ${overview.value?.successRunCount ?? 0}`,
+    hint: `${t('dashboard.successCount')}: ${overview.value?.successRunCount ?? 0}`,
+    hintTone: rateTone.value,
     icon: TrendCharts,
-    tone: 'var(--lw-ink)',
+    tone: 'ink' as const,
   },
 ])
 
@@ -107,18 +121,16 @@ onMounted(load)
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div
+        <LwMetricCard
           v-for="metric in metrics"
           :key="metric.key"
-          class="lw-card p-5 h-32 relative overflow-hidden group transition-all duration-200 hover:lw-shadow-md hover:-translate-y-0.5"
-        >
-          <div class="absolute right-0 top-0 p-4 opacity-10 transition-transform duration-200 group-hover:scale-110">
-            <el-icon :size="56" :color="metric.tone"><component :is="metric.icon" /></el-icon>
-          </div>
-          <div class="text-sm font-bold mb-4" style="color: var(--lw-ink-muted)">{{ t(`dashboard.${metric.key}`) }}</div>
-          <div class="text-2xl font-bold tracking-tight" style="color: var(--lw-ink)">{{ metric.value }}</div>
-          <div class="text-xs font-bold mt-1" style="color: var(--lw-ink-muted)">{{ metric.delta }}</div>
-        </div>
+          :label="t(`dashboard.${metric.key}`)"
+          :value="metric.value"
+          :hint="metric.hint"
+          :hint-tone="metric.hintTone"
+          :tone="metric.tone"
+          :icon="metric.icon"
+        />
       </div>
 
       <!-- 首次使用引导：还没有任何运行时给出下一步动作，不留空白仪表盘 -->
@@ -137,6 +149,11 @@ onMounted(load)
         :title="view === 'runs' ? t('dashboard.trendTitle') : t('dashboard.tokenTrendTitle')"
         :desc="t('dashboard.trendDesc')"
       >
+        <template #actions>
+          <span class="px-2 py-1 rounded-tag text-xs font-bold bg-lw-primaryTint text-lw-primary">
+            {{ t('dashboard.rangeRecent') }}
+          </span>
+        </template>
         <transition name="lw-fade" mode="out-in">
           <LwAreaChart
             v-if="view === 'runs'"

@@ -111,7 +111,7 @@ POST /api/v1/chat/stream（SSE，produces text/event-stream）
 POST /api/v1/kb/doc/upload/{kbId}（multipart）
   ├─ 1 归属与文件校验 → 原件写 MinIO user/{userId}/kbdoc/... → 落库 wb_kb_doc(state=pending)
   └─ 2 发 MQ lw.kb.parse.queue（上传请求零等待）
-        └─ KbDocParseConsumer（跑在 lwIndexExecutor）
+        └─ KbDocParseConsumer（跑在 RabbitMQ 监听容器，并发由 listener.simple 显式给出）
               ├─ 3 MinIO 拉原件 → DocTextExtractor 提纯文本（txt/md、docx、pdf）
               ├─ 4 KbTextChunker 分块：目标 600 字，相邻重叠 120 字
               └─ 5 分块批量写 Manticore lw_kbchunk → wb_kb_doc(ready) 与计数；失败置 failed 可重放

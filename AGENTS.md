@@ -52,7 +52,7 @@ anno ──► 无依赖；aspect ──► common + domain/constant
 ```java
 public interface SessionConst {
     int TITLE_MAX_LENGTH = 128;
-    String DEFAULT_MODEL = "qwen-plus";
+    String DEFAULT_TITLE = "新会话";
 }
 ```
 
@@ -183,7 +183,7 @@ public R<String> create(@RequestBody @Valid UserREQ req) { ... }
 
 - **密码绝不明文过网**：登录、自助改密、管理员建用户、管理员重置密码四个入口的密码字段一律为 RSA 密文（`RSA/ECB/PKCS1Padding`，与浏览器端 JSEncrypt 对齐），公钥由 `GET /api/v1/auth/public-key` 下发（SPKI 的 Base64，进程内存持有，按 6 小时或 1000 次调用轮换）。解密失败即 `CREDENTIAL_INVALID`（自助改密与管理员设密为 `PAYLOAD_DECRYPT_FAILED`），不区分"密文坏"与"密码错"。
 - **密文字段不做长度校验**：RSA-2048 密文 Base64 后 344 字符，`@Size` 加在密文字段上必然误判；口令强度一律在服务端解密后的明文上判定。
-- **凭据绝不回显**：页面、接口响应、运行日志一律不得出现初始密码或明文密码；明文口令只允许出现在部署编排文件（`deploy/docker-compose.app.yaml` 给的默认值，供私有部署直接登录）。种子账号口令来自环境变量 `LITEWORKBENCH_ADMIN_PASSWORD`；缺失时随机生成并仅在启动日志 WARN 打印一次，同时置 `sys_user.pwd_reset_required = true`。
+- **凭据绝不回显**：页面、接口响应、运行日志一律不得出现初始密码或明文密码；明文口令只允许出现在不入仓库的本机文件（`.env.infra`、`.env.app`），编排文件不带任何默认口令。种子账号口令来自环境变量 `LITEWORKBENCH_ADMIN_PASSWORD`；缺失时随机生成并仅在启动日志 WARN 打印一次，同时置 `sys_user.pwd_reset_required = true`。
 - **未激活账号可被配置项接管**：种子 `admin` 仍 `pwd_reset_required = true` 时，启动把口令对齐到配置值；账号完成改密后配置项不再覆盖。
 - **首登强制改密**：`pwd_reset_required` 为 true 的用户，登录后只允许调用 `/auth/password` 与 `/auth/current`，其余业务接口返回 `PASSWORD_RESET_REQUIRED`。
 - **失败计数**：同一用户名连续失败 5 次锁定 10 分钟（Redis 计数），登录接口另有按 IP 的 `@RateLimit`。
@@ -377,14 +377,16 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 
 ## 14. 测试约定
 
-只保留覆盖长链路、复杂场景与跨模块契约的测试；简单断言（ID 格式、字符串清洗、空参校验、SSE 帧文本）、纯算法与薄 mock 单元测试一律不写。当前共 2 个文件 5 个用例，随 `mvn test` 一次跑完（约 1 秒），全部不依赖中间件与 Spring 容器。
+只保留覆盖长链路与跨模块契约的测试；简单断言、纯算法与薄 mock 单元测试一律不写，同一行为的重复覆盖也不写。当前 2 个文件 2 个用例，随 `mvn test` 一次跑完（约 1 秒），全部不依赖中间件与 Spring 容器。
 
 | 文件 | 用例 | 覆盖 |
 |---|---|---|
-| `service/RunEventPipelineTest` | 2 | 事件长链路：一次完整运行的归一与合帧（增量合并边界、类型切换保序、工具起止与结果、用量入账）＋ 边界路径（超长裁剪、失败工具标记、异常事件） |
-| `config/ContractTest` | 3 | 三处静态契约：权限点在三处声明的一致性（扫 api 包注解 + `PermConst` + 菜单种子）、Mapper XML 与接口的绑定与解析、路由兜底的顺序与命中范围（未命中 `/api` 回 404 信封、深链回落 `index.html`、带点静态资源不被吞） |
+| `service/RunEventPipelineTest` | 1 | 事件长链路一条链跑通：内核事件归一、批内合帧（增量合并、类型切换保序）、工具起止与结果、模型用量入账，以及超长裁剪、失败工具标记、异常事件不带正文 |
+| `config/PermissionContractTest` | 1 | 跨模块契约：控制器注解 + `PermConst` + 菜单种子三处声明的权限点必须一致，漏一处即测试失败 |
 
-用例名用中文直述业务断言；一个用例串起一条完整链路或一个契约；契约测试集中在 `config/ContractTest`，不按契约拆多个文件。资源扫描一律走 `classpath*:` 模式，禁止用目录列举（打包成 JAR 后失效）；前端不写快照测试与纯渲染测试。
+**明确不写的测试**：Mapper XML 的解析由应用启动即校验（错了起不来）；路由兜底的命中范围由容器验收清单里的一次 `curl` 探活覆盖——在测试里手工模拟 Spring 容器初始化只会复制框架行为，并随框架升级失效。
+
+用例名用中文直述业务断言；一个用例串起一条完整链路或一个契约；契约测试集中在 `config/PermissionContractTest`，不按契约拆多个文件。资源扫描一律走 `classpath*:` 模式，禁止用目录列举（打包成 JAR 后失效）；前端不写快照测试与纯渲染测试。
 
 ## 15. 依赖使用约定
 
@@ -424,7 +426,7 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 | 范围过滤必须传 `Map.of("ts", Map.of("gte", x))` 形式 | 缺字段名包裹会被序列化成非法过滤器 |
 | 幂等写用「先删同键再插入」，删除结果按 `DeleteResponse.deleted` 对账 | 文档数字 ID 由引擎分配，业务主键是 string 列 |
 | 日志保留由应用定时任务删除，不依赖引擎 TTL | Manticore 无文档级 TTL |
-| `9308` 不发布宿主机，容器同网络用服务名直连 | 减少暴露面 |
+| 五个中间件端口（5432 / 6379 / 9306 / 9308 / 9000+9001 / 5672+15672）全部发布宿主机，本机后端与排障工具直连；容器内仍走服务名 | 少一层覆盖文件，本地与线上编排一致 |
 
 ## 16. 运行参数约定
 
@@ -439,22 +441,40 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 | `-Xss512k` | — | 线程栈从默认 1m 降到 512k，支撑更多 SSE 线程 |
 | `-XX:+ExitOnOutOfMemoryError` | — | OOM 直接退出，交给编排重启，不留半死状态 |
 
-## 17. 并发与线程池治理
+镜像同时固定 `SPRING_PROFILES_ACTIVE=prod`：prod 是「配置已由编排注入」的声明，用于让启动自检在缺失关键配置时拒绝启动（当前校验供应方加密因子），本地无 profile 运行只告警不拦截。
+
+### 16.1 容器化硬约定
+
+以下五条都是「本地跑得过、容器跑不起来」的实测坑，改镜像或构建脚本时必须逐条对账：
+
+| 约定 | 违反后果 |
+|---|---|
+| `backend/lombok.config` 必须进构建上下文（`COPY backend/pom.xml backend/lombok.config ./`） | 缺它则 `@Qualifier` 不会被 Lombok 复制到构造参数，同类多 Bean（四个线程池）的构造注入全部退化成按类型匹配，容器启动直接失败 |
+| 必须排除 `SystemMetricsAutoConfiguration` 与 `TomcatMetricsAutoConfiguration` | 基础镜像的 JDK 是 17-ea，cgroup 探测返回 null 会让指标绑定器抛 `InternalError`，在 ApplicationRunner 之前就炸掉启动；单容器也不观测主机 CPU 与文件描述符 |
+| 启动失败必须显式 `System.exit(1)` | 连接池与 MQ 客户端会留下非守护线程，只靠主线程结束无法终止 JVM，容器会停在假 `Up` 直到被编排强杀 |
+| `.dockerignore` 必须排除 `**/node_modules` 与 `**/target` | `COPY frontend .` 会把 Windows 二进制覆盖进 Alpine 镜像导致构建失败，同时把几百 MB 无谓产物塞进构建上下文 |
+| 容器内 Maven 必须挂可达仓库配置（`deploy/maven-settings.xml`） | 直连 `repo.maven.apache.org` 在部分网络下 SSL 握手中断，CI 构建必失败；且 settings.xml 要放在 `--mount=type=cache` 挂载目标之外，否则被缓存遮蔽读不到 |
+
+### 17. 并发与线程池治理
 
 单个容器跑全部异步能力，**禁止在业务类里裸 `Executors.newXxx()`**。所有线程资源由 `config/ExecutorConfig` 一处声明，按用途分池并各自命名，业务只做构造注入。
 
 | 池用途 | Bean 方法 | 规模策略 | 拒绝策略 | 理由 |
 |---|---|---|---|---|
-| Agent 运行编排 | `lwRunExecutor` | CPU 核数 × 2，队列 256 | `CallerRunsPolicy` | 提交方降速而不是丢任务；运行丢任务是直接可见的业务损失 |
-| 工具执行 | `lwToolExecutor` | CPU 核数 × 4，队列 512 | `AbortPolicy` + 结构化失败 | 工具超量说明模型在打转，快速失败让内核收敛 |
-| 事件扇出与日志投递 | `lwEventExecutor` | 固定 4，队列 2048 | 丢弃 + WARN 计数 | 观测链路不得反压业务链路；丢弃必须留下计数便于发现 |
-| 知识库解析入库 | `lwIndexExecutor` | CPU 核数，队列 128 | `CallerRunsPolicy` | 大文档解析慢，宁可使请求线程变慢也不丢用户以为已上传的文档 |
+| Agent 运行编排 | `lwRunExecutor` | CPU 核数 × 2 起，队列 256 | `CallerRunsPolicy` | 提交方降速而不是丢任务；运行丢任务是直接可见的业务损失 |
+| 工具执行 | `lwToolExecutor` | CPU 核数 × 2 起、峰值 × 4，队列 512 | `AbortPolicy` + 结构化失败 | 工具超量说明模型在打转，快速失败让内核收敛 |
+| 观测投递与低频后台任务 | `lwEventExecutor` | 固定 4，队列 2048 | 丢弃 + WARN 计数 | 观测链路不得反压业务链路；会话自动命名等静默任务失败不影响对话 |
+| 组件健康并发探测 | `lwProbeExecutor` | CPU 核数起、峰值 × 2，队列 64 | `CallerRunsPolicy` | 逐项探测各带超时，探测压力不得反压调用方 |
 | 心跳、超时巡检、日志清理 | `lwScheduleExecutor` | 固定 2 | `AbortPolicy` | 只跑短周期内部任务 |
+
+**知识库解析与日志投递不占线程池**：两者由 RabbitMQ 监听容器驱动，并发上界由 `spring.rabbitmq.listener.simple.concurrency` / `max-concurrency` 显式给出，不再另设池——同一份任务既受池限流又受 prefetch 限流会让并发上界无法判断。
+
+池 Bean 的**返回类型就是 `ExecutorService`**：Spring 的 `ThreadPoolTaskExecutor` 不实现 `ExecutorService`，拿它当池类型会让所有 `@Qualifier(ExecutorConfig.X)` 注入点解析不到 Bean。线程一律**守护线程**，保证异常路径下 JVM 能退出；正常关闭仍走 `destroyMethod` 的三段式收尾（停收 → 等在途 → 超时中断）。
 
 规则：
 
-- 统一用 Hutool `ExecutorBuilder` / `ThreadFactoryBuilder` 构造，线程名前缀 `lw-<用途>-`，排障时线程栈可读。
-- 所有池必须注册优雅关闭（`DisposableBean` 或 `@PreDestroy`），按 `shutdown → awaitTermination(10s) → shutdownNow` 三段式收尾；容器停机不留悬挂 SSE 连接与子进程。
+- 池直接构造 JDK `ThreadPoolExecutor`，线程工厂统一 `ThreadUtil.newNamedThreadFactory`，线程名前缀 `lw-<用途>-`，排障时线程栈可读；线程一律守护线程，保证异常路径下 JVM 能退出。
+- 所有池经 `@Bean(destroyMethod = "destroy")` 注册三段式收尾（`shutdown → awaitTermination(10s) → shutdownNow`）；容器停机不留悬挂 SSE 连接与子进程。
 - **阻塞 IO（PG / Manticore / MinIO / RabbitMQ）不得占用运行编排池**；`@Async` 必须显式指定 `value = "lwXxxExecutor"`，不带参的 `@Async` 跑在 Spring 默认池上，视为违规。
 - 有界一切：队列必须给容量，禁止 `LinkedBlockingQueue` 无参构造（无界队列在 2GB 容器里等价于延迟 OOM）。
 - 信号量在**提交任务前**获取，不在任务线程内获取；任务内获取会让并发度真实上界等于调用数。
@@ -480,6 +500,9 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 | 同一工具同一参数在一次 run 内累计第 4 次直接判失败 | 模型卡在同一调用上打转比撞轮数上限更难排查；计数不衰减，被策略拒绝的调用同样计一次，否则一张审批卡能无限重发 |
 | 失败必须回滚本轮追加的上下文 | 先记下 `contextSize`，异常时弹回到该位置；不回滚会让半截消息污染下一轮，模型看到不完整的工具结果继续推理 |
 | 幂等键必须包含 userId | 只含参数摘要时，不同用户提交同样内容会互相排掉，表现为「别人点了我就失败」 |
+| 限流计数与首次过期必须在同一脚本内原子完成 | 分两步时 `expire` 丢失会让窗口键无 TTL 永久生效，表现为「某个用户从此一直被限流」 |
+| outbound 工具执行前必须校验目标地址 | `http_get` 能访问容器内 `manticore:9308` / PG / 云元数据地址，是现成的 SSRF 跳板；只放行公网 http/https |
+| 启动阶段的多条写库必须同事务 | run / 消息 / 会话统计分开写时中途异常会留下「有 run 无消息」的脏状态，前端表现为打不开的空会话 |
 
 ## 19. Agent 内核实现约定
 
@@ -492,7 +515,7 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 | 表 | 承载 |
 |---|---|
 | `wb_session` | 标题、默认模型、归属用户、最后活跃时间 |
-| `wb_run` | `relation`（original / retry / recovery / rerun）、`parent_run_id`、`state`、用量、耗时、轮数、终态原因 |
+| `wb_run` | `relation`（original / child）、`parent_run_id`、`state`、用量、耗时、轮数、终态原因 |
 | `wb_event` | 归一后的事件流，带 `seq`，一次 Run 内单调递增 |
 
 没有 Run 这一层，「这一次回答花了多少 token、卡在第几轮」永远答不上来。
@@ -540,6 +563,8 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 - 记忆注入放在系统提示**末尾**：越靠近本轮输入越容易被遵守；只取权重最高的少量，避免挤占上下文。
 - `task_delegate` 默认在 `wb_tool` 里 **disabled**：子运行会真实消耗 token，必须由管理员显式开启。
 - 子任务描述必须自带全部上下文——子运行看不到当前对话，这是能力边界不是实现缺陷。
+- **子运行必须限并发**：父运行线程会同步等子运行，配额在派发前获取，拿不到返回结构化失败让模型自行完成该步骤；不设配额会把运行编排池整体拖住。
+- 终态正文只认 `run.result`：迭代上限收敛也必须补发一条带完整正文的结果事件，取消发生在模型出站之前时结果为空串——只靠增量帧累积会因单帧截断丢尾，把历史助手正文当成本次答案更是直接串轮。
 
 ## 20. 内置 Python 运行时约定
 

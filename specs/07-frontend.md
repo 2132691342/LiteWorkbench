@@ -15,7 +15,7 @@
 | `router/` | 静态路由 + 后端菜单驱动的动态注册 + 登录与权限守卫 |
 | `views/` | 路由页：`Login` / `ForcePassword` / `Dashboard`、`console/`、`runs/`、`writer/`、`prompts/`、`files/`、`skills/`、`kb/`、`logs/`、`monitor/`、`settings/`、`system/`、`showcase/`、`error/`(403/404/500) |
 | `components/layout/` | 外壳与导航：`AppShell`、`TheSideBar`、`TheSideMenu`、`TheTopBar`、`icons.ts`（图标按需具名引入） |
-| `components/ui/` | 基础件：`LwButton`、`LwCard`、`LwEmpty`、`LwErrorBar`、`LwErrorPage`、`LwMarkdown`、`LwPageState`、`LwProgressBar`、`LwSegmented`、`LwSkeleton`、`LwTag` |
+| `components/ui/` | 基础件：`LwButton`、`LwCard`、`LwEmpty`、`LwErrorBar`、`LwErrorPage`、`LwMarkdown`、`LwMetricCard`、`LwPageState`、`LwProgressBar`、`LwSegmented`、`LwSkeleton`、`LwTag` |
 | `components/charts/` | 图表封装：`LwAreaChart`、`LwBarChart`、`LwDonutChart`（色值经 `utils/theme.ts` 读令牌） |
 | `components/console/` | 工作台业务件：`ConsoleQuickStart`、`PlanChecklist` |
 | `components/runs/` | 运行记录业务件：`TraceWaterfall`、`RunTree`、`UsagePanel` |
@@ -24,7 +24,8 @@
 | `composables/` | `useRunStream`（SSE 订阅）、`usePermission`（权限判断） |
 | `directives/` | `perm.ts`：`v-perm` 指令，无权限即从 DOM 移除元素 |
 | `api/` | `index.ts` 唯一请求出口（HTTP 封装、令牌、SSE 解析、按域分组的方法表） |
-| `utils/` | `crypto.ts`（公钥与加密）、`theme.ts`（图表取令牌）、`menu.ts`（`menuLabel()`）、`markdown.ts`、`const.ts`（角色码 / 用户状态 / 菜单类型 / 时间格式化） |
+| `plugins/` | `element-plus.ts`：组件与图标按需注册 |
+| `utils/` | `crypto.ts`（公钥与加密）、`theme.ts`（图表取令牌）、`menu.ts`（`menuLabel()`）、`role.ts`（角色标签唯一实现）、`markdown.ts`、`const.ts`（角色码 / 用户状态 / 菜单类型 / 时间格式化） |
 | `types/` | `api.ts` 与后端 VO 对齐的接口类型 |
 | `locales/` | 中英双语资源与 i18n 实例 |
 | `styles/` | `tokens.css` 唯一色值来源、`index.css` 全局样式 |

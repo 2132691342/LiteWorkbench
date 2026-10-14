@@ -6,7 +6,6 @@ import com.liteworkbench.agent.event.AgentEvent;
 import com.liteworkbench.agent.event.AgentEventType;
 import com.liteworkbench.agent.model.ModelClient;
 import com.liteworkbench.agent.model.ModelEventListener;
-import com.liteworkbench.agent.model.ModelTypes;
 import com.liteworkbench.agent.model.ModelTypes.Msg;
 import com.liteworkbench.agent.model.ModelTypes.Request;
 import com.liteworkbench.agent.model.ModelTypes.StreamResult;
@@ -66,9 +65,11 @@ public class AgentLoop {
     /** 执行一次完整推理，直到产出正文、达到迭代上限或被取消；返回最终正文，可能为空 */
     public String run(List<Msg> messages, EventSink sink) {
         List<Msg> context = new ArrayList<>(messages);
+        String lastText = StrUtil.EMPTY;
         for (int iter = 1; iter <= maxIters; iter++) {
             if (cancelled.getAsBoolean()) {
-                return lastAssistantText(context);
+                // 取消发生在模型出站之前：本轮无产出，不能把历史里的助手正文当成本次答案
+                return StrUtil.EMPTY;
             }
             long started = System.currentTimeMillis();
             sink.emit(AgentEvent.builder().type(AgentEventType.MODEL_CALL_START).build());
@@ -79,8 +80,11 @@ public class AgentLoop {
                     .outputTokens(result.getUsage().getOutputTokens())
                     .durationMs(System.currentTimeMillis() - started)
                     .build());
+            if (StrUtil.isNotBlank(result.getText())) {
+                lastText = result.getText();
+            }
             if (cancelled.getAsBoolean()) {
-                return result.getText();
+                return lastText;
             }
             List<ToolCall> calls = result.getToolCalls();
             context.add(Msg.assistant(result.getText(), calls));
@@ -96,8 +100,12 @@ public class AgentLoop {
             executeToolBatch(context, calls, sink);
         }
         sink.emit(AgentEvent.builder().type(AgentEventType.EXCEED_MAX_ITERS).maxIters(maxIters).build());
+        // 超限收敛也必须发终态正文：只靠增量帧累积会因单帧截断丢失长回答的尾部
+        if (StrUtil.isNotBlank(lastText)) {
+            sink.emit(AgentEvent.builder().type(AgentEventType.AGENT_RESULT).message(lastText).build());
+        }
         log.warn("[agent.loop] 达到迭代上限 {}，收敛", maxIters);
-        return lastAssistantText(context);
+        return lastText;
     }
 
     /** 调用模型：工具描述按平台启停过滤后下发 */
@@ -179,16 +187,5 @@ public class AgentLoop {
         }
         log.warn("[agent.loop] tool={} 同一调用累计 {} 次，判定为打转", call.getName(), count);
         return StrUtil.format("ERROR: 同一调用已重复 {} 次仍未推进，请更换参数或改用其他方式", count - 1);
-    }
-
-    /** 取最后一条有正文的助手消息，用于取消或超限时兜底产出 */
-    private String lastAssistantText(List<Msg> context) {
-        for (int i = context.size() - 1; i >= 0; i--) {
-            Msg message = context.get(i);
-            if (ModelTypes.Role.ASSISTANT.equals(message.getRole()) && StrUtil.isNotBlank(message.getContent())) {
-                return message.getContent();
-            }
-        }
-        return StrUtil.EMPTY;
     }
 }

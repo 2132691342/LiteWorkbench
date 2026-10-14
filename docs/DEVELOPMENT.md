@@ -56,7 +56,7 @@ set -a && . ./.env.infra && set +a
 docker compose -f docker-compose.yaml up -d          # 或 podman-compose
 ```
 
-本机后端要直连 Manticore 时叠加 `-f docker-compose.local.yaml`，把 9308 也发布到宿主机（9306 基础文件已发布）。
+五个中间件的宿主机端口（5432 / 6379 / 9306 / 9308 / 9000+9001 / 5672+15672）都已在基础编排里发布，本机后端直接连 `localhost`，不需要任何覆盖文件。
 
 ### 4.2 后端
 
@@ -89,13 +89,47 @@ npm run build       # 产物 frontend/dist
 |---|---|---|
 | `liteworkbench.runtime.data-dir` | `/var/lib/liteworkbench` | `./data` |
 | `LITEWORKBENCH_LOG_DIR` | `/var/log/liteworkbench` | `logs` |
-| `liteworkbench.manticore.url` | `http://manticore:9308`（服务名直连） | `http://localhost:9308`（需 local 覆盖文件发布端口） |
+| `liteworkbench.manticore.url` | `http://manticore:9308`（服务名直连） | `http://localhost:9308`（端口已发布） |
 
 固定阈值**不外部化**，固化在 `domain/constant/*Const`（例如 `KbConst.MAX_DOC_CHARS` 单文档提取正文上限、`OutputSanitizer.MAX_CHARS` 工具输出保尾长度、`AgentEventAdapter.TEXT_DELTA_MAX` 单帧增量截断、`MemoryConst.MAX_PER_USER` 记忆条数上限）。改动这些常量等于改契约，需同步对应 `specs/`。
 
+### 5.1 本地容器验证（可选）
+
+`mvn spring-boot:run` + `npm run dev` 覆盖业务链路，要验证镜像本身（静态资源、深链回落、内置 Python、prod 自检）时再跑这一步：
+
+```bash
+# 1. 构建镜像（.dockerignore 已排除 node_modules / target，上下文很小）
+docker build -f deploy/Dockerfile -t liteworkbench:local .
+
+# 2. 加入中间件所在网络运行；网络名以 docker network ls 为准
+docker run -d --name lw-local -p 24400:8080 --network <中间件网络名> \
+  -e LITEWORKBENCH_DATASOURCE_URL=jdbc:postgresql://postgres:5432/postgres \
+  -e LITEWORKBENCH_DATASOURCE_USERNAME=postgres \
+  -e LITEWORKBENCH_DATASOURCE_PASSWORD=<口令> \
+  -e LITEWORKBENCH_REDIS_HOST=redis \
+  -e LITEWORKBENCH_REDIS_PASSWORD=<口令> \
+  -e LITEWORKBENCH_MANTICORE_URL=http://manticore:9308 \
+  -e LITEWORKBENCH_STORAGE_ENDPOINT=http://minio:9000 \
+  -e LITEWORKBENCH_STORAGE_ACCESS_KEY=<账号> \
+  -e LITEWORKBENCH_STORAGE_SECRET_KEY=<口令> \
+  -e LITEWORKBENCH_MQ_HOST=rabbitmq \
+  -e LITEWORKBENCH_MQ_USERNAME=<账号> \
+  -e LITEWORKBENCH_MQ_PASSWORD=<口令> \
+  -e LITEWORKBENCH_SECURITY_SECRET=<任意长随机串> \
+  liteworkbench:local
+
+# 3. 验收：健康、内置运行时、静态资源与深链
+curl http://localhost:24400/actuator/health
+curl http://localhost:24400/api/v1/runtime/python      # 期望 READY + 版本号
+curl -o /dev/null -w '%{http_code}\n' http://localhost:24400/                # 期望 200
+curl -o /dev/null -w '%{http_code}\n' http://localhost:24400/dashboard       # 期望 200（SPA 深链回落）
+```
+
+`LITEWORKBENCH_SECURITY_SECRET` 在容器内**必填**：镜像固定 `SPRING_PROFILES_ACTIVE=prod`，仍用内置开发因子时启动自检直接拒绝启动，这是预期行为，用来防止把密钥用已知因子加密后入库。
+
 ## 6. 测试
 
-当前 2 个文件 5 个用例，一次 `mvn test` 跑完（约 1 秒），全部不依赖中间件与 Spring 容器。用例清单与保留标准见 [AGENTS.md](../AGENTS.md) §14。
+当前 2 个文件 2 个用例，一次 `mvn test` 跑完（约 1 秒），全部不依赖中间件与 Spring 容器。用例清单与保留标准见 [AGENTS.md](../AGENTS.md) §14。
 
 ```bash
 cd backend && mvn test
@@ -114,7 +148,7 @@ cd backend && mvn test
 | 改推送节拍或水位快照 | `service/RunService.java` 的 `pumpLocked` / `pushSnapshotIfNeeded` + `domain/constant/RunConst.java` 的节拍常量 |
 | 改规划器 / 记忆 / 子运行 | `agent/tool/PlanNormalizer.java`、`service/MemoryService.java`、`service/SubRunService.java` |
 | 多出一个线程池 | `config/ExecutorConfig.java`（禁止在业务类里裸建线程池，见 AGENTS.md §17） |
-| 加一个权限点 | `config/DataInitializer.java` 的菜单种子（`menu_type=button`）+ 控制器注解，`ContractTest` 会校验一致性 |
+| 加一个权限点 | `config/DataInitializer.java` 的菜单种子（`menu_type=button`）+ 控制器注解，`PermissionContractTest` 会校验一致性 |
 | 加一个内置角色 | `domain/constant/RoleCodeConst.java` + `DataInitializer` 的角色与授权 |
 | 加一类日志检索字段 | `observability/ManticoreLogAppender.java` + `mapper/LogSearchMapper.java` 表定义 |
 | 加一种知识库文档格式 | `service/DocTextExtractor.java` + `domain/constant/KbConst.java` 扩展名清单 |
@@ -131,9 +165,8 @@ cd backend && mvn test
 | 文件 | 职责 |
 |---|---|
 | `deploy/Dockerfile` | 三阶段构建：Maven 打包 → Vite 构建 → 运行时镜像（JRE + jar + 前端静态资源 + python3 / curl / tzdata） |
-| `deploy/docker-compose.yaml` | 中间件编排，本机与云主机共用同一份 |
+| `deploy/docker-compose.yaml` | 中间件编排，本机与云主机共用同一份；五个中间件端口全部发布宿主机 |
 | `deploy/docker-compose.app.yaml` | 应用容器编排：单容器、限内存、接入中间件网络、宿主端口由环境注入 |
-| `deploy/docker-compose.local.yaml` | 本地开发覆盖：只把 Manticore 的 9306 / 9308 发布到宿主机 |
 | `deploy/gen-secrets.sh` | 生成 `.env.infra`：字段清单取自 `.env.infra.example`，值随机，不打印 |
 | `deploy/.env.infra.example` | 部署机密的字段清单，新增变量只改这里 |
 | `deploy/deploy-app.sh` | 云主机侧发布：拉镜像 → 重建容器 → 清端口转发残留 → 健康自检 → 失败回滚 |

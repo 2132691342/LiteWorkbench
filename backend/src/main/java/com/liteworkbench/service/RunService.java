@@ -44,6 +44,7 @@ import org.slf4j.MDC;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -55,6 +56,7 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
 
 /** 运行主链路：SSE 流式对话、推送与落库双节拍、取消与回放 */
 @Slf4j
@@ -79,13 +81,15 @@ public class RunService {
     private final StringRedisTemplate redisTemplate;
     /** SSE 心跳与事件攒批冲刷的统一调度器，线程资源跟随容器生命周期回收 */
     private final ThreadPoolTaskScheduler scheduler;
+    /** 启动阶段写库的短事务边界：run / 消息 / 会话统计必须同时生效 */
+    private final TransactionTemplate transactionTemplate;
 
     /** 进行中的运行：runId -> 活动实例 */
     private final Map<String, ActiveRun> active = new ConcurrentHashMap<>();
     /** 推送节拍器：16ms 一帧，只有存在运行时才注册 */
-    private final EventLoop pushLoop = new EventLoop();
+    private final EventLoop pushLoop = new EventLoop(active::isEmpty);
     /** 落库节拍器：200ms 一批，与推送解耦，DB 写入不拖慢首字延迟 */
-    private final EventLoop persistLoop = new EventLoop();
+    private final EventLoop persistLoop = new EventLoop(active::isEmpty);
     /** 流式对话：锁会话 → 落运行与用户消息 → 启动内核（攒批落库 + 推送）→ 终态收尾 */
     public String chatStream(ChatStreamREQ req, RunSink sink) {
         String userId = LoginContext.userId();
@@ -107,10 +111,13 @@ public class RunService {
             String providerCode = provider.getProviderCode();
             String modelName = modelFactory.resolveModelName(provider, session.getModelName());
 
-            insertRun(runId, userId, session.getSessionId(), req.getContent(), modelName);
-            insertMessage(userId, session.getSessionId(), runId, MessageRoleEnum.USER, req.getContent());
-            runMapper.markRunning(runId);
-            sessionMapper.updateStats(session.getSessionId(), 1, 1, 0);
+            // 四条写库必须同事务：否则会留下「有 run 无消息」或「消息已落而 run 仍 queued」的脏状态
+            transactionTemplate.executeWithoutResult(status -> {
+                insertRun(runId, userId, session.getSessionId(), req.getContent(), modelName);
+                insertMessage(userId, session.getSessionId(), runId, MessageRoleEnum.USER, req.getContent());
+                runMapper.markRunning(runId);
+                sessionMapper.updateStats(session.getSessionId(), 1, 1, 0);
+            });
 
             String systemPrompt = composeSystemPrompt(userId, session.getSystemPrompt(), req.getContent());
             RunContext context = new RunContext(userId, session.getSessionId(), runId,
@@ -232,7 +239,7 @@ public class RunService {
     /** 推送节拍：把所有活动运行的新事件合成帧发出去；无运行则注销节拍器 */
     private void pumpAll() {
         if (active.isEmpty()) {
-            pushLoop.stop();
+            pushLoop.stopIfIdle();
             return;
         }
         for (ActiveRun run : active.values()) {
@@ -250,7 +257,7 @@ public class RunService {
     /** 落库节拍：把所有活动运行的待落事件按批写入；无运行则注销节拍器 */
     private void persistAll() {
         if (active.isEmpty()) {
-            persistLoop.stop();
+            persistLoop.stopIfIdle();
             return;
         }
         for (ActiveRun run : active.values()) {
@@ -767,32 +774,50 @@ public class RunService {
         }
     }
 
-    /** 自注销节拍器：首次注册需要时启动，运行清空后由任务自身停表，避免空转占调度线程 */
+    /** 自注销节拍器：首次注册时启动，运行清空后由任务自身停表，避免空转占调度线程 */
     private final class EventLoop {
 
-        private final AtomicBoolean running = new AtomicBoolean(false);
-        private volatile ScheduledFuture<?> future;
+        /** 空闲判据：与取消动作在同一把锁内复检，否则新运行刚注册的节拍器会被本次取消掉 */
+        private final BooleanSupplier idle;
+        private final Object lock = new Object();
+        private ScheduledFuture<?> future;
+
+        EventLoop(BooleanSupplier idle) {
+            this.idle = idle;
+        }
 
         /** 幂等启动：已在跑则不重复注册 */
         void ensure(Runnable task, long intervalMs) {
-            if (!running.compareAndSet(false, true)) {
-                return;
-            }
-            try {
+            synchronized (lock) {
+                if (Objects.nonNull(future)) {
+                    return;
+                }
                 future = scheduler.scheduleWithFixedDelay(task::run, Duration.ofMillis(intervalMs));
-            } catch (RuntimeException e) {
-                running.set(false);
-                log.error("[run.loop] 节拍器注册失败 interval={}ms {}", intervalMs, e.getMessage());
             }
         }
 
-        /** 由任务自身调用停表，下一个运行到来时会重新注册 */
+        /** 空闲时自注销；判空与取消必须原子，防止与新运行的注册交错后停表 */
+        void stopIfIdle() {
+            synchronized (lock) {
+                if (idle.getAsBoolean()) {
+                    cancelLocked();
+                }
+            }
+        }
+
+        /** 无条件停表，仅用于容器停机 */
         void stop() {
+            synchronized (lock) {
+                cancelLocked();
+            }
+        }
+
+        private void cancelLocked() {
             ScheduledFuture<?> current = future;
+            future = null;
             if (Objects.nonNull(current)) {
                 current.cancel(false);
             }
-            running.set(false);
         }
     }
 }

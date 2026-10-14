@@ -148,7 +148,7 @@ public class PromptService {
             throw new BizException(ErrorCodeEnum.PROMPT_NOT_FOUND, promptId);
         }
         String userId = LoginContext.userId();
-        boolean visible = Boolean.TRUE.equals(prompt.getBuiltin()) || userId.equals(prompt.getUserId());
+        boolean visible = Boolean.TRUE.equals(prompt.getBuiltin()) || Objects.equals(userId, prompt.getUserId());
         if (!visible) {
             throw new BizException(ErrorCodeEnum.PROMPT_NOT_FOUND, promptId);
         }

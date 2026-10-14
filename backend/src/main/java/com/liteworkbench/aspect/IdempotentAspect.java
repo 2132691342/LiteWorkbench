@@ -7,6 +7,7 @@ import com.liteworkbench.anno.Idempotent;
 import com.liteworkbench.common.BizException;
 import com.liteworkbench.common.ErrorCodeEnum;
 import com.liteworkbench.common.LoginContext;
+import com.liteworkbench.domain.constant.AppConst;
 import com.liteworkbench.domain.constant.RedisKeyConst;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -31,9 +32,6 @@ import java.util.Objects;
 @Component
 @RequiredArgsConstructor
 public class IdempotentAspect {
-
-    /** 命中重复提交时回传的响应头 */
-    public static final String HEADER_IDEM_KEY = "X-Lw-Idem-Key";
 
     private static final String PLACEHOLDER = "1";
 
@@ -61,7 +59,7 @@ public class IdempotentAspect {
         if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attributes) {
             HttpServletResponse response = attributes.getResponse();
             if (Objects.nonNull(response)) {
-                response.setHeader(HEADER_IDEM_KEY, key);
+                response.setHeader(AppConst.HEADER_IDEM_KEY, key);
             }
         }
     }

@@ -63,7 +63,7 @@ Redis 与 RabbitMQ 的凭据由环境变量在每次启动时重放，改完 `.e
 
 编排同时挂在 `postgres`、`redis`、`manticore`、`minio`、`rabbitmq` 五个服务上，容器崩溃自动重启。应用容器必须加入中间件所在网络才能按主机名互访：中间件栈在宿主机上由本仓库的 `deploy/docker-compose.yaml` 启动（同步到 `/opt/liteworkbench`），项目名取目录名，故网络为 `liteworkbench_default`、命名卷为 `liteworkbench_pgdata` / `liteworkbench_minio_data`。应用编排以 `${LITEWORKBENCH_NETWORK:-liteworkbench_default}` 引用同一网络，换目录部署时用该变量对齐。
 
-Manticore 的 9308（HTTP JSON API）只对同网络容器暴露，不发布宿主机端口；应用以 `manticore:9308` 直连，运维排障经 9306 MySQL 协议（容器内 `mysql -h0 -P9306`）执行 SQL。
+五个中间件的宿主机端口全部发布（见 §3 端口表），本机后端与排障工具可直接连 `localhost`，容器内应用仍以服务名互访（Manticore 走 `manticore:9308`）。运维排障经 9306 MySQL 协议执行 SQL：`mysql -h0 -P9306`。
 
 RabbitMQ 拓扑由应用声明：`lw.log.exchange` / `lw.log.index.queue`（死信到 `lw.log.dlx` → `lw.log.dead.queue`）与 `lw.kb.exchange` / `lw.kb.parse.queue`。启动期 `RabbitTopologyGuard` 先于监听容器对账，历史队列参数与代码不一致时按代码声明重建并补齐绑定；对账只动应用自身命名空间的队列，不应人工去 broker 上删队列。
 
@@ -104,6 +104,16 @@ podman run -d --name liteworkbench -p ${LITEWORKBENCH_PORT:-24399}:8080 \
 
 `deploy/Dockerfile` 三阶段：Maven 编译后端（跳过测试）→ Node 构建前端并拷入 `static/` → 运行时基于 `openjdk:17-jdk-alpine`，容器内直接安装 `python3` / `curl` / `tzdata`，并以 `--spring.web.resources.static-locations` 指向拷入的前端产物。
 
+### 4.1 镜像构建的三个必守项
+
+| 文件 | 作用 | 删掉或改错的后果 |
+|---|---|---|
+| `.dockerignore` | 排除 `**/node_modules`、`**/target`、本地日志与数据 | `COPY frontend .` 会把宿主机（Windows）二进制覆盖进 Alpine 镜像，构建直接失败；构建上下文还会多出数百 MB |
+| `deploy/maven-settings.xml` | 容器内 Maven 走可达仓库（`repo1.maven.org`） | 直连 `repo.maven.apache.org` 在部分网络下 SSL 握手中断，CI 构建必失败；该文件放在 cache mount 挂载目标之外，否则被缓存遮蔽读不到 |
+| `backend/lombok.config` | 声明 `@Qualifier` 可复制到构造参数 | 缺它则四个线程池的 `@Qualifier` 注入退化为按类型匹配，容器启动报 `No qualifying bean of type ExecutorService` |
+
+构建期还用 `RUN --mount=type=cache` 挂载 `/root/.m2` 与 `/root/.npm`，避免每次 CI 都全量下载依赖。
+
 ## 5. 配置项
 
 全部可用环境变量覆盖，命名规则 `LITEWORKBENCH_<SECTION>_<KEY>`（Spring 与 Sa-Token 原生键保留自身前缀）。
@@ -127,7 +137,7 @@ podman run -d --name liteworkbench -p ${LITEWORKBENCH_PORT:-24399}:8080 \
 | `LITEWORKBENCH_MQ_PASSWORD` | `admin_public` | 来自 `.env.infra` | 容器部署必填 |
 | `LITEWORKBENCH_AUTH_TOKEN_TIMEOUT` | 7200 | 7200 | 登录态有效期（秒），令牌放 `Authorization` 头 |
 | `LITEWORKBENCH_ADMIN_PASSWORD` | 空 | 空（`.env.infra` 留空） | 空则应用随机生成并仅在启动日志 WARN 打印一次 |
-| `LITEWORKBENCH_SECURITY_SECRET` | `liteworkbench-default-secret` | 来自 `.env.infra` | 供应方密钥加密因子，生产必须覆盖 |
+| `LITEWORKBENCH_SECURITY_SECRET` | `liteworkbench-default-secret` | 来自 `.env.infra` | 供应方密钥加密因子；镜像内置 `SPRING_PROFILES_ACTIVE=prod`，仍用内置开发因子时启动直接失败 |
 | `LITEWORKBENCH_LOG_DIR` | logs | `/var/log/liteworkbench` | 容器内挂 `app_logs` 卷 |
 | `LITEWORKBENCH_RUNTIME_DATA_DIR` | `./data` | `/var/lib/liteworkbench` | 容器内挂 `app_data` 卷 |
 | `LITEWORKBENCH_RUNTIME_PYTHON_PATH` | 空 | 空 | 空则按 数据目录 → PATH 顺序探测解释器 |
@@ -322,7 +332,9 @@ CI **不注入任何部署密钥**：应用密钥、中间件口令只来自目�
 | 场景 | 判据 | 处置 |
 |---|---|---|
 | 容器反复重启 | HEALTHCHECK 失败、日志出现 OOM | 查 `podman stats` 是否超限，必要时调大容器内存 |
-| 启动失败：缺配置 | 日志含环境变量名 | 补 `LITEWORKBENCH_SECURITY_SECRET` 等必填项；生产禁用开发默认密钥 |
+| 容器停在 Up 但健康检查不过 | `docker ps` 显示 Up，`/actuator/health` 不通 | JVM 已死而非守护线程挂着：日志应有 `[app.startup]`；应用侧保证启动失败即 `System.exit(1)`，若仍假 Up 是第三方线程没退干净 |
+| 启动报 `processorMetrics` 或 `InternalError` | 堆栈含 `jdk.internal.platform.Metrics.systemMetrics` | 基础镜像 JDK 17-ea 的 cgroup 探测缺陷，已排除两个 metrics 自动配置；更换基础镜像时必须重新评估 |
+| 启动失败：缺配置 | 日志含 `[startup.guard] prod 环境未注入 LITEWORKBENCH_SECURITY_SECRET` | 在 `.env.infra` 补该字段后重建容器；容器内 `SPRING_PROFILES_ACTIVE=prod`，用内置开发因子不允许启动 |
 | 启动失败：DDL 报错 | `spring.sql.init` 日志 | schema.sql 幂等，检查是否手工改过表结构导致类型冲突 |
 | 全部接口 401 | 登录后仍 401 | Redis 被清空或重启，Sa-Token 会话丢失属预期，重新登录；检查 Redis 是否被写满 |
 | 会话提交报 `SESSION_BUSY` | 该会话有运行未收尾 | 等锁 TTL 自动释放，或对残留运行执行 abort |

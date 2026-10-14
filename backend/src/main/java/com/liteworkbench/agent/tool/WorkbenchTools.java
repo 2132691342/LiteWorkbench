@@ -2,6 +2,7 @@ package com.liteworkbench.agent.tool;
 
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.core.util.URLUtil;
 import cn.hutool.http.HttpUtil;
 import com.liteworkbench.agent.spi.KbSearchPort;
 import com.liteworkbench.agent.spi.MemoryPort;
@@ -19,6 +20,9 @@ import com.liteworkbench.runtime.ExecRequest;
 import com.liteworkbench.runtime.PythonRuntime;
 import lombok.extern.slf4j.Slf4j;
 
+import java.net.InetAddress;
+import java.net.URL;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -126,19 +130,51 @@ public class WorkbenchTools {
 
     /** 发起 GET 请求 */
     @AgentTool(name = "http_get", risk = ToolRiskEnum.SAFE,
-            description = "对给定 URL 发起 GET 请求，返回响应文本（截断至 8000 字符）")
+            description = "对给定 URL 发起 GET 请求，返回响应文本（截断至 8000 字符）；"
+                    + "只允许公网 http/https 地址，内网地址一律拒绝")
     public String httpGet(
             @AgentToolParam(name = "url", description = "完整 http(s) 地址") String url) {
         if (!toolGate.isEnabled("http_get")) {
             return error("工具 http_get 已被禁用");
         }
         try {
+            assertPublicTarget(url);
             String body = HttpUtil.createGet(url)
                     .timeout((int) TimeUnit.SECONDS.toMillis(HTTP_TIMEOUT_SECONDS))
                     .execute().body();
             return OutputSanitizer.clean(Objects.toString(body, StrUtil.EMPTY));
+        } catch (BizException e) {
+            return error(e.getMessage());
         } catch (Exception e) {
             return error("请求失败：" + e.getMessage());
+        }
+    }
+
+    /** 目标地址校验：只放行公网 http/https，阻断回环 / 私有 / 链路本地 / 组播地址，避免被当作 SSRF 跳板 */
+    private void assertPublicTarget(String url) {
+        if (StrUtil.isBlank(url)) {
+            throw new BizException(ErrorCodeEnum.TOOL_TARGET_BLOCKED, "url 不能为空");
+        }
+        URL parsed = URLUtil.url(url);
+        String protocol = StrUtil.nullToEmpty(parsed.getProtocol()).toLowerCase();
+        if (!"http".equals(protocol) && !"https".equals(protocol)) {
+            throw new BizException(ErrorCodeEnum.TOOL_TARGET_BLOCKED, "只允许 http/https");
+        }
+        String host = parsed.getHost();
+        if (StrUtil.isBlank(host)) {
+            throw new BizException(ErrorCodeEnum.TOOL_TARGET_BLOCKED, "url 缺少主机名");
+        }
+        InetAddress[] addresses;
+        try {
+            addresses = InetAddress.getAllByName(host);
+        } catch (UnknownHostException e) {
+            throw new BizException(ErrorCodeEnum.TOOL_TARGET_BLOCKED, "域名无法解析：" + host);
+        }
+        for (InetAddress address : addresses) {
+            if (address.isLoopbackAddress() || address.isAnyLocalAddress() || address.isLinkLocalAddress()
+                    || address.isSiteLocalAddress() || address.isMulticastAddress()) {
+                throw new BizException(ErrorCodeEnum.TOOL_TARGET_BLOCKED, "不允许访问内网地址：" + host);
+            }
         }
     }
 

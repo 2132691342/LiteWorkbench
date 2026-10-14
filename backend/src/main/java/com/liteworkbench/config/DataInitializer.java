@@ -144,13 +144,10 @@ public class DataInitializer implements ApplicationRunner {
         return menu;
     }
 
-    /** 内置三角色 + 种子账号：admin（超级管理员）、demo（普通用户），按用户名分别补建 */
+    /** 内置三角色 + 种子账号：admin（超级管理员）、demo（普通用户）；账号已存在也要重放授权，角色被误删可自愈 */
     private void initRolesAndUsers() {
         boolean adminExists = Objects.nonNull(sysUserMapper.selectByUsername(ADMIN_USERNAME));
         boolean demoExists = Objects.nonNull(sysUserMapper.selectByUsername(DEMO_USERNAME));
-        if (adminExists && demoExists) {
-            return;
-        }
         List<SysMenuDO> menus = sysMenuMapper.selectAll();
         List<String> allMenuIds = menus.stream().map(SysMenuDO::getMenuId).toList();
         // 平台管理员不持角色管理权限：角色是特权来源，仅超级管理员可授，杜绝横向提拔
@@ -158,11 +155,14 @@ public class DataInitializer implements ApplicationRunner {
                 .filter(menu -> !isRoleManagementMenu(menu))
                 .map(SysMenuDO::getMenuId)
                 .toList();
-        String initPassword = resolveInitPassword();
+        // 口令只在实际建号时解析：否则每次启动都会重新生成并 WARN 打印一次，制造"口令又变了"的假象
+        String initPassword = adminExists && demoExists ? null : resolveInitPassword();
 
         String superRoleId = ensureRole(RoleCodeConst.SUPER_ADMIN, "超级管理员", 0, allMenuIds);
         if (!adminExists) {
             createUser(ADMIN_USERNAME, "超级管理员", superRoleId, initPassword);
+        } else {
+            ensureSeedUserRole(ADMIN_USERNAME, superRoleId);
         }
 
         String adminRoleId = ensureRole(RoleCodeConst.ADMIN, "平台管理员", 1, adminMenuIds);
@@ -175,8 +175,24 @@ public class DataInitializer implements ApplicationRunner {
         grantMenus(userRoleId, userMenuIds);
         if (!demoExists) {
             createUser(DEMO_USERNAME, "演示用户", userRoleId, initPassword);
+        } else {
+            ensureSeedUserRole(DEMO_USERNAME, userRoleId);
         }
         log.info("[data.init.roles] super={} admin={} user={}", superRoleId, adminRoleId, userRoleId);
+    }
+
+    /** 种子账号的角色绑定：角色被删后重建会换新 ID，旧绑定指向已不存在的角色，这里补回 */
+    private void ensureSeedUserRole(String username, String roleId) {
+        SysUserDO user = sysUserMapper.selectByUsername(username);
+        if (Objects.isNull(user)) {
+            return;
+        }
+        List<String> owned = sysUserMapper.selectRoleIdsByUserId(user.getUserId());
+        if (CollUtil.contains(owned, roleId)) {
+            return;
+        }
+        sysUserMapper.insertUserRoles(user.getUserId(), List.of(roleId), SYSTEM);
+        log.info("[data.init.user] 补回种子账号角色绑定 username={} roleId={}", username, roleId);
     }
 
     /** 角色管理菜单：权限码以 system:role: 开头的菜单与权限点，仅超级管理员持有 */
@@ -206,15 +222,20 @@ public class DataInitializer implements ApplicationRunner {
         if (StrUtil.isBlank(configured)) {
             return;
         }
-        SysUserDO admin = sysUserMapper.selectByUsername(ADMIN_USERNAME);
-        if (Objects.isNull(admin) || !Boolean.TRUE.equals(admin.getPwdResetRequired())) {
+        List.of(ADMIN_USERNAME, DEMO_USERNAME).forEach(username -> realignSeedPassword(username, configured));
+    }
+
+    /** 单个种子账号对齐：只动尚未激活的账号，已改密账号的口令不受配置项影响 */
+    private void realignSeedPassword(String username, String rawPassword) {
+        SysUserDO user = sysUserMapper.selectByUsername(username);
+        if (Objects.isNull(user) || !Boolean.TRUE.equals(user.getPwdResetRequired())) {
             return;
         }
         String salt = PasswordUtil.randomSalt();
-        sysUserMapper.updatePassword(admin.getUserId(), PasswordUtil.hash(configured, salt), salt,
+        sysUserMapper.updatePassword(user.getUserId(), PasswordUtil.hash(rawPassword, salt), salt,
                 Boolean.TRUE, SYSTEM);
-        log.info("[data.init.user] 种子账号尚未激活，已按 LITEWORKBENCH_ADMIN_PASSWORD 对齐密码 userId={}",
-                admin.getUserId());
+        log.info("[data.init.user] 种子账号尚未激活，已按 LITEWORKBENCH_ADMIN_PASSWORD 对齐密码 username={}",
+                username);
     }
 
     /** 初始密码：配置优先；未配置则随机生成并仅打印一次，绝不写死在代码或配置里 */

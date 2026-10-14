@@ -223,17 +223,31 @@ onMounted(() => {
           </el-table-column>
           <el-table-column :label="t('common.actions')" width="300" fixed="right">
             <template #default="{ row }">
-              <div class="flex gap-2">
+              <div class="flex items-center gap-1">
                 <LwButton v-if="hasPerm('system:user:update')" variant="text" size="sm" @click="openDialog(row)">
                   {{ t('common.edit') }}
                 </LwButton>
                 <LwButton v-if="hasPerm('system:user:update')" variant="text" size="sm" @click="toggleState(row)">
                   {{ row.state === USER_STATE.NORMAL ? t('common.disable') : t('common.enable') }}
                 </LwButton>
-                <LwButton v-if="hasPerm('system:user:reset')" variant="text" size="sm" @click="openReset(row)">
+                <!-- 改密与删除不可逆，用分隔线隔开并取错误语义色，降低误点概率 -->
+                <span class="w-px h-4 mx-1 shrink-0" style="background: var(--lw-border)" aria-hidden="true" />
+                <LwButton
+                  v-if="hasPerm('system:user:reset')"
+                  variant="text"
+                  size="sm"
+                  class="lw-text-danger"
+                  @click="openReset(row)"
+                >
                   {{ t('system.user.resetPassword') }}
                 </LwButton>
-                <LwButton v-if="hasPerm('system:user:delete')" variant="text" size="sm" @click="removeUser(row)">
+                <LwButton
+                  v-if="hasPerm('system:user:delete')"
+                  variant="text"
+                  size="sm"
+                  class="lw-text-danger"
+                  @click="removeUser(row)"
+                >
                   {{ t('common.delete') }}
                 </LwButton>
               </div>

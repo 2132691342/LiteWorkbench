@@ -9,6 +9,13 @@ server:
 spring:
   application:
     name: lite-workbench
+  autoconfigure:
+    exclude:
+      # 基础镜像的 JDK 是 17-ea，cgroup 探测返回 null 会让系统指标绑定器抛 NPE 直接炸掉启动：
+      # SystemMetricsAutoConfiguration 读主机 CPU / 文件描述符，TomcatMetricsAutoConfiguration 在
+      # 启动事件里读容器指标。单容器里这两类指标没有观测价值，平台健康与用量由 MonitorService 提供
+      - org.springframework.boot.actuate.autoconfigure.metrics.SystemMetricsAutoConfiguration
+      - org.springframework.boot.actuate.autoconfigure.metrics.web.tomcat.TomcatMetricsAutoConfiguration
   datasource:
     url: ${LITEWORKBENCH_DATASOURCE_URL:jdbc:postgresql://localhost:5432/postgres}
     username: ${LITEWORKBENCH_DATASOURCE_USERNAME:postgres}
@@ -30,6 +37,8 @@ spring:
     init:
       mode: always
       schema-locations: classpath:db/schema.sql
+      # 必须显式指定：schema.sql 含中文种子数据（wb_tool 标签），不指定时按平台默认编码读取，Windows(GBK) 下整表标签变乱码
+      encoding: UTF-8
       continue-on-error: false
   servlet:
     multipart:
@@ -45,6 +54,11 @@ spring:
     password: ${LITEWORKBENCH_MQ_PASSWORD:admin_public}
     listener:
       simple:
+        # 每个监听容器最少 2 个消费线程、峰值 4：日志投递与知识库解析的并发上界由此显式给出，不由线程池兜底
+        concurrency: 2
+        max-concurrency: 4
+        # 预取条数：小容器下压住内存，同时保证消费端不空转
+        prefetch: 8
         # multiplier 必须 > 1.0，否则 ExponentialBackOffPolicy 在启动期打告警且退避等同固定间隔
         retry:
           enabled: true
@@ -86,6 +100,7 @@ management:
       # 开启 liveness / readiness 分组，容器编排按 readiness 判断是否接流量
       probes:
         enabled: true
+
 
 liteworkbench:
   # 日志目录，容器内用环境变量覆盖

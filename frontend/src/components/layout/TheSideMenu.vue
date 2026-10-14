@@ -5,6 +5,7 @@ import { useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import type { MenuVO } from '@/types/api'
 import { menuLabel } from '@/utils/menu'
+import { roleLabel } from '@/utils/role'
 import { menuIcon } from './icons'
 
 /** 侧栏菜单主体：菜单树渲染 + 目录展开 + 选中态 + 底部品牌卡片，桌面侧栏与移动抽屉共用 */
@@ -13,6 +14,7 @@ const route = useRoute()
 const userStore = useUserStore()
 
 const expandedDirs = ref<string[]>([])
+const currentRoleLabel = computed(() => roleLabel(userStore.roleCodes, t))
 
 const primaryMenus = computed(() =>
   userStore.menus.filter((item) => item.menuType !== 'button' && item.visible),
@@ -117,8 +119,8 @@ function handleClick(menu: MenuVO): void {
         <div class="relative z-10" style="color: var(--lw-on-secondary)">
           <div class="text-xs font-bold mb-1">{{ t('app.title') }}</div>
           <div class="text-[10px] opacity-90 leading-relaxed mb-3">{{ t('app.slogan') }}</div>
-          <div class="text-[10px] font-mono opacity-80">
-            {{ userStore.user?.username }} · {{ userStore.roleCodes[0] ?? '-' }}
+          <div class="text-[10px] opacity-90 truncate">
+            {{ userStore.user?.username }} · {{ currentRoleLabel }}
           </div>
         </div>
       </div>

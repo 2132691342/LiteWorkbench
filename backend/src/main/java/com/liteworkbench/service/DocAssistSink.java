@@ -7,4 +7,7 @@ public interface DocAssistSink {
     void send(String eventType, String payloadJson);
 
     void complete();
+
+    /** 客户端是否已断开：断连后模型出站必须立即关闭连接，不能只等下一次推送失败 */
+    boolean isClientGone();
 }

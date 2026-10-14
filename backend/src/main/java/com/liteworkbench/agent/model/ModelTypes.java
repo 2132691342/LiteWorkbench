@@ -5,6 +5,7 @@ import lombok.Data;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /** 模型层传输对象：消息、工具调用、工具描述、请求与响应，三协议共用同一结构 */
 public final class ModelTypes {
@@ -51,7 +52,7 @@ public final class ModelTypes {
         /** 助手消息，可带工具调用 */
         public static Msg assistant(String content, List<ToolCall> toolCalls) {
             Msg msg = new Msg(Role.ASSISTANT, content);
-            msg.setToolCalls(toolCalls == null ? new ArrayList<>() : new ArrayList<>(toolCalls));
+            msg.setToolCalls(Objects.isNull(toolCalls) ? new ArrayList<>() : new ArrayList<>(toolCalls));
             return msg;
         }
 

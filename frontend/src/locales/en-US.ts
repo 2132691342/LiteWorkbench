@@ -11,6 +11,7 @@ export default {
     roleSuperAdmin: 'Super admin',
     roleAdmin: 'Admin',
     roleUser: 'User',
+    roleCustom: 'Custom role',
   },
   common: {
     confirm: 'Confirm',
@@ -174,6 +175,7 @@ export default {
     metricSuccess: 'Success rate',
     trendTitle: 'Run trend',
     trendDesc: 'Runs over the last 7 days',
+    rangeRecent: 'Last 7 days',
     viewRuns: 'Runs',
     viewTokens: 'Tokens',
     tokenTrendTitle: 'Token trend',

@@ -47,8 +47,9 @@ services:
     environment:
       EXTRA: ""
     ports:
-      # 9306 MySQL 协议面向运维排障；9308 HTTP JSON API 只对同网络容器开放，不发布宿主机
+      # 9306 MySQL 协议面向运维排障；9308 HTTP JSON API 供本机后端直连，无需再叠加覆盖文件
       - "9306:9306"
+      - "9308:9308"
     ulimits:
       nofile:
         hard: 65536

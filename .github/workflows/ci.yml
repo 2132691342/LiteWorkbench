@@ -68,24 +68,14 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/liteworkbench:latest
             ghcr.io/${{ github.repository_owner }}/liteworkbench:${{ github.sha }}
 
-      # source 只接受单个路径：多文件要拆成多个 step，写成多行块会被当成一个路径导致 tar 空包
-      - name: 同步应用编排到云主机
+      # source 支持逗号分隔的多路径，strip_components 去掉 deploy/ 前缀让文件直接落在应用目录
+      - name: 同步应用编排与发布脚本到云主机
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
-          source: deploy/docker-compose.app.yaml
-          target: ${{ secrets.SSH_APP_DIR }}
-          strip_components: 1
-
-      - name: 同步发布脚本到云主机
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          source: deploy/deploy-app.sh
+          source: deploy/docker-compose.app.yaml,deploy/deploy-app.sh
           target: ${{ secrets.SSH_APP_DIR }}
           strip_components: 1
 

@@ -212,15 +212,41 @@ UnoCSS 主题只映射令牌，组件禁止硬编码色值：颜色 `lw-<别名>
 | `LwEmpty` | 居中 `flex-col gap-3 py-10`：56px 圆角瓷砖（2xl 圆角、`--lw-primary-tint` 底 + 主色 26px 图标）+ 14px `--lw-ink-muted` 说明 + 可选主操作 |
 | `LwSkeleton` | `flex-col gap-3`，默认 4 行；每行 36px 高、8px 圆角；宽度在 100/92/78/86/64/90% 间循环；渐变扫光 1.4s；`aria-hidden` |
 
-### 5.6 错误条（LwErrorBar）
+### 5.6 指标卡（LwMetricCard）
+
+仪表盘与统计页的指标一律用 `components/ui/LwMetricCard.vue`，禁止各页自造指标块：
+
+| 部位 | 规范 |
+|---|---|
+| 容器 | `lw-card p-5`，固定高 `h-32`，`relative overflow-hidden`；悬停上移 2px 并加 `--lw-shadow-md` |
+| 标签行 | 左侧标签 14px 加粗 `--lw-ink-muted`；右侧 28px 圆角瓷砖（圆角 6px、内边距 6px），底与图标同色系淡底 |
+| 装饰图标 | 右上角 56px 图标 `opacity-10`，悬停放大 1.1；色随 `tone` |
+| 数值 | 24px 加粗、`tracking-tight`、`--lw-ink` |
+| 页脚 | 12px 加粗，缺省 `--lw-ink-muted`；可按口径取成功 / 警示 / 错误语义文字色，超长截断 |
+
+`tone` 三档：`primary`（主紫淡底）、`secondary`（辅助紫淡底）、`ink`（辅助紫淡底 + 主紫图标）。`hintTone` 只用于表达口径健康度（如成功率），不承担装饰。
+
+### 5.7 危险文字按钮（lw-text-danger）
+
+不可逆操作（删除、重置密码）一律取错误语义色，与常规操作一眼区分：
+
+| 部位 | 规范 |
+|---|---|
+| 用法 | `LwButton variant="text" class="lw-text-danger"`，只用于带二次确认的破坏性动作 |
+| 颜色 | 文字 `--lw-error-ink`，悬停底纹 `--lw-error-tint`，按下文字 `--lw-error-active` |
+| 分组 | 与常规操作之间加 1px 竖分隔线（`w-px h-4` + `--lw-border`），整组 `gap-1` |
+
+禁止把破坏性动作混在一排等距的文字按钮里：误点没有挽回余地，颜色与分隔线是唯一的事前提示。危险色只用于文字按钮，实心危险按钮仍是 `variant="danger"`。
+
+### 5.8 错误条（LwErrorBar）
 
 内联展示，不弹全屏遮罩：`px-4 py-3 rounded-control`，1px `--lw-error` 边框 + `--lw-error-tint` 底；左侧警示图标 + 14px `--lw-error` 文案；右侧 `text` sm 重试按钮。
 
-### 5.7 顶部进度条（LwProgressBar）
+### 5.9 顶部进度条（LwProgressBar）
 
 固定顶部、`z-50`、高 2px、`--lw-primary` 底 + 8px 同色光晕；宽度按 `--lw-dur`、透明度按 `--lw-dur-fast` 过渡。路由开始推进至 12%，此后每 180ms 随机递增（单次 ≤12%、封顶 88%）；完成时收满 100% 并 240ms 淡出。
 
-### 5.8 Markdown 消息（LwMarkdown）
+### 5.10 Markdown 消息（LwMarkdown）
 
 14px 正文行高 1.65。代码块 `.md-code`：1px `--lw-border` + 10px 圆角 + `--lw-surface` 底，头部 11px `--lw-ink-muted` + 复制按钮（悬停转 `--lw-primary` + `--lw-primary-tint` 底；复制成功 400ms 内图标切为对勾、色转 `--lw-success-ink`）。行内代码 `--lw-muted-tint` 底 + 4px 圆角；引用块 3px 主紫左边 + 右侧 8px 圆角 + `--lw-primary-tint` 底；表格 1px 边框。
 
@@ -336,7 +362,7 @@ UnoCSS 主题只映射令牌，组件禁止硬编码色值：颜色 `lw-<别名>
 ```
 
 - **页头** `lw-page-head`：标题 `lw-title`（24px 加粗）+ 副标题 `lw-subtitle`（14px `--lw-ink-muted`），右侧操作区为「次 + 主」两枚按钮。
-- **指标卡**：`h-32`，右上角 56px 图标 `opacity-10` 且 `group-hover:scale-110`；数值 `text-2xl font-bold tracking-tight`，页脚一行 12px 加粗次级信息；悬停上移 2px 并加 `--lw-shadow-md`。
+- **指标卡**：见 §5.6，全站唯一实现是 `components/ui/LwMetricCard.vue`（`tone` 决定淡底图标瓷砖，`hintTone` 决定页脚语义色）。
 - **面积图**（见 §8）：主序列 `--lw-primary`，`secondary` 时 `--lw-secondary`，渐变 `5%:0.2 → 95%:0`；网格线 `--lw-border` `dashed` `opacity .5`，Y 轴刻度 `--lw-ink-muted` 10px。
 - 图卡右上角可放 12px 加粗的时间范围徽标（`--lw-muted-tint` 底），**不得**再放装饰性图例。
 - **侧栏底部品牌卡**：`--lw-secondary` 底 + `--lw-on-secondary` 字，12px 圆角 + `--lw-shadow-sm`，`p-4`，内叠 `--lw-on-primary` 10% 蒙版；内容为产品名、口号与 `用户名 · 角色码`。这是侧栏唯一的深色块，用于把非菜单信息与导航分开。

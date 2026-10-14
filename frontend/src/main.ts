@@ -1,16 +1,16 @@
-import ElementPlus from 'element-plus'
 import { createPinia } from 'pinia'
 import { createApp } from 'vue'
 import App from './App.vue'
 import { setupPermDirective } from './directives/perm'
 import { i18n } from './locales'
+import { setupElementPlus } from './plugins/element-plus'
 import router from './router'
 import 'element-plus/dist/index.css'
 import 'highlight.js/styles/github.css'
 import 'virtual:uno.css'
 import '@/styles/index.css'
 
-/** 应用入口：Pinia → Router → i18n → Element Plus → 指令与图标注册 */
+/** 应用入口：Pinia → Router → i18n → Element Plus 按需组件 → 指令 */
 const app = createApp(App)
 
 /** 错误统一收集到 window.__vueErrs，便于无控制台环境排障 */
@@ -34,7 +34,7 @@ window.addEventListener('unhandledrejection', (event) => {
 app.use(createPinia())
 app.use(router)
 app.use(i18n)
-app.use(ElementPlus)
+setupElementPlus(app)
 setupPermDirective(app)
 
 // 图标一律按需具名引入（见 components/layout/icons.ts）；全量注册会把千余个图标打包进主 chunk

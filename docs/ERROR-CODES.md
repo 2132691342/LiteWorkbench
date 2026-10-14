@@ -122,6 +122,7 @@
 | 5002 | `TOOL_DISABLED` | 409 | 工具已禁用 |
 | 5003 | `TOOL_EXEC_TIMEOUT` | 504 | 工具执行超时 |
 | 5005 | `TOOL_CONFIRM_REQUIRED` | 409 | 该工具有副作用，需确认后执行 |
+| 5006 | `TOOL_TARGET_BLOCKED` | 403 | 工具目标地址不被允许 |
 
 ## 12. 文件 6000
 

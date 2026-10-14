@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Search } from '@element-plus/icons-vue'
+import { RefreshLeft, Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -227,6 +227,21 @@ function applyPreset(key: string): void {
   handleSearch()
 }
 
+/** 重置：清空全部筛选条件并回到默认 24 小时窗口，用户不必逐项清空 */
+function handleReset(): void {
+  query.keyword = ''
+  query.field = 'message'
+  query.level = ''
+  query.logger = ''
+  query.traceId = ''
+  query.userId = ''
+  query.runId = ''
+  query.from = undefined
+  query.to = undefined
+  query.page = 1
+  applyPreset('24h')
+}
+
 function drillHour(index: number): void {
   const bucket = histogram.value[index]
   if (!bucket) return
@@ -412,6 +427,10 @@ onBeforeUnmount(() => {
           <template #icon><el-icon><Search /></el-icon></template>
           {{ t('common.search') }}
         </LwButton>
+        <LwButton variant="text" @click="handleReset">
+          <template #icon><el-icon><RefreshLeft /></el-icon></template>
+          {{ t('common.reset') }}
+        </LwButton>
       </div>
       <div class="flex flex-wrap items-center gap-3 mt-3">
         <span class="text-xs" style="color: var(--lw-ink-muted)">{{ t('logs.quickRange') }}</span>
@@ -445,7 +464,7 @@ onBeforeUnmount(() => {
             @keydown.enter="expanded = expanded === doc.logId ? '' : doc.logId"
           >
             <div class="flex items-center gap-3">
-              <LwTag :tone="levelTone(doc.level)">{{ doc.level }}</LwTag>
+              <LwTag :tone="levelTone(doc.level)" class="w-16 justify-center shrink-0">{{ doc.level }}</LwTag>
               <span class="text-xs font-mono opacity-70 shrink-0">{{ formatTime(doc.ts) }}</span>
               <span class="text-sm truncate flex-1" style="color: var(--lw-ink)">
                 <template v-for="(seg, index) in highlight(doc.message, query.field === 'message' ? query.keyword : '')" :key="index">

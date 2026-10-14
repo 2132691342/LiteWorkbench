@@ -271,29 +271,31 @@ onMounted(async () => {
         </div>
         <div class="flex-1 overflow-auto px-3 pb-3 flex flex-col gap-1">
           <LwEmpty v-if="!runStore.runs.length" :description="t('console.noRuns')" />
-          <div
-            v-for="run in runStore.runs"
-            v-else
-            :key="run.runId"
-            class="px-2 py-1.5 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm"
-            :style="{
-              'border-color': run.runId === runStore.replayRunId ? 'var(--lw-primary)' : 'var(--lw-border)',
-              background: run.runId === runStore.replayRunId ? 'var(--lw-primary-tint)' : 'transparent',
-            }"
-            @click="replay(run.runId)"
-          >
-            <div class="flex items-center justify-between gap-2">
-              <span class="text-xs truncate" style="color: var(--lw-ink-muted)">{{ formatTime(run.createdAt) }}</span>
-              <LwTag :tone="runStatusTone(run)">{{ runStatusText(run) }}</LwTag>
+          <!-- v-for 不得与 v-else 同元素：v-if 优先级更高会让分支判定失效，条件与循环必须分层 -->
+          <template v-else>
+            <div
+              v-for="run in runStore.runs"
+              :key="run.runId"
+              class="px-2 py-1.5 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm"
+              :style="{
+                'border-color': run.runId === runStore.replayRunId ? 'var(--lw-primary)' : 'var(--lw-border)',
+                background: run.runId === runStore.replayRunId ? 'var(--lw-primary-tint)' : 'transparent',
+              }"
+              @click="replay(run.runId)"
+            >
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-xs truncate" style="color: var(--lw-ink-muted)">{{ formatTime(run.createdAt) }}</span>
+                <LwTag :tone="runStatusTone(run)">{{ runStatusText(run) }}</LwTag>
+              </div>
+              <div class="text-xs truncate mt-0.5">{{ run.prompt }}</div>
+              <div class="flex items-center justify-between gap-2 mt-0.5">
+                <span v-if="runMeta(run)" class="text-xs opacity-50 font-mono">{{ runMeta(run) }}</span>
+                <LwButton variant="text" size="sm" class="shrink-0" @click.stop="openInRuns(run.runId)">
+                  {{ t('console.openInRuns') }}
+                </LwButton>
+              </div>
             </div>
-            <div class="text-xs truncate mt-0.5">{{ run.prompt }}</div>
-            <div class="flex items-center justify-between gap-2 mt-0.5">
-              <span v-if="runMeta(run)" class="text-xs opacity-50 font-mono">{{ runMeta(run) }}</span>
-              <LwButton variant="text" size="sm" class="shrink-0" @click.stop="openInRuns(run.runId)">
-                {{ t('console.openInRuns') }}
-              </LwButton>
-            </div>
-          </div>
+          </template>
         </div>
       </div>
     </aside>

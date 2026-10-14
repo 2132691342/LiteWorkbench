@@ -151,6 +151,18 @@ body {
   color: var(--lw-primary-active);
 }
 
+/* 危险文字按钮：不可逆操作（重置密码、删除）取错误语义色，与常规操作一眼区分 */
+.lw-btn--text.lw-text-danger {
+  color: var(--lw-error-ink);
+}
+.lw-btn--text.lw-text-danger:hover:not(:disabled):not(.is-loading) {
+  background-color: var(--lw-error-tint);
+}
+.lw-btn--text.lw-text-danger:active:not(:disabled):not(.is-loading) {
+  color: var(--lw-error-active);
+  background-color: var(--lw-error-tint);
+}
+
 /* 焦点环：仅键盘导航时出现，鼠标点击不显示 */
 .lw-btn:focus-visible,
 .lw-segmented__item:focus-visible,

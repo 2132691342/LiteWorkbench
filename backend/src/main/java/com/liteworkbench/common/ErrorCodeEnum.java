@@ -68,6 +68,7 @@ public enum ErrorCodeEnum {
     TOOL_DISABLED("5002", 409, "工具已禁用"),
     TOOL_EXEC_TIMEOUT("5003", 504, "工具执行超时"),
     TOOL_CONFIRM_REQUIRED("5005", 409, "该工具有副作用，需确认后执行"),
+    TOOL_TARGET_BLOCKED("5006", 403, "工具目标地址不被允许"),
 
     // 文件 6000
     FILE_NOT_FOUND("6001", 404, "文件不存在"),

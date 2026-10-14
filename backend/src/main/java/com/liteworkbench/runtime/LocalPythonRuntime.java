@@ -100,9 +100,12 @@ public class LocalPythonRuntime implements PythonRuntime {
                     + env.getOrDefault("PATH", StrUtil.EMPTY));
             Process process = builder.start();
             boolean finished = process.waitFor(timeout, TimeUnit.SECONDS);
+            // 超时也要把已落盘的输出一并回报：模型据此缩短脚本或分批处理，而不是只知道「不能用」
             if (!finished) {
                 killTree(process);
-                return new ExecResult(-1, "", "执行超时（" + timeout + " 秒），进程树已终止", true);
+                String partialOut = OutputSanitizer.clean(FileUtil.readUtf8String(stdoutFile.toFile()));
+                String partialErr = OutputSanitizer.clean(FileUtil.readUtf8String(stderrFile.toFile()));
+                return new ExecResult(-1, partialOut, StrUtil.format("执行超时（{} 秒），进程树已终止\n{}", timeout, partialErr), true);
             }
             String stdout = OutputSanitizer.clean(FileUtil.readUtf8String(stdoutFile.toFile()));
             String stderr = OutputSanitizer.clean(FileUtil.readUtf8String(stderrFile.toFile()));

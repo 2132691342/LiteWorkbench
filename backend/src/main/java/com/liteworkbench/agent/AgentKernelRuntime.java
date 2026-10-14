@@ -27,6 +27,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
@@ -83,7 +84,7 @@ public class AgentKernelRuntime implements AgentRuntime {
         executor.submit(() -> run(handle, context, loop, messages, registry, seq, sink));
         log.info("[agent.start] runId={} provider={} model={} history={} messages={}",
                 context.runId(), context.providerCode(), context.modelName(),
-                context.history() == null ? 0 : context.history().size(), messages.size());
+                Objects.isNull(context.history()) ? 0 : context.history().size(), messages.size());
         return handle;
     }
 

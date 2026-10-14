@@ -8,11 +8,13 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Objects;
 
 /** 模型出站 HTTP 支撑：建连、逐行读流、错误体截断，全部基于 JDK，连接即取消凭据 */
 public final class HttpModelSupport {
@@ -41,12 +43,16 @@ public final class HttpModelSupport {
         connection.setReadTimeout(readTimeoutMs);
         connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
         connection.setRequestProperty("Accept", "text/event-stream, application/json");
-        if (headers != null) {
+        if (Objects.nonNull(headers)) {
             headers.forEach(connection::setRequestProperty);
         }
         byte[] payload = StrUtil.bytes(body, StandardCharsets.UTF_8);
         connection.setFixedLengthStreamingMode(payload.length);
-        connection.getOutputStream().write(payload);
+        // 请求体必须显式关闭：固定长度模式下不关闭会让服务端一直等剩余字节，表现为首字节延迟
+        try (OutputStream out = connection.getOutputStream()) {
+            out.write(payload);
+            out.flush();
+        }
         return connection;
     }
 
@@ -69,7 +75,7 @@ public final class HttpModelSupport {
 
     /** 读取整个流，失败返回空串 */
     public static String readAll(InputStream stream) {
-        if (stream == null) {
+        if (Objects.isNull(stream)) {
             return StrUtil.EMPTY;
         }
         StringBuilder builder = new StringBuilder();
@@ -102,7 +108,7 @@ public final class HttpModelSupport {
 
     /** 安静关闭连接 */
     public static void close(HttpURLConnection connection) {
-        if (connection != null) {
+        if (Objects.nonNull(connection)) {
             try {
                 connection.disconnect();
             } catch (Exception ignored) {

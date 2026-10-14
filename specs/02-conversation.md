@@ -146,7 +146,7 @@ client.stream(request, listener, cancelled)
   └─ 4 解析增量 → onText / onThinking，工具调用按 index 累积 → 返回 StreamResult
 ```
 
-会话自动命名：首轮对话结束后异步触发（跑在事件扇出池 `lwEventExecutor`），标题仍为默认值时把用户首条提问截前 400 字交给 `ModelCaller.completeQuietly` 生成标题，清洗引号 / 标点 / 换行并截 24 字；失败静默保持默认标题，不阻塞对话。
+会话自动命名：首轮对话结束后异步触发（跑在低频后台池 `lwEventExecutor`），标题仍为默认值时把用户首条提问截前 400 字交给 `ModelCaller.completeQuietly` 生成标题，清洗引号 / 标点 / 换行并截 24 字；失败静默保持默认标题，不阻塞对话。
 
 连通性测试：构建该供应方的客户端，走流式通道发一条 `ping`（`maxTokens` 16、超时 15 秒），拿到任意响应即视为连通；失败按 `MODEL_CALL_FAILED` 返回原因。供应方未配置默认模型时测试用 `gpt-4o-mini` 兜底。
 

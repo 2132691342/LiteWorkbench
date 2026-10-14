@@ -8,7 +8,7 @@ import LwButton from '@/components/ui/LwButton.vue'
 import { switchLocale } from '@/locales'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
-import { ROLE_ADMIN, ROLE_SUPER_ADMIN } from '@/utils/const'
+import { roleLabel } from '@/utils/role'
 import PasswordDialog from '@/views/settings/PasswordDialog.vue'
 
 /** 顶栏：品牌区 + 语言切换 + 用户菜单，退出登录前二次确认 */
@@ -20,15 +20,7 @@ const userStore = useUserStore()
 const passwordVisible = ref(false)
 const localeText = computed(() => (appStore.locale === 'zh-CN' ? 'EN' : '中'))
 const initials = computed(() => userStore.nickname.slice(0, 2).toUpperCase() || 'LW')
-const roleLabel = computed(() => {
-  if (userStore.roleCodes.includes(ROLE_SUPER_ADMIN)) {
-    return t('app.roleSuperAdmin')
-  }
-  if (userStore.roleCodes.includes(ROLE_ADMIN)) {
-    return t('app.roleAdmin')
-  }
-  return t('app.roleUser')
-})
+const currentRoleLabel = computed(() => roleLabel(userStore.roleCodes, t))
 
 function toggleLocale(): void {
   switchLocale(appStore.locale === 'zh-CN' ? 'en-US' : 'zh-CN')
@@ -90,7 +82,7 @@ function handleCommand(command: string): void {
       <div class="hidden sm:flex flex-col items-end mr-1 leading-tight">
         <span class="text-xs font-bold" style="color: var(--lw-ink)">{{ userStore.nickname }}</span>
         <span class="text-[10px]" style="color: var(--lw-ink-muted)">
-          {{ roleLabel }}
+          {{ currentRoleLabel }}
         </span>
       </div>
       <el-dropdown trigger="click" @command="handleCommand">

@@ -7,6 +7,8 @@ public interface AppConst {
     String HEADER_TRACE_ID = "X-Trace-Id";
     /** 鉴权请求头 */
     String HEADER_AUTHORIZATION = "Authorization";
+    /** 幂等命中时回传占位键的响应头 */
+    String HEADER_IDEM_KEY = "X-Lw-Idem-Key";
     /** MDC 键：链路标识 */
     String MDC_TRACE_ID = "traceId";
     /** MDC 键：用户 ID */

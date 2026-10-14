@@ -10,6 +10,7 @@ import com.liteworkbench.common.IdGenerator;
 import com.liteworkbench.domain.constant.EventTypeEnum;
 import com.liteworkbench.domain.constant.IdPrefixConst;
 import com.liteworkbench.domain.constant.PlanConst;
+import com.liteworkbench.domain.constant.RunConst;
 import com.liteworkbench.domain.constant.RunStatusEnum;
 import com.liteworkbench.domain.constant.StopReasonEnum;
 import com.liteworkbench.domain.dto.RunEventDTO;
@@ -19,6 +20,7 @@ import com.liteworkbench.mapper.WbRunMapper;
 import com.liteworkbench.mapper.WbSessionMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -26,6 +28,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
 /** 子运行：父运行把子任务交给独立运行执行，同步收口产出，事件与父运行同属一个会话 */
@@ -33,9 +36,6 @@ import java.util.concurrent.TimeUnit;
 @Service
 @RequiredArgsConstructor
 public class SubRunService implements SubRunPort {
-
-    /** 子运行的派生关系标识，Run 树按它区分父子 */
-    public static final String RELATION_CHILD = "child";
 
     /** 子运行系统提示：只交代任务边界，不带平台技能，避免子运行越权做父运行该做的事 */
     private static final String CHILD_PROMPT = """
@@ -49,11 +49,18 @@ public class SubRunService implements SubRunPort {
     /** 事件按 seq 排序，保证落库与回放保序 */
     private static final Comparator<RunEventDTO> BY_SEQ = Comparator.comparingLong(RunEventDTO::seq);
 
-    private final AgentRuntime agentRuntime;
+    /** 同时执行的子运行上限：父运行线程同步等子运行，不设上界会把运行编排池整体拖住 */
+    private static final int MAX_CONCURRENT_SUB_RUNS = Math.max(2, Runtime.getRuntime().availableProcessors());
+
+    /** 运行内核惰性解析：内核反向依赖本端口（task_delegate），构造期直取会形成循环依赖 */
+    private final ObjectProvider<AgentRuntime> agentRuntimeProvider;
     private final ModelFactory modelFactory;
     private final WbRunMapper runMapper;
     private final WbEventMapper eventMapper;
     private final WbSessionMapper sessionMapper;
+
+    /** 子运行配额：在派发之前获取，拿不到即刻返回结构化失败让模型换路，而不是排队阻塞 */
+    private final Semaphore delegateSlots = new Semaphore(MAX_CONCURRENT_SUB_RUNS, true);
 
     @Override
     public String delegate(String userId, String parentRunId, String sessionId, String task, long timeoutSeconds) {
@@ -65,6 +72,20 @@ public class SubRunService implements SubRunPort {
         if (StrUtil.isBlank(providerCode)) {
             return error("当前没有可用的模型供应方，子任务无法执行");
         }
+        if (!delegateSlots.tryAcquire()) {
+            return error(StrUtil.format("子任务并发已达上限 {}，请稍后重试或由你直接完成该步骤",
+                    MAX_CONCURRENT_SUB_RUNS));
+        }
+        try {
+            return execute(userId, parentRunId, sessionId, task, timeoutSeconds, parent, providerCode);
+        } finally {
+            delegateSlots.release();
+        }
+    }
+
+    /** 配额内执行一次子运行：建子 run → 同步等产出 → 收口终态 */
+    private String execute(String userId, String parentRunId, String sessionId, String task, long timeoutSeconds,
+                           WbRunDO parent, String providerCode) {
         long timeout = Math.min(Math.max(timeoutSeconds, 1L), PlanConst.DELEGATE_TIMEOUT_SECONDS * 2);
         String childRunId = IdGenerator.generate(IdPrefixConst.RUN);
         insertChildRun(childRunId, userId, sessionId, parent, task);
@@ -74,7 +95,7 @@ public class SubRunService implements SubRunPort {
         // 子运行的中间帧不推送，只在收尾一次性落库：父运行的时间线只呈现「委派」这一件事
         List<RunEventDTO> collected = Collections.synchronizedList(new ArrayList<>());
         long started = System.currentTimeMillis();
-        RunHandle handle = agentRuntime.start(context, collected::add);
+        RunHandle handle = agentRuntimeProvider.getObject().start(context, collected::add);
         try {
             handle.completion().get(timeout, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
@@ -118,7 +139,7 @@ public class SubRunService implements SubRunPort {
         child.setUserId(userId);
         child.setSessionId(sessionId);
         child.setParentRunId(parent.getRunId());
-        child.setRelation(RELATION_CHILD);
+        child.setRelation(RunConst.RELATION_CHILD);
         child.setPrompt(task);
         child.setModelName(parent.getModelName());
         child.setState(RunStatusEnum.QUEUED.getCode());

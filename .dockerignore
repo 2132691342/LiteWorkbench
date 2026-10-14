@@ -1,0 +1,24 @@
+# 构建上下文瘦身：下列内容都是宿主机构建产物或本地状态，容器内由 mvn / npm 重新生成
+# node_modules 必须排除：宿主机（Windows）二进制与镜像内（Alpine）不兼容，COPY 进去会让构建直接失败
+**/node_modules
+**/target
+**/dist
+**/*.log
+
+# 本地运行期数据与日志
+logs/
+data/
+deploy/.env.infra
+
+# 版本库与编辑器
+.git
+.gitignore
+.idea
+.vscode
+.playwright-cli
+*.iml
+
+# 文档不进镜像
+*.md
+docs/
+specs/

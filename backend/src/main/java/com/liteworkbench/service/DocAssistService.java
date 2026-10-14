@@ -92,7 +92,7 @@ public class DocAssistService {
                         }
                     }
                 }
-            }, cancelled::get);
+            }, () -> cancelIfGone(sink, cancelled));
 
             flush(sink, cancelled, pending);
             if (!cancelled.get()) {
@@ -114,6 +114,18 @@ public class DocAssistService {
             sink.complete();
             MDC.remove(AppConst.MDC_USER_ID);
         }
+    }
+
+    /** 取消判定：推送失败或客户端已断开都记为取消，模型客户端在下一检查点关闭连接 */
+    private boolean cancelIfGone(DocAssistSink sink, AtomicBoolean cancelled) {
+        if (cancelled.get()) {
+            return true;
+        }
+        if (sink.isClientGone()) {
+            cancelled.set(true);
+            return true;
+        }
+        return false;
     }
 
     /** 冲刷累积增量：空缓冲不动 */

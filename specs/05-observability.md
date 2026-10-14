@@ -145,7 +145,7 @@
 | RabbitMQ | 连接打开 | 3s |
 | Python | 版本探测（`PythonRuntime.detect`） | 5s |
 
-逐组件探测提交到入库池（`ExecutorConfig.INDEX_EXECUTOR`）执行，超时与异常统一记 `DOWN` 并带 `costMs` 与失败原因。聚合状态：`UP` 全通，`DEGRADED` 有非核心组件失败，`DOWN` 数据库或 Redis 失败。仪表盘汇总（会话数、运行数、成功率、今日运行、总 Token、运行/Token 趋势、工具分布）缓存 60 秒（Redis），避免高频重算。
+逐组件探测提交到探测池（`ExecutorConfig.PROBE_EXECUTOR`）执行，超时与异常统一记 `DOWN` 并带 `costMs` 与失败原因（取 `Future.get` 的根因消息，不显示包装异常类名）。聚合状态：`UP` 全通，`DEGRADED` 有非核心组件失败，`DOWN` 数据库或 Redis 失败。仪表盘汇总（会话数、运行数、成功率、今日运行、总 Token、运行/Token 趋势、工具分布）缓存 60 秒（Redis），避免高频重算。
 
 ## 契约
 

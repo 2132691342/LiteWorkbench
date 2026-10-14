@@ -80,9 +80,16 @@ public class ModelFactory {
         if (Objects.nonNull(cached)) {
             return cached;
         }
-        ModelClient client = build(loadProvider(providerCode), modelName);
-        clientCache.put(cacheKey, client);
-        return client;
+        // 同步包装只锁单次调用，构建过程必须整体占锁，否则并发同键会重复建客户端并越过容量上限
+        synchronized (clientCache) {
+            ModelClient existing = clientCache.get(cacheKey);
+            if (Objects.nonNull(existing)) {
+                return existing;
+            }
+            ModelClient client = build(loadProvider(providerCode), modelName);
+            clientCache.put(cacheKey, client);
+            return client;
+        }
     }
 
     /** 把供应方配置适配为 hutool-ai 的配置契约，内核与 hutool-ai 服务共用同一份 */
@@ -104,11 +111,13 @@ public class ModelFactory {
         return HUTOOL_AI_CODES.contains(StrUtil.nullToEmpty(providerCode).toLowerCase());
     }
 
-    /** 清除某供应方的全部缓存 */
+    /** 清除某供应方的全部缓存：遍历与删除必须同一把锁，否则与并发 put 冲突抛 ConcurrentModificationException */
     public void evictProvider(String providerCode) {
         String prefix = providerCode + ".";
-        clientCache.keySet().stream().filter(key -> key.startsWith(prefix)).toList()
-                .forEach(clientCache::remove);
+        synchronized (clientCache) {
+            clientCache.keySet().stream().filter(key -> key.startsWith(prefix)).toList()
+                    .forEach(clientCache::remove);
+        }
     }
 
     /** 供应方配置：Redis 5 分钟缓存，未命中回源 */

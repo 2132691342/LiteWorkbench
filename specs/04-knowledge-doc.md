@@ -6,7 +6,7 @@
 
 边界：知识库管文档解析、分块与检索，不做向量化；创作台管文档正文、版本与全文索引，不做协同编辑与权限共享。
 
-不回答：接口路径与出入参（见 docs/API-CONTRACT.md §12、§15）；`wb_kb` / `wb_kb_doc` / `wb_doc` / `wb_doc_version` 字段与 `lw_kbchunk` / `lw_doc` 表结构（见 docs/DATA-MODEL.md §5.9–§5.12、§6.3、§6.4）；分块参数配置项（见 docs/DEPLOYMENT.md）；`kb_search` 在内核里的注册与下发（见 specs/01）；知识库解析 MQ 拓扑的构建与对账（见 specs/05）。
+不回答：接口路径与出入参（见 docs/API-CONTRACT.md §12、§15）；`wb_kb` / `wb_kb_doc` / `wb_doc` / `wb_doc_version` 字段与 `lw_kbchunk` / `lw_doc` 表结构（见 docs/DATA-MODEL.md §5.9–§5.12、§6.3、§6.4）；分块参数配置项（见 `application.yaml` 的 `liteworkbench.kb.chunk.*`，未外部化为环境变量）；`kb_search` 在内核里的注册与下发（见 specs/01）；知识库解析 MQ 拓扑的构建与对账（见 specs/05）。
 
 ## 设计
 
@@ -68,6 +68,9 @@ public interface DocAssistSink {
 
     /** 关闭通道 */
     void complete();
+
+    /** 客户端是否已断开：断连后模型出站必须立即关闭连接，不能只等下一次推送失败 */
+    boolean isClientGone();
 }
 ```
 

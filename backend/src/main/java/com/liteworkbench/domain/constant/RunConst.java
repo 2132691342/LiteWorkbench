@@ -17,4 +17,6 @@ public interface RunConst {
     long SSE_HEARTBEAT_MS = 15000L;
     /** 事件起始序号 */
     long EVENT_SEQ_START = 1L;
+    /** 子运行派生关系标识，Run 树按它区分父子 */
+    String RELATION_CHILD = "child";
 }

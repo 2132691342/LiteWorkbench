@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  构建期 Maven 配置：容器内直连 repo.maven.apache.org 在部分网络下 SSL 握手中断，导致镜像构建失败。
+  这里把 central 指向 repo1.maven.org（与开发机一致，已验证可达）；若 CI 所在网络仍不稳定，
+  换成 https://maven.aliyun.com/repository/central 即可，其余配置不需要动。
+-->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
+  <mirrors>
+    <mirror>
+      <id>central</id>
+      <name>Maven Central</name>
+      <url>https://repo1.maven.org/maven2</url>
+      <mirrorOf>central</mirrorOf>
+    </mirror>
+  </mirrors>
+</settings>

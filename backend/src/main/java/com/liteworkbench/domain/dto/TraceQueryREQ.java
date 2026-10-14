@@ -4,6 +4,8 @@ import lombok.Data;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Objects;
 
 /** 可观测性查询条件：时间窗口是可选的，缺省回看最近若干天 */
 @Data
@@ -18,11 +20,11 @@ public class TraceQueryREQ {
 
     /** 归一化起始时间：未给出时按回看天数回推 */
     public Long resolvedFrom(int defaultDays) {
-        if (from != null && from > 0) {
+        if (Objects.nonNull(from) && from > 0) {
             return from;
         }
-        int window = days == null || days <= 0 ? defaultDays : days;
+        int window = Objects.isNull(days) || days <= 0 ? defaultDays : days;
         return LocalDateTime.now().minus(Duration.ofDays(window))
-                .atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
+                .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
     }
 }
