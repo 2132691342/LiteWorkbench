@@ -72,9 +72,9 @@ public class LogSearchMapper {
     /** 表就绪标记：未就绪时写入路径先自保建表，杜绝 /insert 隐式建出缺列结构 */
     private volatile boolean tableReady;
 
-    /** 幂等建表：/cli 执行后必须用属性过滤 SELECT 校验（/cli 对失败语句也回显成功，且 /insert 会建出错结构表） */
-    public synchronized boolean ensureTable() {
-        if (tableReady) {
+    /** 幂等建表；force 为真时忽略就绪标记重新对账，用于表被外部删除或被 /insert 隐式建成缺列结构后自愈 */
+    public synchronized boolean ensureTable(boolean force) {
+        if (tableReady && !force) {
             return true;
         }
         try {
@@ -101,7 +101,7 @@ public class LogSearchMapper {
 
     /** 写入日志文档，失败仅告警不抛异常（调用方在 MQ 消费线程） */
     public void add(LogPublisher.LogMessage message) {
-        if (!tableReady && !ensureTable()) {
+        if (!tableReady && !ensureTable(false)) {
             return;
         }
         try {
@@ -109,8 +109,8 @@ public class LogSearchMapper {
                     .table(TABLE)
                     .doc(docOf(message)));
         } catch (Exception e) {
-            // 结构被历史数据污染时补一次对账再重试，仍失败仅告警
-            if (ensureTable()) {
+            // 结构被外部改动或污染时强制对账再重试，仍失败仅告警
+            if (ensureTable(true)) {
                 try {
                     indexApi.insert(new InsertDocumentRequest()
                             .table(TABLE)

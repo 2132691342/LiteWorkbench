@@ -35,7 +35,7 @@ value_of() {
   case "$1" in
     LITEWORKBENCH_STORAGE_ACCESS_KEY) printf 'minio%s' "$(rand | cut -c1-12)" ;;
     LITEWORKBENCH_SECURITY_SECRET)    printf '%s%s' "$(rand)" "$(rand)" ;;
-    LITEWORKBENCH_MQ_USERNAME|LITEWORKBENCH_ADMIN_PASSWORD) printf '%s' "$2" ;;
+    LITEWORKBENCH_MQ_USERNAME|LITEWORKBENCH_ADMIN_PASSWORD|LITEWORKBENCH_BIND_ADDR) printf '%s' "$2" ;;
     *) printf '%s' "$(rand)" ;;
   esac
 }

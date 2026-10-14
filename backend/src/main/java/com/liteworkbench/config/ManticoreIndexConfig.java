@@ -28,7 +28,7 @@ public class ManticoreIndexConfig {
             boolean msg = messageIndexMapper.ensureTable();
             boolean kb = kbChunkIndexMapper.ensureTable();
             boolean doc = docIndexMapper.ensureTable();
-            boolean logTable = logSearchMapper.ensureTable();
+            boolean logTable = logSearchMapper.ensureTable(false);
             log.info("[index.init] msg={} kbchunk={} doc={} log={}", msg, kb, doc, logTable);
         };
     }

@@ -5,6 +5,9 @@
 # 该文件部署到宿主机的应用目录（/opt/liteworkbench）后由 podman-compose 启动，
 # 项目名取目录名，因此默认网络为 liteworkbench_default、卷名为 liteworkbench_<卷>；
 # 应用编排按同一名字加入网络，改名会直接让应用连不上中间件。
+#
+# 端口绑定地址由 LITEWORKBENCH_BIND_ADDR 决定：缺省 0.0.0.0 便于本机开发工具直连，
+# 服务器必须设 127.0.0.1 —— 中间件口令强度不足以承受公网直连，Manticore 更是无认证。
 services:
   postgres:
     image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/pgvector/pgvector:pg16
@@ -15,7 +18,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${LITEWORKBENCH_DATASOURCE_PASSWORD:?未设置数据库口令，请先执行 deploy/gen-secrets.sh}
     ports:
-      - "5432:5432"
+      - "${LITEWORKBENCH_BIND_ADDR:-0.0.0.0}:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -33,7 +36,10 @@ services:
     environment:
       REDIS_PASSWORD: ${LITEWORKBENCH_REDIS_PASSWORD:?未设置 Redis 口令，请先执行 deploy/gen-secrets.sh}
     ports:
-      - "6379:6379"
+      - "${LITEWORKBENCH_BIND_ADDR:-0.0.0.0}:6379:6379"
+    volumes:
+      # 命名卷而非匿名卷：登录态与缓存要跨容器重建保留，匿名卷在 podman 重建时不会被复用
+      - redis_data:/data
     healthcheck:
       test: [ "CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG" ]
       interval: 10s
@@ -47,9 +53,12 @@ services:
     environment:
       EXTRA: ""
     ports:
-      # 9306 MySQL 协议面向运维排障；9308 HTTP JSON API 供本机后端直连，无需再叠加覆盖文件
-      - "9306:9306"
-      - "9308:9308"
+      # 9306 MySQL 协议面向运维排障；9308 HTTP JSON API 供应用直连
+      - "${LITEWORKBENCH_BIND_ADDR:-0.0.0.0}:9306:9306"
+      - "${LITEWORKBENCH_BIND_ADDR:-0.0.0.0}:9308:9308"
+    volumes:
+      # 会话消息与知识库分块是用户数据，必须落命名卷；丢失后消息历史与检索能力同时消失
+      - manticore_data:/var/lib/manticore
     ulimits:
       nofile:
         hard: 65536
@@ -69,8 +78,8 @@ services:
       MINIO_ROOT_USER: ${LITEWORKBENCH_STORAGE_ACCESS_KEY:?未设置对象存储账号，请先执行 deploy/gen-secrets.sh}
       MINIO_ROOT_PASSWORD: ${LITEWORKBENCH_STORAGE_SECRET_KEY:?未设置对象存储口令，请先执行 deploy/gen-secrets.sh}
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "${LITEWORKBENCH_BIND_ADDR:-0.0.0.0}:9000:9000"
+      - "${LITEWORKBENCH_BIND_ADDR:-0.0.0.0}:9001:9001"
     volumes:
       - minio_data:/data
     healthcheck:
@@ -88,16 +97,20 @@ services:
       RABBITMQ_DEFAULT_USER: ${LITEWORKBENCH_MQ_USERNAME:?未设置消息队列账号，请先执行 deploy/gen-secrets.sh}
       RABBITMQ_DEFAULT_PASS: ${LITEWORKBENCH_MQ_PASSWORD:?未设置消息队列口令，请先执行 deploy/gen-secrets.sh}
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "${LITEWORKBENCH_BIND_ADDR:-0.0.0.0}:5672:5672"
+      - "${LITEWORKBENCH_BIND_ADDR:-0.0.0.0}:15672:15672"
+    volumes:
+      # 队列定义与未消费消息落命名卷，重建后不必依赖应用侧拓扑对账兜底
+      - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
       test: [ "CMD", "rabbitmq-diagnostics", "ping", "--quiet" ]
       interval: 30s
       timeout: 10s
       retries: 3
 
-# Manticore / RabbitMQ / Redis 的数据目录由各自镜像声明为 VOLUME，
-# 落到项目命名空间下的匿名卷，容器重建时不被删除；只有 podman volume prune 会清掉它们。
 volumes:
   pgdata: { }
   minio_data: { }
+  manticore_data: { }
+  redis_data: { }
+  rabbitmq_data: { }
