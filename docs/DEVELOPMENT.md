@@ -135,7 +135,7 @@ curl -o /dev/null -w '%{http_code}\n' http://localhost:24400/dashboard       # �
 cd backend && mvn test
 ```
 
-前端只有类型检查，没有测试运行器；`npm run typecheck` 与 `npm run build` 就是前端 CI 的全部校验。
+前端只有类型检查，没有测试运行器；`npm run build` 自带 `vue-tsc --noEmit`（类型不过直接中断构建），`npm run typecheck` 用于单独快速校验，两者就是前端 CI 的全部校验。
 
 ## 7. 常见改动入口
 

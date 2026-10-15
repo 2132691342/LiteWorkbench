@@ -58,7 +58,7 @@ const chartValues = [8, 16, 12, 24, 20, 32, 28, 40]
         <h2 class="lw-title">{{ t('showcase.title') }}</h2>
         <p class="lw-subtitle mt-1">{{ t('showcase.desc') }}</p>
       </div>
-      <LwTag v-if="demoDone" tone="success">{{ t('common.success') }}</LwTag>
+      <LwTag tone="success">{{ t('common.success') }}</LwTag>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -75,7 +75,7 @@ const chartValues = [8, 16, 12, 24, 20, 32, 28, 40]
             <LwButton size="sm">{{ t('showcase.sizeSm') }}</LwButton>
             <LwButton>{{ t('showcase.sizeMd') }}</LwButton>
             <LwButton size="lg">{{ t('showcase.sizeLg') }}</LwButton>
-            <LwButton :loading="demoLoading">{{ t('showcase.loading') }}</LwButton>
+            <LwButton :loading="demoState === 'loading'">{{ t('showcase.loading') }}</LwButton>
             <LwButton disabled>{{ t('showcase.disabled') }}</LwButton>
           </div>
           <div class="flex flex-col gap-2 pt-3 border-t" style="border-color: var(--lw-border)">
