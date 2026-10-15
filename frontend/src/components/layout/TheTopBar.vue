@@ -66,7 +66,7 @@ function handleCommand(command: string): void {
         </el-tooltip>
         <div
           class="w-8 h-8 rounded-lg flex items-center justify-center font-bold lw-shadow-sm"
-          style="background-color: var(--lw-secondary); color: var(--lw-on-primary)"
+          style="background-color: var(--lw-secondary); color: var(--lw-on-secondary)"
         >
           <svg width="18" height="18" viewBox="0 0 32 32" fill="none" aria-hidden="true">
             <path d="M9 22V10h3v9h6v3H9z" fill="currentColor" />
@@ -88,7 +88,7 @@ function handleCommand(command: string): void {
       <el-dropdown trigger="click" @command="handleCommand">
         <div
           class="w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs lw-shadow-sm cursor-pointer transition-transform duration-200 hover:scale-105"
-          style="background-color: var(--lw-surface-subtle); color: var(--lw-primary)"
+          style="background-color: var(--lw-surface-subtle); color: var(--lw-primary-ink)"
         >
           {{ initials }}
         </div>

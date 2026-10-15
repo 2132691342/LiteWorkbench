@@ -1,8 +1,8 @@
-# 05 · 可观测：日志、运行记录、健康监控
+# 05 · 可观测：日志、调用观测、运行记录、健康监控
 
 ## 定位
 
-三件事各答一个问题：日志回答"系统发生了什么"，运行记录回答"Agent 是怎么跑的"，健康监控回答"哪个组件挂了"。边界：日志只做采集、落盘、索引与检索，不改业务日志内容；运行记录只做查看与控制（列表、详情、时间线、瀑布、Run 树、用量、回放、中断），不重跑、不改写历史；监控只做探测与汇总，不含告警通道。
+四件事各答一个问题：日志回答"系统发生了什么"，调用观测回答"哪次调用慢、慢在哪"，运行记录回答"Agent 是怎么跑的"，健康监控回答"哪个组件挂了"。边界：日志只做采集、落盘、索引与检索，不改业务日志内容；调用观测只做输入/输出/耗时审计与窗口内聚合，不改调用语义、不落库；运行记录只做查看与控制（列表、详情、时间线、瀑布、Run 树、用量、回放、中断），不重跑、不改写历史；监控只做探测与汇总，不含告警通道。
 
 不回答：日志级别、MDC 规范与注释规范（见 AGENTS.md §9、§13）；事件类型定义与归一阵列（见 specs/01）；`lw_log` 表结构（见 docs/DATA-MODEL.md §6）；响应信封与路径约定（见 docs/API-CONTRACT.md）。
 
@@ -147,6 +147,30 @@
 
 逐组件探测提交到探测池（`ExecutorConfig.PROBE_EXECUTOR`）执行，超时与异常统一记 `DOWN` 并带 `costMs` 与失败原因（取 `Future.get` 的根因消息，不显示包装异常类名）。聚合状态：`UP` 全通，`DEGRADED` 有非核心组件失败，`DOWN` 数据库或 Redis 失败。仪表盘汇总（会话数、运行数、成功率、今日运行、总 Token、运行/Token 趋势、工具分布）缓存 60 秒（Redis），避免高频重算。
 
+### 调用观测：SQL 与 HTTP 审计
+
+两类审计只做一件事：把一次调用的**输入、输出、耗时**写成一行结构化日志，交给既有日志管道落 Manticore；统计另走进程内聚合，页面读接口而不是翻日志。
+
+| 审计 | 实现 | 记录内容 |
+|---|---|---|
+| SQL | `observability/SqlAuditInterceptor`，MyBatis `StatementHandler` 插件（mybatis-spring-boot 自动收集 `Interceptor` Bean，无需手写装配） | mapper 方法、语句模板、入参摘要、影响行数、耗时；达阈值升级 `[sql.slow]`，异常记 `[sql.fail]` |
+| HTTP | `observability/HttpAuditFilter`，`OncePerRequestFilter`，`HIGHEST_PRECEDENCE + 10` 排在 `TraceFilter` 之后以便带上 `traceId` | 方法、URI、查询串、客户端 IP、白名单请求头、请求体、状态码、响应体、耗时；达阈值升级 `[http.slow]`，5xx 记 `[http.error]` |
+
+四条不变量，违反就是事故：
+
+| 约束 | 为什么 |
+|---|---|
+| SSE 与异步响应绝不包 `ContentCachingResponseWrapper` | 包装会吞掉流式写出，长连接永不 flush；`/stream` 路径与 `Accept: text/event-stream` 双重判定 |
+| multipart 与超大请求体不进内存 | 上传接口只走原请求，文本类请求体缓存上限 4096 字节 |
+| 页面与二进制响应只记状态码 | `text/html`、`image/`、pdf 等正文不进日志，只留耗时 |
+| 敏感键整值替换为 `***` | `password` / `token` / `authorization` / `apiKey` / `secret` 等由 `liteworkbench.observe.sensitive-keys` 统一配置；JSON 递归替换、非 JSON 正则兜底，SQL 入参按属性名走同一套判定 |
+
+两类日志独立挂 logger（`com.liteworkbench.observability`，`additivity=false`）：不上控制台，只进全量文件与检索索引，避免高频调用把控制台与首屏日志冲掉。
+
+**统计口径**：`ObserveStats` 用 `LongAdder` / `LongAccumulator` 在进程内累计，窗口自启动或上次重置起算，不落库、不缓存、不跨实例。观测键有界——SQL 以语句模板为键（占位符已在模板里，参数不会打散键），HTTP 以「方法 + 路由模式」为键（路径中 ID 形态片段归一为 `{id}`）；仍设 500 上限，超界淘汰慢榜之外的条目并告警，防路径规范化失效吃堆。
+
+**为什么不做外部时序库**：新增时序库等于多一个中间件容器与一份运维面，而单实例工作台要的只是「哪条语句慢、哪个接口慢、从现在重新算」三件事——窗口计数器加日志全文检索已经覆盖。代价是进程重启即清零、不能跨实例聚合，接受。
+
 ## 契约
 
 | 方法 | 路径 | 权限 | 说明 |
@@ -164,6 +188,8 @@
 | GET | `/api/v1/monitor/overview` | `monitor:health:list` | 仪表盘汇总 |
 | GET | `/api/v1/runtime/python` | `monitor:health:list` | Python 运行时探测结果（来源 / 版本 / 状态） |
 | POST | `/api/v1/runtime/python/reprobe` | `monitor:python:reprobe` | 清探测缓存重新探测 |
+| GET | `/api/v1/monitor/observe` | `monitor:health:list` | 调用观测快照：窗口内 SQL 与 HTTP 汇总 + 慢调用榜 |
+| POST | `/api/v1/monitor/observe/reset` | `monitor:observe:reset` | 重置观测窗口，计数与慢调用榜归零 |
 
 日志两个接口需 `monitor:log:list`（内置 `user` 角色种子已授予），检索范围由 `monitor:log:global` 决定是否收窄；运行记录与 `trace` 接口登录即可用，归属强制校验，不泄露他人运行。
 

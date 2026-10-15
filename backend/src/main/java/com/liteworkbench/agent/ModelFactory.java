@@ -7,7 +7,6 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.crypto.digest.DigestUtil;
 import cn.hutool.crypto.symmetric.SymmetricCrypto;
 import com.liteworkbench.agent.model.ModelClient;
-import com.liteworkbench.agent.model.OllamaClient;
 import com.liteworkbench.agent.model.OpenAiCompatClient;
 import com.liteworkbench.agent.model.ProviderAIConfig;
 import com.liteworkbench.agent.spi.ProviderStore;
@@ -36,7 +35,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-/** 按平台级供应方配置构建并缓存模型客户端，协议集合与 hutool-ai 对齐：OpenAI 兼容族与 Ollama */
+/** 按平台级供应方配置构建并缓存模型客户端，协议集合与 hutool-ai 对齐：全部走 OpenAI 兼容通道 */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -57,7 +56,7 @@ public class ModelFactory {
 
     /** hutool-ai 有原生服务实现的供应方码：与协议通道一致，命中共用同步文本路径 */
     private static final Set<String> HUTOOL_AI_CODES =
-            Set.of("deepseek", "openai", "doubao", "grok", "ollama");
+            Set.of("deepseek", "openai", "doubao", "grok");
 
     private final ProviderStore providerStore;
     private final AgentProperties agentProperties;
@@ -176,19 +175,18 @@ public class ModelFactory {
         return Objects.nonNull(preset) ? preset.getBaseUrl() : provider.getBaseUrl();
     }
 
-    /** 按协议构建客户端：OpenAI 兼容族必须配置密钥，ollama 免密钥 */
+    /** 按协议构建客户端：OpenAI 兼容族必须配置密钥 */
     private ModelClient build(WbProviderDO provider, String modelName) {
         ProviderAIConfig config = aiConfig(provider, modelName);
-        if (!ProviderPresetEnum.isOllama(provider.getProviderCode()) && StrUtil.isBlank(config.getApiKey())) {
+        if (StrUtil.isBlank(config.getApiKey())) {
             throw new BizException(ErrorCodeEnum.PROVIDER_NOT_CONFIGURED, provider.getProviderCode());
         }
-        return ProviderPresetEnum.isOllama(provider.getProviderCode())
-                ? new OllamaClient(config) : new OpenAiCompatClient(config);
+        return new OpenAiCompatClient(config);
     }
 
-    /** 协议判定：编码命中 ollama 即走本地协议，其余一律按 OpenAI 兼容端点处理 */
+    /** 协议判定：协议集合固定为 OpenAI 兼容通道 */
     public String resolveProtocol(WbProviderDO provider) {
-        return ProviderPresetEnum.isOllama(provider.getProviderCode()) ? "ollama" : "openai";
+        return "openai";
     }
 
     /** 密钥加密：AES/GCM，随机 IV 前置后 Base64 */

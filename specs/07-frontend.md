@@ -20,6 +20,7 @@
 | `components/console/` | 工作台业务件：`ConsoleQuickStart`、`PlanChecklist` |
 | `components/runs/` | 运行记录业务件：`TraceWaterfall`、`RunTree`、`UsagePanel` |
 | `components/settings/` | 设置业务件：`ProviderPanel`、`ToolPanel`、`MemoryPanel` |
+| `components/monitor/` | 监控业务件：`ObservePanel`（调用观测：指标卡 + 慢 SQL / 慢接口榜 + 定时刷新 + 重置窗口） |
 | `stores/` | setup 风格 store：`user`、`session`、`run`、`monitor`、`app` |
 | `composables/` | `useRunStream`（SSE 订阅）、`usePermission`（权限判断） |
 | `directives/` | `perm.ts`：`v-perm` 指令，无权限即从 DOM 移除元素 |
@@ -47,7 +48,7 @@
 | `/skills` | 技能 | 登录 |
 | `/kb` | 知识库 | 登录 |
 | `/logs` | 日志中心（本人视角；`monitor:log:global` 可切全局） | `monitor:log:list` |
-| `/monitor` | 健康监控 | `monitor:health:list` |
+| `/monitor` | 健康监控 + 调用观测 | `monitor:health:list`（重置窗口另需 `monitor:observe:reset`） |
 | `/settings` | 设置（账户安全 + 平台级分区） | 登录 |
 | `/system` | 系统管理目录 | — |
 | `/system/user` | 用户管理 | `system:user:list` |
@@ -73,7 +74,7 @@
 | `useUserStore` | 令牌、用户信息、角色码、权限标识、菜单树、`pwdResetRequired`、`loaded`；`login`（本地加密后提交）、`loadCurrent`、`logout`、`reset` |
 | `useSessionStore` | 会话列表、当前会话、消息与三个加载态（`loading` / `loadingMessages` / `error`） |
 | `useRunStore` | 运行列表、唯一时间线 reducer（`timeline`）、`streaming` / `replaying` / `replayRunId` / `currentRunId` / `errorDetail`；`applyEvent`（reducer）、`loadTimeline`、`beginStream`、`replay`、`backToLive` |
-| `useMonitorStore` | 健康、仪表盘汇总与 Python 运行时；`loadHealth` / `loadOverview` / `loadPython` / `reprobe` |
+| `useMonitorStore` | 健康、仪表盘汇总、调用观测与 Python 运行时；`loadHealth` / `loadOverview` / `loadObserve` / `resetObserve` / `loadPython` / `reprobe`。观测区自带 `observeLoading` / `observeError`，不污染健康面板加载态 |
 | `useAppStore` | 侧栏折叠、移动端抽屉、语言（持久化到 `lw-locale`） |
 
 大对象一律 `shallowRef`，标量用 `ref`。

@@ -157,6 +157,47 @@ liteworkbench:
   degradation:
     # 中间件不可用时是否允许降级启动
     allow-start: ${LITEWORKBENCH_DEGRADATION_ALLOW_START:true}
+  observe:
+    # 记入日志即整值替换为 *** 的键名，SQL 入参与 HTTP 载荷共用
+    sensitive-keys:
+      - password
+      - apiKey
+      - apiKeyEnc
+      - secret
+      - token
+      - authorization
+      - cookie
+      - accessKey
+      - secretKey
+    sql:
+      enabled: true
+      # 慢查询阈值，毫秒；耗时达到即升级为 warn
+      slow-ms: 300
+      # 单条日志内 SQL 与入参摘要的最大字符数
+      max-sql-chars: 1200
+      max-param-chars: 800
+      # 慢语句榜保留条数
+      top-size: 10
+    http:
+      enabled: true
+      # 慢请求阈值，毫秒；耗时达到即升级为 warn
+      slow-ms: 1000
+      # 单条日志内请求体或响应体最大字符数
+      max-body-chars: 1000
+      top-size: 10
+      # 不审计的路径前缀：健康检查与前端静态资源
+      skip-prefixes:
+        - /actuator
+        - /assets
+        - /static
+        - /favicon
+        - /index.html
+      # 记入请求日志的请求头，其余一律不落盘
+      log-headers:
+        - content-type
+        - accept-language
+        - referer
+        - x-forwarded-for
 
 logging:
   config: classpath:logback-spring.xml

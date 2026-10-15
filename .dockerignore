@@ -1,24 +1,24 @@
-# 构建上下文瘦身：下列内容都是宿主机构建产物或本地状态，容器内由 mvn / npm 重新生成
-# node_modules 必须排除：宿主机（Windows）二进制与镜像内（Alpine）不兼容，COPY 进去会让构建直接失败
-**/node_modules
-**/target
-**/dist
-**/*.log
+# 构建上下文裁剪：缺了这份文件，本机 `docker build -f deploy/Dockerfile .` 会把
+# node_modules（Windows 二进制）与 target 一起送进上下文——既拖慢传输，
+# 也会让 `COPY frontend .` 把宿主 node_modules 拷进 Linux 镜像，node 直接跑不起来。
+.git/
+.github/
+.codebuddy/
+.shots/
+.secrets/
 
-# 本地运行期数据与日志
+backend/target/
+backend/data/
+backend/logs/
+
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
 logs/
-data/
+*.log
+
+# 机密不入镜像层
 deploy/.env.infra
-
-# 版本库与编辑器
-.git
-.gitignore
-.idea
-.vscode
-.playwright-cli
-*.iml
-
-# 文档不进镜像
-*.md
-docs/
-specs/
+deploy/.env.app
+.env

@@ -58,6 +58,7 @@ function statusLabel(span: TraceSpanVO): string {
       <span>{{ t('trace.total') }} {{ formatMs(totalMs) }}</span>
       <span class="flex items-center gap-1">
         <span class="w-3 h-2 rounded-sm" style="background-color: var(--lw-primary)" />
+
         {{ t('trace.kindModel') }}
       </span>
       <span class="flex items-center gap-1">
@@ -126,7 +127,7 @@ function statusLabel(span: TraceSpanVO): string {
 .tw-row__track {
   position: relative;
   height: 0.75rem;
-  border-radius: 999px;
+  border-radius: var(--lw-radius-pill);
   background-color: var(--lw-border);
   overflow: hidden;
 }
@@ -135,7 +136,7 @@ function statusLabel(span: TraceSpanVO): string {
   position: absolute;
   top: 0;
   height: 100%;
-  border-radius: 999px;
+  border-radius: var(--lw-radius-pill);
   transition: width 0.3s ease, left 0.3s ease;
 }
 

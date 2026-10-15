@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { authApi } from '@/api'
 import LwButton from '@/components/ui/LwButton.vue'
+import LwErrorBar from '@/components/ui/LwErrorBar.vue'
 import { useUserStore } from '@/stores/user'
 import { encryptSecret, resetPublicKey } from '@/utils/crypto'
 
@@ -108,10 +109,7 @@ async function handleSubmit(): Promise<void> {
           {{ showPassword ? t('login.hidePassword') : t('login.showPassword') }}
         </button>
 
-        <p v-if="errorMessage" class="text-xs font-medium px-3 py-2 rounded-control"
-           style="color: var(--lw-error-ink); background: var(--lw-error-tint)">
-          {{ errorMessage }}
-        </p>
+        <LwErrorBar v-if="errorMessage" :message="errorMessage" :retryable="false" />
 
         <LwButton native-type="submit" size="lg" block :loading="loading">
           {{ loading ? t('forcePassword.submitting') : t('forcePassword.submit') }}

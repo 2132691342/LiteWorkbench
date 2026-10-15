@@ -12,79 +12,86 @@
 
 ## 1. 设计原则
 
-**设计哲学：秩序紫（Ordered Violet）。** 一个只靠背景差、1px 边框与两级阴影建立层级的浅色系统。四色紫序列承担全部信息编码——深紫是文字与确认动作，浅紫是选中态与数据序列，最浅的一档只做底纹。所有装饰（渐变堆叠、插画、大图）一律让位给两枚弥散光斑与真实数据本身；界面里唯一被允许"动"的，是状态变化：悬停放大、按下缩小、加载锁宽。判断一个元素该不该存在的标准是它是否替用户省掉一次点击或一次犹豫，不能就删掉。
+**设计哲学：秩序靛（Ordered Indigo）。** 一个只靠背景差、1px 边框与两级阴影建立层级的浅色系统。SaaS 五色调色板承担全部信息编码——靛蓝 `#6366f1` 是品牌与确认动作，`#818cf8` 是选中态与次序列，`#e0e7ff` 是最浅的一档只做底纹，`#f8fafc` 是页面底，`#1e293b` 是文字。所有装饰（渐变堆叠、插画、大图）一律让位给两枚弥散光斑与真实数据本身；界面里唯一被允许"动"的，是状态变化：悬停放大、按下缩小、加载锁宽。判断一个元素该不该存在的标准是它是否替用户省掉一次点击或一次犹豫，不能就删掉。
 
 | 原则 | 落地方式 |
 |---|---|
 | 极简 | 无装饰性渐变与阴影堆叠，层级靠背景差与 1px 边框建立 |
-| 克制配色 | 四色紫色序列走完全站，语义色只在 success / warning / error（含 info）出现 |
+| 克制配色 | SaaS 五色调色板走完全站，语义色只在 success / warning / error（含 info）出现 |
 | 可预期 | 所有可点击元素有五态，所有异步操作有三态 |
 | 有反馈 | 悬停、按下、加载、成功、失败均有过渡动画，无静默操作 |
 
 ## 2. 设计令牌
 
-### 2.1 品牌四色序列
+### 2.1 SaaS 五色调色板
+
+全站唯一色值源头。组件与页面一律引用 §2.2 的语义别名，禁止直接引用本组变量。
 
 ```css
 :root {
-  --purple_sequential-color-1: #f2f0f7;   /* 浅底 */
-  --purple_sequential-color-2: #cbc9e2;   /* 辅助浅紫 */
-  --purple_sequential-color-3: #9e9ac8;   /* 辅助紫 */
-  --purple_sequential-color-4: #6a51a3;   /* 主紫 */
+  --saas_dashboard-color-1: #6366f1;   /* 主靛蓝：品牌、主按钮底、图表主序列 */
+  --saas_dashboard-color-2: #818cf8;   /* 辅助靛蓝：选中态、次序列、输入强调边 */
+  --saas_dashboard-color-3: #e0e7ff;   /* 靛蓝淡底：头像底、选中按钮底、思考块底 */
+  --saas_dashboard-color-4: #f8fafc;   /* 页面底 */
+  --saas_dashboard-color-5: #1e293b;   /* 主文本 */
 }
 ```
 
 ### 2.2 语义别名
 
-业务与组件只用别名，不直接引用四色序列。
+业务与组件只用别名，不直接引用五色调色板。
 
 | 别名 | 取值 | 用途 |
 |---|---|---|
-| `--lw-primary` | `var(--purple_sequential-color-4)` | 标题、正文、主按钮底、图表默认序列 |
-| `--lw-primary-hover` | `#5a448c` | 主色悬停 |
-| `--lw-primary-active` | `#4a3a73` | 主色按下 |
-| `--lw-primary-tint` | `rgba(106,81,163,.08)` | 主色淡底 |
-| `--lw-secondary` | `var(--purple_sequential-color-3)` | 侧栏选中、图表次序列、强调底色 |
-| `--lw-secondary-hover` | `#8a85b8` | 辅助紫悬停 |
-| `--lw-secondary-tint` | `rgba(158,154,200,.14)` | 辅助紫淡底 |
-| `--lw-secondary-selected` | `rgba(158,154,200,.1)` | 侧栏选中底 |
-| `--lw-accent-soft` | `var(--purple_sequential-color-2)` | 图表第三序列、分隔强调 |
-| `--lw-surface-subtle` | `var(--purple_sequential-color-1)` | 头像底、选中按钮底、品牌卡、思考块底 |
-| `--lw-surface` | `#f8fafc` | 页面底色 |
+| `--lw-primary` | `var(--saas_dashboard-color-1)` | 主按钮底、主序列、焦点环、图标 |
+| `--lw-primary-hover` | `#4f46e5` | 主色悬停 |
+| `--lw-primary-active` | `#4338ca` | 主色按下 |
+| `--lw-primary-ink` | `#4f46e5` | 浅底之上的主色**文字**（正文对比度 ≥ 4.5:1） |
+| `--lw-primary-tint` | `rgba(99,102,241,.08)` | 主色淡底 |
+| `--lw-secondary` | `var(--saas_dashboard-color-2)` | 侧栏选中、图表次序列、强调底色 |
+| `--lw-secondary-hover` | `#6366f1` | 辅助靛蓝悬停（收敛到主靛蓝） |
+| `--lw-secondary-tint` | `rgba(129,140,248,.14)` | 辅助靛蓝淡底 |
+| `--lw-secondary-selected` | `rgba(129,140,248,.1)` | 侧栏选中底 |
+| `--lw-accent-soft` | `var(--saas_dashboard-color-3)` | 图表第三序列、分隔强调 |
+| `--lw-surface-subtle` | `var(--saas_dashboard-color-3)` | 头像底、选中按钮底、品牌卡、思考块底 |
+| `--lw-surface` | `var(--saas_dashboard-color-4)` | 页面底色 |
 | `--lw-surface-raised` | `#ffffff` | 卡片、侧栏、顶栏 |
-| `--lw-surface-disabled` | `var(--purple_sequential-color-1)` | 禁用底 |
-| `--lw-border` | `#e2e8f0` | 默认边框 |
-| `--lw-border-strong` | `var(--purple_sequential-color-2)` | 强调边框 |
-| `--lw-ink` | `var(--purple_sequential-color-4)` | 主文本 |
+| `--lw-surface-disabled` | `#f1f5f9` | 禁用底 |
+| `--lw-border` | `#e2e8f0` | 默认边框（分隔） |
+| `--lw-border-strong` | `var(--saas_dashboard-color-2)` | **输入类控件**边框 |
+| `--lw-ink` | `var(--saas_dashboard-color-5)` | 主文本 |
 | `--lw-ink-muted` | `#64748b` | 次级文本 |
 | `--lw-ink-disabled` | `#94a3b8` | 禁用文本 |
-| `--lw-on-primary` | `#ffffff` | 深底之上的文字 |
-| `--lw-on-secondary` | `#2e2536` | `--lw-secondary` 之上的文字 |
+| `--lw-on-primary` | `#ffffff` | 主靛蓝底之上的文字 |
+| `--lw-on-secondary` | `var(--saas_dashboard-color-5)` | 辅助靛蓝底之上的文字 |
 | `--lw-overlay` | `rgba(15,23,42,.45)` | 抽屉遮罩 |
 
-布局尺寸同样以令牌表达：`--lw-topbar-h: 64px`、`--lw-sidebar-w: 208px`。
+**`--lw-primary-ink` 是唯一的主色文字色**：`#6366f1` 对白的对比度约 4.45:1，`#818cf8` 仅约 3.0:1，都过不了 14px 正文的 4.5:1 门槛。故凡"浅底之上的主色/辅助靛文字"（链接、菜单选中项、标签文字、按钮描边变体的文字、徽标 pill）一律取 `--lw-primary-ink`（`#4f46e5`，6.3:1）；`--lw-primary` 与 `--lw-secondary` 只做**底、边框、图形与图表序列**，不直接当文字色。
+
+布局尺寸与圆角同样以令牌表达：`--lw-topbar-h: 64px`、`--lw-sidebar-w: 208px`；圆角 `--lw-radius-card: 12px` / `--lw-radius-control: 8px` / `--lw-radius-tag: 6px` / `--lw-radius-pill: 999px`，与 UnoCSS `rounded-card` / `rounded-control` / `rounded-tag` 同值，供 scoped CSS 引用——scoped 样式里写 `border-radius: var(--lw-radius-control)`，不写字面量。
 
 ### 2.3 语义色与派生色
 
 | 类别 | 令牌 | 取值 | 用途 |
 |---|---|---|---|
-| 语义底 | `--lw-success` | `#5abf8a` | 运行成功、校验通过 |
-| | `--lw-warning` | `#d6a85c` | 需要确认、资源吃紧 |
-| | `--lw-error` | `#d46a6a` | 运行失败、请求异常 |
+| 语义底 | `--lw-success` | `#10b981` | 运行成功、校验通过 |
+| | `--lw-warning` | `#f59e0b` | 需要确认、资源吃紧 |
+| | `--lw-error` | `#ef4444` | 运行失败、请求异常 |
 | | `--lw-info` | `var(--lw-primary)` | 提示、信息 |
-| 文字加深 | `--lw-success-ink` | `#3d8f62` | 成功语义文字 |
-| | `--lw-warning-ink` | `#a97e33` | 警示语义文字 |
-| | `--lw-error-ink` | `#b45555` | 错误语义文字 |
-| 交互态 | `--lw-error-hover` | `#c25555` | 危险按钮悬停 |
-| | `--lw-error-active` | `#a94747` | 危险按钮按下 |
-| 淡底 | `--lw-success-tint` | `rgba(90,191,138,.14)` | 成功标签底 |
-| | `--lw-warning-tint` | `rgba(214,168,92,.16)` | 警示标签底、待收尾行底 |
-| | `--lw-error-tint` | `rgba(212,106,106,.14)` | 错误标签底、错误条底 |
+| 文字加深 | `--lw-success-ink` | `#047857` | 成功语义文字（浅底 ≥ 4.5:1） |
+| | `--lw-warning-ink` | `#b45309` | 警示语义文字 |
+| | `--lw-error-ink` | `#b91c1c` | 错误语义文字 |
+| 交互态 | `--lw-error-hover` | `#dc2626` | 危险按钮悬停 |
+| | `--lw-error-active` | `#b91c1c` | 危险按钮按下 |
+| 淡底 | `--lw-success-tint` | `rgba(16,185,129,.12)` | 成功标签底 |
+| | `--lw-warning-tint` | `rgba(245,158,11,.14)` | 警示标签底、待收尾行底 |
+| | `--lw-error-tint` | `rgba(239,68,68,.1)` | 错误标签底、错误条底 |
 | | `--lw-muted-tint` | `rgba(100,116,139,.12)` | 中性标签底、行内代码底 |
-| EP 主题映射 | `--lw-primary-light-3/5/7/8` | `#9785bf` / `#b5a8d1` / `#d2cbe3` / `#e1dced` | 仅供 Element Plus 主题映射 |
-| 骨架 | `--lw-skeleton-a` | `var(--purple_sequential-color-1)` | 骨架屏渐变起点 |
+| EP 主题映射 | `--lw-primary-light-3/5/7/8` | `#9294f5` / `#b2b2f8` / `#d0d1fb` / `#e0e0fc` | 主靛与白按 30/50/70/80% 混合，仅供 Element Plus 主题映射 |
+| | `--lw-primary-dark-2` | `#4f52c1` | 主靛与黑按 20% 混合 |
+| 骨架 | `--lw-skeleton-a` | `var(--saas_dashboard-color-3)` | 骨架屏渐变起点 |
 
-**规则**：语义色只做低饱和处理，避免与品牌紫抢注意力；文字态一律用 ink 变体加深，不直接用语义底。
+**规则**：语义色底只做低饱和处理，避免与品牌靛抢注意力；文字态一律用 ink 变体加深，不直接用语义底——`#10b981` 对白的对比度只有 2.7:1，拿来写字等于没写。
 
 ### 2.4 阴影与动效
 
@@ -102,7 +109,18 @@
 
 ### 2.5 UnoCSS 语义类
 
-UnoCSS 主题只映射令牌，组件禁止硬编码色值：颜色 `lw-<别名>`（如 `text-lw-ink`、`bg-lw-raised`、`border-lw-border`）、圆角 `rounded-card`(12px) / `rounded-control`(8px) / `rounded-tag`(6px)、阴影 `lw-shadow-sm` / `lw-shadow-md`；快捷类 `lw-card` / `lw-panel` / `lw-page` / `lw-page-head` / `lw-title` / `lw-subtitle` / `lw-label` / `lw-input` / `lw-table` / `lw-center`。
+UnoCSS 主题只映射令牌，组件禁止硬编码色值：颜色 `lw-<别名>`（如 `text-lw-ink`、`bg-lw-raised`、`border-lw-border`，主色文字用 `text-lw-primaryInk`）、圆角 `rounded-card`(12px) / `rounded-control`(8px) / `rounded-tag`(6px)、阴影 `lw-shadow-sm` / `lw-shadow-md`；快捷类 `lw-card` / `lw-panel` / `lw-page` / `lw-page-head` / `lw-title` / `lw-subtitle` / `lw-label` / `lw-input` / `lw-field` / `lw-table` / `lw-center`。
+
+**输入类控件只允许两种形态**，二者都自带一眼可见的框线，禁止第三种写法：
+
+| 形态 | 用法 | 框线来源 |
+|---|---|---|
+| Element Plus 控件 | `el-input` / `el-select` / `el-textarea` / `el-date-picker` | `styles/index.css` 全局把 `box-shadow: 0 0 0 1px var(--lw-border-strong)` 打进 wrapper |
+| 原生字段 | `<div class="lw-field">…<input />…</div>` | `.lw-field` 画 1.5px 实线边框，内层 `input` / `textarea` 强制 `border: none` |
+
+`.lw-field` 带两个变体，仍属「原生字段」这一种形态：`--textarea` 用于多行文本（解除固定高度、最小 80px），`--auto` 用于容器内混排（如对话输入区：解除固定 `h-10`，高度随内层多行文本与右侧按钮自适应）。除变体外不得再叠加 `rounded-*`、`border` 等覆盖类，圆角与边框一律由 `.lw-field` 决定。
+
+裸 `<input>` / `<textarea>` 不加 `.lw-field` 包装视为违规：浏览器默认边框在 `#f8fafc` 上几乎不可见，且与令牌的圆角、色阶都不对齐。
 
 ## 3. 排版与间距
 
@@ -130,8 +148,8 @@ UnoCSS 主题只映射令牌，组件禁止硬编码色值：颜色 `lw-<别名>
 └────────┴─────────────────────────────────┘
 ```
 
-- 顶栏 `--lw-topbar-h`、白底 `--lw-surface-raised`、下边框 `--lw-border`、内边距 `px-4 md:px-6`。左侧品牌方块 32px、`--lw-secondary` 底 + `--lw-on-primary` 图标 + `--lw-shadow-sm`，后接产品名（18px 加粗）；右侧为语言切换（ghost sm）与用户区（昵称/角色 + 36px 圆形头像，`--lw-surface-subtle` 底 + `--lw-primary` 字 + `--lw-shadow-sm`，悬停放大 1.05）。
-- 侧栏宽 `--lw-sidebar-w`、白底、右边框。菜单组标题 10px 大写 `--lw-ink-muted`（`px-3 mb-2`）；一级菜单项 `h-10` 圆角 8px，二级子项 `h-9`，悬停为黑色 5% 叠加，选中为 `--lw-primary` 文字 + 字重 600 + `--lw-secondary-selected` 底；目录展开箭头 200ms 旋转。
+- 顶栏 `--lw-topbar-h`、白底 `--lw-surface-raised`、下边框 `--lw-border`、内边距 `px-4 md:px-6`。左侧品牌方块 32px、`--lw-secondary` 底 + `--lw-on-primary` 图标 + `--lw-shadow-sm`，后接产品名（18px 加粗）；右侧为语言切换（ghost sm）与用户区（昵称/角色 + 36px 圆形头像，`--lw-surface-subtle` 底 + `--lw-primary-ink` 字 + `--lw-shadow-sm`，悬停放大 1.05）。
+- 侧栏宽 `--lw-sidebar-w`、白底、右边框。菜单组标题 10px 大写 `--lw-ink-muted`（`px-3 mb-2`）；一级菜单项 `h-10` 圆角 8px，二级子项 `h-9`，悬停为黑色 5% 叠加，选中为 `--lw-primary-ink` 文字 + 字重 600 + `--lw-secondary-selected` 底；目录展开箭头 200ms 旋转。
 - 侧栏底部固定品牌卡：`--lw-secondary` 底 + `--lw-on-secondary` 字，12px 圆角 + `--lw-shadow-sm`，内叠一层 `--lw-on-primary` 10% 蒙版；内容为产品名（12px 加粗）、口号（10px）、`用户名 · 角色码`（10px 等宽）；悬停放大 1.02。
 - 主区 `lw-page`（`p-6 flex flex-col gap-6`）滚屏，侧栏与顶栏固定；断点 `lg` 以下侧栏收起为抽屉（遮罩 `--lw-overlay`，滑入 `--lw-dur`）。
 - 指标卡：`h-32`，白底 + 1px 边框 + 12px 圆角 + `--lw-shadow-sm`，右上角 56px 图标 `opacity-10`，悬停时图标放大 1.1、卡片上移 2px 并加 `--lw-shadow-md`。
@@ -152,17 +170,19 @@ UnoCSS 主题只映射令牌，组件禁止硬编码色值：颜色 `lw-<别名>
 
 **规则**：HOVER 放大、PRESSED 缩小，形成明确点击感；LOADING 不落原生 `disabled`，保持主色底与可见指示器（深底变体指示器用 `--lw-on-primary`），宽度不变避免布局跳动。`:focus-visible` 显示 2px 主色焦点环（见 §10）。
 
-**输入类控件的边框**：输入框、下拉、多行文本的静止边框一律取 `--lw-border-strong`（辅助紫），悬停转 `--lw-secondary`，聚焦转 `--lw-primary`。`--lw-border`（浅灰）只用于卡片、表格等**分隔**场景——白底上 1px 浅灰几乎不可见，用在输入框上会让用户找不到可输入的位置。原生 `<input>` / `<textarea>` 必须去掉浏览器默认边框，由外层包装统一绘制（`styles/index.css` 的 `.lw-field`）。
+**输入类控件的边框**：输入框、下拉、多行文本、日期选择、搜索框的静止边框一律取 `--lw-border-strong`（辅助靛）**且不低于 1.5px**，悬停转 `--lw-secondary` 并加 `--lw-shadow-sm`，聚焦转 `--lw-primary` 并加 3px 主靛淡底光晕。`--lw-border`（浅灰）只用于卡片、表格等**分隔**场景——白底上 1px 浅灰几乎不可见，用在输入框上会让用户找不到可输入的位置。原生 `<input>` / `<textarea>` 必须去掉浏览器默认边框，由外层 `.lw-field` 统一绘制（见 §2.5）。禁用态转 `--lw-surface-disabled` 底 + `--lw-ink-disabled` 字，边框保留，不让控件"整块消失"。
+
+**图层层次**：页面 `--lw-surface` → 卡片 `--lw-surface-raised` + `--lw-border` + `--lw-shadow-sm` → 卡内分区 `--lw-surface` 或 `--lw-surface-subtle` 底 + `--lw-border`。相邻两层必须同时满足"**色差 + 边框**"两项，只给色差或只给边框都视为无层次。浮层（弹窗、抽屉、下拉面板）一律 `--lw-shadow-md` 且底色仍为 `--lw-surface-raised`，靠阴影与边框与页面分层，不靠加深底色。
 
 变体：
 
 | 变体 | 静止 | HOVER | PRESSED |
 |---|---|---|---|
 | `primary` | `--lw-primary` 底 + 白字 | `--lw-primary-hover` | `--lw-primary-active` |
-| `secondary` | 透明底 + `--lw-secondary` 描边与文字 | `--lw-secondary-tint` 底 | 文字与描边转 `--lw-secondary-hover` |
-| `ghost` | 透明底 + `--lw-primary` 描边与文字 | `--lw-primary-tint` 底 | 描边与文字转 `--lw-primary-active` |
+| `secondary` | 透明底 + `--lw-secondary` 2px 描边 + `--lw-primary-ink` 字 | `--lw-secondary-tint` 底 | 描边转 `--lw-secondary-hover`、文字转 `--lw-primary-active` |
+| `ghost` | 透明底 + `--lw-primary` 1px 描边 + `--lw-primary-ink` 字 | `--lw-primary-tint` 底 | 描边与文字转 `--lw-primary-active` |
 | `danger` | `--lw-error` 底 + 白字 | `--lw-error-hover` | `--lw-error-active` |
-| `text` | 无底主色文字（左右内边距 8px） | `--lw-primary-tint` 底 | `--lw-primary-tint` 底 + 文字转 `--lw-primary-active` |
+| `text` | 无底 `--lw-primary-ink` 文字（左右内边距 8px） | `--lw-primary-tint` 底 | `--lw-primary-tint` 底 + 文字转 `--lw-primary-active` |
 
 尺寸：
 
@@ -229,7 +249,7 @@ UnoCSS 主题只映射令牌，组件禁止硬编码色值：颜色 `lw-<别名>
 | 数值 | 24px 加粗、`tracking-tight`、`--lw-ink` |
 | 页脚 | 12px 加粗，缺省 `--lw-ink-muted`；可按口径取成功 / 警示 / 错误语义文字色，超长截断 |
 
-`tone` 三档：`primary`（主紫淡底）、`secondary`（辅助紫淡底）、`ink`（辅助紫淡底 + 主紫图标）。`hintTone` 只用于表达口径健康度（如成功率），不承担装饰。
+`tone` 三档：`primary`（主靛淡底）、`secondary`（辅助靛淡底）、`ink`（辅助靛淡底 + 主靛图标）。`hintTone` 只用于表达口径健康度（如成功率），不承担装饰。
 
 ### 5.7 危险文字按钮（lw-text-danger）
 
@@ -247,13 +267,15 @@ UnoCSS 主题只映射令牌，组件禁止硬编码色值：颜色 `lw-<别名>
 
 内联展示，不弹全屏遮罩：`px-4 py-3 rounded-control`，1px `--lw-error` 边框 + `--lw-error-tint` 底；左侧警示图标 + 14px `--lw-error` 文案；右侧 `text` sm 重试按钮。
 
+`retryable` 默认 true。表单提交失败、登录失败这类「重放同一个请求没有意义」的场景传 `retryable="false"` 收起重试按钮，只留文案；仍用本组件而非自造 `<p>`，保证错误视觉全站一处定义。
+
 ### 5.9 顶部进度条（LwProgressBar）
 
 固定顶部、`z-50`、高 2px、`--lw-primary` 底 + 8px 同色光晕；宽度按 `--lw-dur`、透明度按 `--lw-dur-fast` 过渡。路由开始推进至 12%，此后每 180ms 随机递增（单次 ≤12%、封顶 88%）；完成时收满 100% 并 240ms 淡出。
 
 ### 5.10 Markdown 消息（LwMarkdown）
 
-14px 正文行高 1.65。代码块 `.md-code`：1px `--lw-border` + 10px 圆角 + `--lw-surface` 底，头部 11px `--lw-ink-muted` + 复制按钮（悬停转 `--lw-primary` + `--lw-primary-tint` 底；复制成功 400ms 内图标切为对勾、色转 `--lw-success-ink`）。行内代码 `--lw-muted-tint` 底 + 4px 圆角；引用块 3px 主紫左边 + 右侧 8px 圆角 + `--lw-primary-tint` 底；表格 1px 边框。
+14px 正文行高 1.65。代码块 `.md-code`：1px `--lw-border` + 10px 圆角 + `--lw-surface` 底，头部 11px `--lw-ink-muted` + 复制按钮（悬停转 `--lw-primary` + `--lw-primary-tint` 底；复制成功 400ms 内图标切为对勾、色转 `--lw-success-ink`）。行内代码 `--lw-muted-tint` 底 + 4px 圆角；引用块 3px 主靛左边 + 右侧 8px 圆角 + `--lw-primary-tint` 底；表格 1px 边框。
 
 ## 6. 异步三态
 
@@ -292,7 +314,7 @@ UnoCSS 主题只映射令牌，组件禁止硬编码色值：颜色 `lw-<别名>
 - 轴标签 `--lw-ink-muted`，字号 10；轴线 `--lw-border`；不显示轴刻度线。
 - Tooltip 白底 `--lw-surface-raised` + 1px `--lw-border` + 8px 圆角 + 12px `--lw-ink` 文字。
 - 柱状图：柱最大宽 28px，顶部圆角 6px，色同序列规则。
-- 环形图：内外半径 `58% / 78%`，分片间隔 2px `--lw-surface-raised` 描边、4px 圆角；图例置底、圆形色块 8×8、11px `--lw-ink-muted`；配色按序取 主紫 / 辅助紫 / `--lw-ink` / `--lw-ink-disabled` / 语义色。
+- 环形图：内外半径 `58% / 78%`，分片间隔 2px `--lw-surface-raised` 描边、4px 圆角；图例置底、圆形色块 8×8、11px `--lw-ink-muted`；配色按序取 主靛 / 辅助靛 / `--lw-ink` / `--lw-ink-disabled` / 语义色。
 - 不放标题以外的图例装饰，tooltip 白底 1px 边框圆角 8。
 
 ## 9. 菜单与标签渲染
@@ -309,7 +331,7 @@ UnoCSS 主题只映射令牌，组件禁止硬编码色值：颜色 `lw-<别名>
 |---|---|
 | 焦点环 | `outline: 2px solid var(--lw-primary); outline-offset: 2px`，只在 `:focus-visible` 出现 |
 | 键盘 | 所有可点击元素可 Tab 到达、Enter/Space 触发；弹窗打开即锁焦点并在关闭后归还 |
-| 对比度 | 正文对底 ≥ 4.5:1；`--lw-on-secondary` 专供 `--lw-secondary` 底，不得用于主紫底 |
+| 对比度 | 正文对底 ≥ 4.5:1；`--lw-on-secondary` 专供 `--lw-secondary` 底，不得用于主靛底 |
 | 语义 | 图标按钮必须有 `aria-label`；加载态按钮带 `aria-busy="true"` |
 | 动效 | 尊重 `prefers-reduced-motion`，命中时关闭缩放与位移动画，仅保留颜色过渡 |
 
@@ -319,8 +341,8 @@ UnoCSS 主题只映射令牌，组件禁止硬编码色值：颜色 `lw-<别名>
 
 | 规则 | 说明 |
 |---|---|
-| 色不出四色序列与中性色 | `#f2f0f7` `#cbc9e2` `#9e9ac8` `#6a51a3` 加中性 `#ffffff` / `#f8fafc` / `#e2e8f0` / `#64748b`。语义色只在 success / warning / error（含 info）出现 |
-| 层级靠背景差与 1px 边框 | 不用渐变堆叠、不用彩色阴影。页面 `#f8fafc`，卡片 `#ffffff` + `1px #e2e8f0` + `12px` 圆角 |
+| 色不出 SaaS 五色序列与中性色 | `#6366f1` `#818cf8` `#e0e7ff` `#f8fafc` `#1e293b` 加中性 `#ffffff` / `#f1f5f9` / `#e2e8f0` / `#94a3b8` / `#64748b`。语义色只在 success / warning / error（含 info）出现 |
+| 层级靠背景差 + 1px 边框，输入控件另加粗 | 不用渐变堆叠、不用彩色阴影。页面 `#f8fafc`，卡片 `#ffffff` + `1px #e2e8f0` + `12px` 圆角；输入类控件 `1.5px #818cf8`，绝不与分隔边框同色同粗 |
 | 每一处可交互都有形变反馈 | 悬停 `scale(1.05)`、按下 `scale(0.95)`、加载锁宽、禁用去形变。不存在「点了没反应」的元素 |
 
 ### 11.2 品牌展示屏（登录页 / 落地页）
@@ -331,7 +353,7 @@ UnoCSS 主题只映射令牌，组件禁止硬编码色值：颜色 `lw-<别名>
 <div class="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] rounded-full blur-[100px] opacity-20"
      style="background-color: var(--lw-secondary); pointer-events: none"></div>
 <div class="absolute bottom-[-10%] right-[-10%] w-[400px] h-[400px] rounded-full blur-[100px] opacity-20"
-     style="background-color: var(--lw-surface-subtle); pointer-events: none"></div>
+     style="background-color: var(--lw-primary); pointer-events: none"></div>
 ```
 
 光斑必须 `pointer-events: none` 且被内容层 `z-10` 压住。页面背景 `--lw-surface`，无大图无渐变。整体为左右双列：左侧品牌区、右侧凭证卡（`max-w-[400px]`）；`lg` 以下纵向堆叠，品牌区能力卡在 `lg` 以下收起。
@@ -340,14 +362,14 @@ UnoCSS 主题只映射令牌，组件禁止硬编码色值：颜色 `lw-<别名>
 
 - 品牌方块 48px、`--lw-secondary` 底 + `--lw-on-primary` 图标 + `--lw-shadow-sm`，悬停放大 1.05；旁接产品名（24px 加粗 `--lw-ink`）。
 - 徽标 pill：白底 + 1px `--lw-border` + `--lw-secondary` 字 + 星形图标，圆角全圆，`px-3 py-1.5` 12px 加粗，悬停加 `--lw-shadow-sm`。
-- 大标题两行：第一行 `--lw-ink`（主紫）、第二行 `--lw-secondary`，`text-4xl lg:text-5xl font-extrabold tracking-tight leading-tight`。
+- 大标题两行：第一行 `--lw-ink`（主靛）、第二行 `--lw-secondary`，`text-4xl lg:text-5xl font-extrabold tracking-tight leading-tight`。
 - 定位描述 `text-base`、`--lw-ink-muted`、`max-w-[480px]`。
 - 能力卡（纵向 `gap-3`，`max-w-[460px]`）：白底 + 1px 边框 + 12px 圆角，左侧 36px 图标瓷砖（`--lw-primary-tint` 底 + `--lw-primary` 图标），标题 14px `--lw-ink`、描述 12px `--lw-ink-muted`；悬停上移 2px 并加 `--lw-shadow-md`。
 
 凭证卡（`lw-card p-6 flex flex-col gap-5`）：
 
 - 欢迎语 18px 加粗 + 一句说明 12px `--lw-ink-muted`；字段间距 16px。
-- 输入框 `h-10 px-3 rounded-control`，聚焦时边框转主紫并加 `--lw-shadow-sm`；密码显隐按钮悬停黑 5% 叠加、按下缩小。
+- 输入框 `h-10 px-3 rounded-control`，聚焦时边框转主靛并加 `--lw-shadow-sm`；密码显隐按钮悬停黑 5% 叠加、按下缩小。
 - 主操作 `primary lg block`；提交 loading 最短显示 400ms（防闪烁），成功前保持 LOADING。
 - 公钥加载失败显示内联错误条 + 重试按钮，**绝不降级明文**。
 
@@ -378,7 +400,9 @@ UnoCSS 主题只映射令牌，组件禁止硬编码色值：颜色 `lw-<别名>
 用于自证设计系统的页面（`/showcase`）为 1/2 列响应式网格（`gap-6`），由四张 `LwCard` 组成：品牌与按钮 / 功能语义色 / 交互控件 / 信息展示。
 
 - 每张卡走 `LwCard` 形态：白底 + 1px 边框 + 12px 圆角 + `--lw-shadow-sm` + `p-5`，标题 16px 加粗 `--lw-ink`、说明 12px `--lw-ink-muted`。
-- 色板卡：`h-16 rounded-lg` 大色块 + 下方 `font-mono text-xs` 行（左色值右名称，`--lw-ink-muted`），展示主紫 `#6A51A3` 与辅助紫 `#9E9AC8`。
+- 色板卡：`h-16 rounded-lg` 大色块 + 下方 `font-mono text-xs` 行（左色值右名称，`--lw-ink-muted`），展示主靛 `#6366F1`、辅助靛 `#818CF8`、淡底 `#E0E7FF`、中性 `#1E293B` 四块——与案例「品牌色与按钮」卡的色值栏一一对应。
+- 按钮卡展示五态：DEFAULT / HOVER（放大 + 加深 + 阴影）/ PRESSED（缩小 + 再加深）/ DISABLED / LOADING，逐态可点；次要按钮与幽灵按钮各占一格，与案例「次要按钮」「幽灵按钮」同形。
+- 交互控件卡展示 `.lw-field` 与 EP 输入两类控件：默认态 `1.5px #818cf8` 边框、聚焦态 `#6366f1` 边框 + 淡底光晕，下方跟复选框 / 单选 / 开关三件套（`el-checkbox` / `el-radio-group` / `el-switch`，配色吃 `--el-color-primary` 主题映射，不自绘）。
 - 语义反馈用 `LwTag`（六 tone）与 `LwErrorBar`，**不使用 Element Plus Alert**。
 - 图表样例用 `LwAreaChart`（ECharts），不自造 canvas 图形。
 - 标签统一 `LwTag` 形态（`px-2 py-0.5 rounded-tag(6px) text-xs font-bold`），不另造标签样式。
@@ -389,10 +413,10 @@ UnoCSS 主题只映射令牌，组件禁止硬编码色值：颜色 `lw-<别名>
 
 | 组件 | 形态 | 关键约束 |
 |---|---|---|
-| 链路瀑布（`TraceWaterfall`） | 每行 = 一个片段：左标签 / 中轨道（12px 高，底 `--lw-border`）/ 右指标（状态 Tag + 耗时 + Token） | 条用主紫（模型）与辅助紫（工具），错误用 `--lw-error-ink`、待收尾用 `--lw-warning-ink`；宽度按 `offsetMs / totalMs` 百分比、最小 0.8%；悬停整行铺 `--lw-primary-tint`，待收尾行铺 `--lw-warning-tint`；不做缩放与拖拽 |
+| 链路瀑布（`TraceWaterfall`） | 每行 = 一个片段：左标签 / 中轨道（12px 高，底 `--lw-border`）/ 右指标（状态 Tag + 耗时 + Token） | 条用主靛（模型）与辅助靛（工具），错误用 `--lw-error-ink`、待收尾用 `--lw-warning-ink`；宽度按 `offsetMs / totalMs` 百分比、最小 0.8%；悬停整行铺 `--lw-primary-tint`，待收尾行铺 `--lw-warning-tint`；不做缩放与拖拽 |
 | Run 树（`RunTree`） | 缩进列表 + 一条竖连接线标层级 | 行高 36px（h-9），子行左内缩 1.25rem/级；选中态 `--lw-secondary-tint` 底 + `--lw-secondary` 边；层级只用缩进与连接线，不加重型树控件 |
-| 用量归因（`UsagePanel`） | 指标卡 ×4 + 柱状趋势 + 占比条 | 柱宽自适应、间隔 `gap-1`、无坐标轴，柱底 `--lw-secondary`；占比条底 `--lw-border`，条按序号在主紫/辅助紫间交替；数字一律 `font-mono` 且 `k` / `M` 简写 |
-| 计划清单（`PlanChecklist`） | 顶部标题 + 进度条 + 步骤列表 | 卡片底 `--lw-secondary-tint`、边 `--lw-secondary`；完成步骤 `--lw-ink-muted` + 删除线，进行中主紫加粗；进度条 500ms 过渡 |
+| 用量归因（`UsagePanel`） | 指标卡 ×4 + 柱状趋势 + 占比条 | 柱宽自适应、间隔 `gap-1`、无坐标轴，柱底 `--lw-secondary`；占比条底 `--lw-border`，条按序号在主靛/辅助靛间交替；数字一律 `font-mono` 且 `k` / `M` 简写 |
+| 计划清单（`PlanChecklist`） | 顶部标题 + 进度条 + 步骤列表 | 卡片底 `--lw-secondary-tint`、边 `--lw-secondary`；完成步骤 `--lw-ink-muted` + 删除线，进行中主靛加粗；进度条 500ms 过渡 |
 
 共同规则：**颜色只表达「谁在耗时 / 到哪一步」，不承担装饰**；所有状态变化都要有过渡（`200ms` 起）；无数据一律 `LwEmpty` + 一句说明，不留白板。
 
@@ -429,28 +453,28 @@ UnoCSS 主题只映射令牌，组件禁止硬编码色值：颜色 `lw-<别名>
 ```
 
 - 概览卡与直方图随过滤条件联动刷新，顶部有 `--lw-dur` 高度过渡，不做整页 loading。
-- 快捷时间预设：15 分钟 / 1 小时 / 24 小时 / 7 天，选中态浅紫底 + 主紫字；自定义时间用日期选择器。
-- 结果行：级别用 `LwTag`（INFO 主紫 / WARN 警告 / ERROR 错误），时间等宽字体，正文单行截断；点击展开显示 `traceId` / `logger` / `thread` 与异常栈（异常区 `--lw-error-tint` 底 + `--lw-error-ink` 字）。
-- 关键字命中在正文内高亮：`<mark>` 浅紫底圆角 2px，不使用浏览器默认黄色。
+- 快捷时间预设：15 分钟 / 1 小时 / 24 小时 / 7 天，选中态浅靛底 + 主靛字；自定义时间用日期选择器。
+- 结果行：级别用 `LwTag`（INFO 主靛 / WARN 警告 / ERROR 错误），时间等宽字体，正文单行截断；点击展开显示 `traceId` / `logger` / `thread` 与异常栈（异常区 `--lw-error-tint` 底 + `--lw-error-ink` 字）。
+- 关键字命中在正文内高亮：`<mark>` 浅靛底圆角 2px，不使用浏览器默认黄色。
 - 钻取动作：复制 `traceId`（图标 400ms 切对勾 + toast）、按该 `traceId` 过滤（一键填入过滤区并刷新）。
 - 过滤区下方常驻一行语法说明（12px `--lw-ink-muted`）：关键字匹配哪个字段、等值过滤有哪些、时间怎么传。
 
 ### 12.2 对话时间线（工作台）
 
 ```
-用户消息：右对齐，主紫淡底气泡，圆角 12（右下 4）
+用户消息：右对齐，主靛淡底气泡，圆角 12（右下 4）
 助手消息：左对齐无气泡，Markdown 全文渲染
   思考块：可折叠，标题行"思考过程"+ 耗时，展开为 12px 次级文本
   工具卡：白卡 1px 边框，头部 = 工具名 + 状态 Tag + 耗时，
           展开显示参数 JSON 与输出（输出超 4KB 截断并提示）
-  模型调用行：11px 主紫淡底胶囊，标注模型名
+  模型调用行：11px 主靛淡底胶囊，标注模型名
 运行终态：成功/失败/中断 Tag + 用量（输入/输出 Token）+ 总耗时
 流式中：正文末尾光标闪烁（--lw-primary，1s 步进），中断按钮常驻输入区
 ```
 
 - 时间线按事件 `seq` 严格保序渲染，不做前端重排。
 - 思考块底 `--lw-surface-subtle`、8px 圆角；工具卡白底 + 1px `--lw-border` + 8px 圆角，展开代码区 `--lw-surface-subtle` 底 + 6px 圆角 + 最大高 260px 滚动。
-- 回放态：顶部通栏提示条（`--lw-secondary-tint` 底 + 主紫字）+「返回实时」按钮，与实时态视觉可区分。
+- 回放态：顶部通栏提示条（`--lw-secondary-tint` 底 + 主靛字）+「返回实时」按钮，与实时态视觉可区分。
 - 输入区：多行自适应文本域，回车发送（组词中不发送），发送按钮 loading 与流式状态联动；流式中中断按钮为 `secondary` + loading 形态，常驻输入区。
 
 ### 12.3 运行可观测页（运行记录）
@@ -467,7 +491,7 @@ UnoCSS 主题只映射令牌，组件禁止硬编码色值：颜色 `lw-<别名>
 └──────────────┴────────────────────────────────┘
 ```
 
-- 运行状态 Tag 色：`success` 语义绿 / `failed` 错误色 / `aborted` 中性灰 / `running`·`queued` 主紫 / 其余警示色。
+- 运行状态 Tag 色：`success` 语义绿 / `failed` 错误色 / `aborted` 中性灰 / `running`·`queued` 主靛 / 其余警示色。
 - 工具卡状态：执行中显示旋转指示器，完成转对勾或错误图标，均有 `--lw-dur` 过渡。
 - 回放态：详情区顶部通栏提示条（`--lw-secondary-tint` 底 +「回放中 · 返回实时」），与实时态视觉可区分。
 - 空态：`LwEmpty` + 「选择左侧运行查看详情」；列表空显示「暂无运行记录」+ 去工作台按钮。
@@ -493,7 +517,7 @@ UnoCSS 主题只映射令牌，组件禁止硬编码色值：颜色 `lw-<别名>
 | 状态列 | 统一 `LwTag`，同状态同色（见语义色表） |
 | 空态 | 表格内 `LwEmpty`（图标 + 说明 + 主操作），不留白板 |
 | 加载 | 骨架行（3–5 行），不做整页遮罩 |
-| 分页 | 右对齐：总数 + 每页条数 + 上一页 / 页码 / 下一页；页码选中态主紫底白字 |
+| 分页 | 右对齐：总数 + 每页条数 + 上一页 / 页码 / 下一页；页码选中态主靛底白字 |
 
 **对齐纪律**：同一筛选行的控件统一 `h-10`（按钮 `md`、输入 `md`、下拉 `md`），标签文本与控件水平基线对齐；表单页标签统一左对齐固定宽度；不同页面同类元素尺寸一致，严禁同屏混用 `sm` / `md`。
 
@@ -509,7 +533,7 @@ UnoCSS 主题只映射令牌，组件禁止硬编码色值：颜色 `lw-<别名>
 
 | 案例屏 | 本文件出处 | 骨架要点 |
 |---|---|---|
-| 落地页（品牌展示屏） | §11.2 | 左右双列；两枚 `blur-[100px]` 弥散光斑（`--lw-secondary` 与 `--lw-surface-subtle`，`opacity-20`、`pointer-events-none`）；左侧品牌区（品牌方块 + 徽标 pill + 两行大标题 + 能力卡），右侧凭证卡 `max-w-[400px]` |
+| 落地页（品牌展示屏） | §11.2 | 左右双列；两枚 `blur-[100px]` 弥散光斑（`--lw-secondary` 与 `--lw-primary`，`opacity-20`、`pointer-events-none`）；左侧品牌区（品牌方块 + 徽标 pill + 两行大标题 + 能力卡），右侧凭证卡 `max-w-[400px]` |
 | 仪表盘（控制台） | §11.3、§5.6、§8 | TopBar `h-16` + Sidebar `w-52` + `lw-page`；页头「次 + 主」两枚按钮；指标卡 ×3（`h-32`、右上角 56px 图标 `opacity-10`、悬停上移 2px）；面积图 + 柱状图 + 环形图 |
 | 组件库（自证页） | §11.4 | 1/2 列响应式网格 `gap-6`，四张 `LwCard`：品牌与按钮 / 功能语义色 / 交互控件 / 信息展示 |
 
@@ -519,11 +543,13 @@ UnoCSS 主题只映射令牌，组件禁止硬编码色值：颜色 `lw-<别名>
 
 | 案例取值 | 替换为 | 说明 |
 |---|---|---|
-| `slate-900` 实心按钮 | `LwButton variant="primary"`（`--lw-primary` 底 + `--lw-on-primary` 字） | 深底按钮不用中性黑，主色即品牌紫 |
+| `slate-900` 实心按钮 | `LwButton variant="primary"`（`--lw-primary` 底 + `--lw-on-primary` 字） | 深底按钮不用中性黑，主靛即品牌 |
 | `slate-50` / `slate-100` / `slate-200` | `--lw-surface` / `--lw-surface-subtle` / `--lw-border` | 中性灰只有三档，全部走令牌 |
-| `emerald-500` 上升指标 | `--lw-success-ink` | 语义文字色，不用鲜绿 |
-| `amber-500` 视图开关选中态 | `--lw-primary-tint` 底 + `--lw-primary` 字 | 主题/视图切换的选中态统一走 `LwSegmented` 规范（§5.2） |
-| `blue-600` 分段选中态 | `--lw-primary` 字 + `--lw-surface-subtle` 底 | 同上，禁止引入蓝色系 |
+| `slate-900` 实心「桌面端 / 移动端」开关 | `LwSegmented` 或 `LwButton variant="secondary"` | 设备态切换不是品牌动作，不用深底实心 |
+| `emerald-500` 上升指标 | `--lw-success-ink`（`#047857`） | 语义文字色，不用鲜绿 |
+| `amber-500` 视图开关选中态 | `--lw-primary-tint` 底 + `--lw-primaryInk` 字 | 主题/视图切换的选中态统一走 `LwSegmented` 规范（§5.2） |
+| `blue-600` 分段选中态 | `--lw-primaryInk` 字 + `--lw-surface-subtle` 底 | 同上，禁止引入蓝色系 |
+| `#818cf8` 之上的 `color: #000` 文字 | `--lw-on-secondary`（`#1e293b`） | 深字+浅底才达 5:1，纯黑在浅靛上过硬 |
 | `dark:` 变体 | 一律删除 | 只交付浅色主题（§13） |
 
 ### 14.3 五态与三态验收

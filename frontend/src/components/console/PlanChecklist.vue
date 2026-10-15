@@ -27,7 +27,7 @@ function stepStyle(step: PlanStep): Record<string, string> {
     return { color: 'var(--lw-ink-muted)', textDecoration: 'line-through' }
   }
   if (step.status === 'doing') {
-    return { color: 'var(--lw-primary)', fontWeight: '600' }
+    return { color: 'var(--lw-primary-ink)', fontWeight: '600' }
   }
   return { color: 'var(--lw-ink)' }
 }
@@ -36,7 +36,7 @@ function stepStyle(step: PlanStep): Record<string, string> {
 <template>
   <div class="plan-card">
     <div class="flex items-center justify-between gap-2">
-      <span class="text-xs font-bold" style="color: var(--lw-primary)">{{ t('console.planTitle') }}</span>
+      <span class="text-xs font-bold" style="color: var(--lw-primary-ink)">{{ t('console.planTitle') }}</span>
       <span class="text-[10px] font-mono" style="color: var(--lw-ink-muted)">
         {{ doneCount }}/{{ steps.length }}
       </span>

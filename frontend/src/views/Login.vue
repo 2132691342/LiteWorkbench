@@ -140,7 +140,7 @@ async function handleSubmit(): Promise<void> {
                class="flex items-start gap-3 p-3 rounded-card border transition-all duration-200 hover:-translate-y-0.5 hover:lw-shadow-md"
                style="background: var(--lw-surface-raised); border-color: var(--lw-border)">
             <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
-                 style="background: var(--lw-primary-tint); color: var(--lw-primary)">
+                 style="background: var(--lw-primary-tint); color: var(--lw-primary-ink)">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                    stroke-linecap="round" stroke-linejoin="round">
                 <path :d="feature.icon" />
@@ -209,10 +209,7 @@ async function handleSubmit(): Promise<void> {
             </div>
           </label>
 
-          <p v-if="errorMessage" class="text-xs font-medium px-3 py-2 rounded-control"
-             style="color: var(--lw-error-ink); background: var(--lw-error-tint)">
-            {{ errorMessage }}
-          </p>
+          <LwErrorBar v-if="errorMessage" :message="errorMessage" :retryable="false" />
 
           <LwButton native-type="submit" size="lg" block :loading="loading" :disabled="!keyReady" class="mt-2">
             {{ loading ? t('login.submitting') : t('login.submit') }}

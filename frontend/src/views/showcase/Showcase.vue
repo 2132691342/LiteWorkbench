@@ -21,6 +21,8 @@ const primaryHex = ref('')
 const secondaryHex = ref('')
 const surfaceHex = ref('')
 const accentHex = ref('')
+const inkHex = ref('')
+const secondaryInkHex = ref('')
 
 /** 三态互斥：一次只呈现 loading / empty / error 中的一种，刷新在两态间轮转 */
 const demoState = ref<'loading' | 'empty' | 'error'>('loading')
@@ -44,8 +46,13 @@ onMounted(() => {
   secondaryHex.value = tokenHex('--lw-secondary')
   surfaceHex.value = tokenHex('--lw-surface-subtle')
   accentHex.value = tokenHex('--lw-accent-soft')
+  inkHex.value = tokenHex('--lw-ink')
+  secondaryInkHex.value = tokenHex('--lw-primary-ink')
   void simulate()
 })
+
+/** 案例「交互控件」卡的输入演示：聚焦态可复现，用于对照 1.5px 强调边框 */
+const demoText = ref('')
 
 const chartCategories = ['1', '2', '3', '4', '5', '6', '7', '8']
 const chartValues = [8, 16, 12, 24, 20, 32, 28, 40]
@@ -90,8 +97,8 @@ const chartValues = [8, 16, 12, 24, 20, 32, 28, 40]
 
       <LwCard :title="t('showcase.colors')" :desc="t('showcase.colorsDesc')">
         <div class="flex flex-col gap-4">
-          <div class="flex gap-4">
-            <div class="flex-1 space-y-2">
+          <div class="grid grid-cols-2 gap-4">
+            <div class="space-y-2">
               <div class="h-16 rounded-lg flex items-center justify-center font-bold text-sm lw-shadow-sm" style="background: var(--lw-primary); color: var(--lw-on-primary)">
                 {{ t('showcase.tagPrimary') }}
               </div>
@@ -99,12 +106,28 @@ const chartValues = [8, 16, 12, 24, 20, 32, 28, 40]
                 <span>{{ primaryHex }}</span><span>Primary</span>
               </div>
             </div>
-            <div class="flex-1 space-y-2">
+            <div class="space-y-2">
               <div class="h-16 rounded-lg flex items-center justify-center font-bold text-sm lw-shadow-sm" style="background: var(--lw-secondary); color: var(--lw-on-secondary)">
                 {{ t('showcase.tagSecondary') }}
               </div>
               <div class="flex justify-between text-xs font-mono" style="color: var(--lw-ink-muted)">
                 <span>{{ secondaryHex }}</span><span>Secondary</span>
+              </div>
+            </div>
+            <div class="space-y-2">
+              <div class="h-16 rounded-lg flex items-center justify-center font-bold text-sm lw-shadow-sm" style="background: var(--lw-accent-soft); color: var(--lw-ink)">
+                {{ t('showcase.tagSoft') }}
+              </div>
+              <div class="flex justify-between text-xs font-mono" style="color: var(--lw-ink-muted)">
+                <span>{{ accentHex }}</span><span>Tint</span>
+              </div>
+            </div>
+            <div class="space-y-2">
+              <div class="h-16 rounded-lg flex items-center justify-center font-bold text-sm lw-shadow-sm" style="background: var(--lw-ink); color: var(--lw-on-primary)">
+                {{ t('showcase.tagInk') }}
+              </div>
+              <div class="flex justify-between text-xs font-mono" style="color: var(--lw-ink-muted)">
+                <span>{{ inkHex }}</span><span>Neutral</span>
               </div>
             </div>
           </div>
@@ -118,8 +141,34 @@ const chartValues = [8, 16, 12, 24, 20, 32, 28, 40]
           </div>
           <div class="p-3 rounded-lg border text-xs flex items-center justify-between" style="background: var(--lw-surface); border-color: var(--lw-border)">
             <span class="font-bold">{{ t('showcase.surfaceLabel') }}</span>
-            <span class="font-mono" style="color: var(--lw-ink-muted)">{{ surfaceHex }} / {{ accentHex }}</span>
+            <span class="font-mono" style="color: var(--lw-ink-muted)">{{ surfaceHex }} / {{ secondaryInkHex }}</span>
           </div>
+        </div>
+      </LwCard>
+
+      <LwCard :title="t('showcase.inputs')" :desc="t('showcase.inputsDesc')">
+        <div class="flex flex-col gap-4">
+          <label class="flex flex-col gap-1.5">
+            <span class="lw-label">{{ t('showcase.fieldLabel') }}</span>
+            <div class="lw-field">
+              <input v-model="demoText" class="w-full bg-transparent outline-none text-sm" :placeholder="t('showcase.fieldPlaceholder')" />
+            </div>
+          </label>
+          <label class="flex flex-col gap-1.5">
+            <span class="lw-label">{{ t('showcase.fieldLabel') }}</span>
+            <el-input :placeholder="t('showcase.fieldPlaceholder')" clearable />
+          </label>
+          <div class="flex flex-wrap items-center gap-6 pt-3 border-t" style="border-color: var(--lw-border)">
+            <el-checkbox :model-value="true">{{ t('showcase.checked') }}</el-checkbox>
+            <el-radio-group :model-value="true">
+              <el-radio :value="true">{{ t('showcase.radio') }}</el-radio>
+            </el-radio-group>
+            <span class="flex items-center gap-2">
+              <el-switch :model-value="true" />
+              <span class="text-xs font-medium">{{ t('showcase.switchOn') }}</span>
+            </span>
+          </div>
+          <p class="text-xs" style="color: var(--lw-ink-muted)">{{ t('showcase.inputsHint') }}</p>
         </div>
       </LwCard>
 

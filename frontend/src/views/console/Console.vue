@@ -239,7 +239,7 @@ onMounted(async () => {
           class="group h-10 px-3 rounded-lg flex items-center justify-between cursor-pointer transition-all duration-200 hover:bg-black/5"
           :style="
             item.sessionId === sessionStore.activeSessionId
-              ? 'color: var(--lw-primary); font-weight: 600; background: var(--lw-primary-tint)'
+              ? 'color: var(--lw-primary-ink); font-weight: 600; background: var(--lw-primary-tint)'
               : 'color: var(--lw-ink)'
           "
           role="button"
@@ -251,16 +251,14 @@ onMounted(async () => {
         >
           <span class="text-sm truncate">{{ item.title }}</span>
           <el-tooltip :open-delay="300" :content="t('console.sessionDelete')" placement="top">
-            <el-icon
-              class="opacity-0 group-hover:opacity-60 transition-opacity focus:opacity-60"
-              role="button"
-              tabindex="0"
-              aria-label="delete session"
+            <button
+              type="button"
+              class="lw-icon-btn p-0.5 opacity-0 group-hover:opacity-60 focus-visible:opacity-60 transition-all duration-200 hover:text-lw-errorInk active:scale-90"
+              :aria-label="t('console.sessionDelete')"
               @click.stop="removeSession(item.sessionId)"
-              @keydown.enter.stop="removeSession(item.sessionId)"
             >
-              <Delete />
-            </el-icon>
+              <el-icon :size="14"><Delete /></el-icon>
+            </button>
           </el-tooltip>
         </div>
       </div>
@@ -347,11 +345,9 @@ onMounted(async () => {
               </div>
             </div>
             <div v-else class="flex flex-col gap-2">
-              <details v-if="message.thinking" class="text-xs">
-                <summary class="cursor-pointer opacity-60">{{ t('console.thinking') }}</summary>
-                <div class="mt-1 px-3 py-2 rounded-lg whitespace-pre-wrap" style="background: var(--lw-surface)">
-                  {{ message.thinking }}
-                </div>
+              <details v-if="message.thinking" class="tl-thinking">
+                <summary>{{ t('console.thinking') }}</summary>
+                <pre>{{ message.thinking }}</pre>
               </details>
               <PlanChecklist v-if="message.plan.length" :steps="message.plan" />
               <div
@@ -383,14 +379,12 @@ onMounted(async () => {
 
       <footer class="p-6 pt-4 shrink-0 flex flex-col gap-2 max-w-3xl mx-auto w-full">
         <LwErrorBar v-if="streamError" :message="streamError" />
-        <div
-          class="lw-field flex items-end gap-3 p-3 rounded-xl border transition-all duration-200 focus-within:lw-shadow-md"
-          style="background: var(--lw-surface-raised); border-color: var(--lw-border-strong)"
-        >
+        <div class="lw-field lw-field--auto py-2" style="background: var(--lw-surface-raised)">
           <textarea
             v-model="draft"
             rows="2"
-            class="flex-1 resize-none bg-transparent outline-none text-sm px-2 py-1"
+            class="flex-1 resize-none bg-transparent outline-none text-sm"
+            style="padding: 2px 0"
             :placeholder="t('console.inputPlaceholder')"
             :disabled="runStore.streaming || runStore.replaying"
             @keydown.enter.exact="onEnter"
@@ -430,7 +424,7 @@ onMounted(async () => {
 <style scoped>
 .lw-cursor {
   animation: lw-blink 1s step-start infinite;
-  color: var(--lw-primary);
+  color: var(--lw-primary-ink);
 }
 @keyframes lw-blink {
   50% {

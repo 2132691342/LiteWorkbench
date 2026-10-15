@@ -18,6 +18,7 @@ import type {
   InvokeToolREQ,
   KbChunkVO,
   KbDocVO,
+  ObserveRESP,
   KbREQ,
   KbSearchParams,
   KbVO,
@@ -321,6 +322,8 @@ export const providerApi = {
 export const monitorApi = {
   health: () => get<HealthRESP>('/monitor/health'),
   overview: () => get<OverviewRESP>('/monitor/overview'),
+  observe: () => get<ObserveRESP>('/monitor/observe'),
+  observeReset: () => post<string>('/monitor/observe/reset'),
   pythonStatus: () => get<PythonStatusVO>('/runtime/python'),
   pythonReprobe: () => post<PythonStatusVO>('/runtime/python/reprobe'),
 }

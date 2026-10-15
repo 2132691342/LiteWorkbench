@@ -61,7 +61,7 @@ function handleClick(menu: MenuVO): void {
           class="h-10 rounded-lg flex items-center px-3 gap-3 cursor-pointer transition-all duration-200 hover:bg-black/5"
           :style="
             isBranchActive(menu)
-              ? 'color: var(--lw-primary); font-weight: 600; background: var(--lw-secondary-selected)'
+              ? 'color: var(--lw-primary-ink); font-weight: 600; background: var(--lw-secondary-selected)'
               : 'color: var(--lw-ink)'
           "
           role="button"
@@ -87,7 +87,7 @@ function handleClick(menu: MenuVO): void {
               class="h-9 rounded-lg flex items-center pl-9 pr-3 gap-2 text-sm transition-all duration-200 hover:bg-black/5"
               :style="
                 isActive(child)
-                  ? 'color: var(--lw-primary); font-weight: 600; background: var(--lw-secondary-selected)'
+                  ? 'color: var(--lw-primary-ink); font-weight: 600; background: var(--lw-secondary-selected)'
                   : 'color: var(--lw-ink)'
               "
             >
@@ -103,7 +103,7 @@ function handleClick(menu: MenuVO): void {
           class="h-10 rounded-lg flex items-center px-3 gap-3 text-sm transition-all duration-200 hover:bg-black/5"
           :style="
             isActive(menu)
-              ? 'color: var(--lw-primary); font-weight: 600; background: var(--lw-secondary-selected)'
+              ? 'color: var(--lw-primary-ink); font-weight: 600; background: var(--lw-secondary-selected)'
               : 'color: var(--lw-ink)'
           "
         >

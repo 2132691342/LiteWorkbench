@@ -330,8 +330,8 @@ onBeforeUnmount(() => {
             :key="kb.kbId"
             class="text-left rounded-card border p-4 transition-all duration-200 cursor-pointer hover:-translate-y-0.5 hover:lw-shadow-md"
             :class="kb.kbId === selectedKbId
-              ? 'border-[var(--lw-primary)] bg-[var(--lw-secondary-selected)] lw-shadow-sm'
-              : 'border-[var(--lw-border)] bg-[var(--lw-surface)]'"
+              ? 'border-lw-primary bg-lw-secondarySelected lw-shadow-sm'
+              : 'border-lw-border bg-lw-surface'"
             role="button"
             tabindex="0"
             :aria-selected="kb.kbId === selectedKbId"
@@ -339,7 +339,7 @@ onBeforeUnmount(() => {
             @keydown.enter="selectKb(kb)"
           >
             <div class="flex items-center justify-between gap-2">
-              <span class="font-bold text-sm truncate" :style="{ color: 'var(--lw-primary)' }">{{ kb.kbName }}</span>
+              <span class="font-bold text-sm truncate" :style="{ color: 'var(--lw-primary-ink)' }">{{ kb.kbName }}</span>
               <span class="flex items-center gap-1 shrink-0" @click.stop>
                 <LwButton
                   v-if="hasPerm('wb:kb:update')"
@@ -465,10 +465,10 @@ onBeforeUnmount(() => {
             <div class="flex flex-col gap-3">
               <article
                 v-for="chunk in chunks" :key="chunk.chunkId"
-                class="rounded-xl border p-4 transition-colors border-[var(--lw-border)] bg-[var(--lw-surface)] hover:border-[var(--lw-primary)]"
+                class="rounded-card border p-4 transition-colors border-lw-border bg-lw-surface hover:border-lw-primary"
               >
                 <div class="flex items-center justify-between gap-3 mb-2">
-                  <span class="text-xs font-bold truncate" :style="{ color: 'var(--lw-primary)' }">
+                  <span class="text-xs font-bold truncate" :style="{ color: 'var(--lw-primary-ink)' }">
                     {{ chunk.docName }} · {{ t('kb.seq') }} {{ chunk.seq }}
                   </span>
                   <LwTag tone="muted">{{ t('kb.score') }} {{ (chunk.score ?? 0).toFixed(3) }}</LwTag>
@@ -519,7 +519,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .lw-kb-hit {
   background: var(--lw-secondary-tint);
-  color: var(--lw-primary);
+  color: var(--lw-primary-ink);
   border-radius: 3px;
   padding: 0 2px;
   font-weight: 600;

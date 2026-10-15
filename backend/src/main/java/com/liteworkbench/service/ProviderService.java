@@ -52,8 +52,8 @@ public class ProviderService {
             vo.setProviderCode(preset.getCode());
             vo.setBaseUrl(preset.getBaseUrl());
             vo.setDefaultModel(preset.getDefaultModel());
-            vo.setProtocol(ProviderPresetEnum.isOllama(preset.getCode()) ? "ollama" : "openai");
-            vo.setRequiresKey(!ProviderPresetEnum.isOllama(preset.getCode()));
+            vo.setProtocol("openai");
+            vo.setRequiresKey(true);
             return vo;
         }).toList();
     }

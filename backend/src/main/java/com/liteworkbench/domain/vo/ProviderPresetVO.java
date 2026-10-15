@@ -14,9 +14,9 @@ public class ProviderPresetVO implements Serializable {
 
     private String providerCode;
     private String baseUrl;
-    /** 默认模型，Ollama 为空 */
+    /** 默认模型 */
     private String defaultModel;
-    /** 协议通道：openai（兼容族）/ ollama */
+    /** 协议通道：固定 openai（兼容族） */
     private String protocol;
     private Boolean requiresKey;
 }

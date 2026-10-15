@@ -7,10 +7,11 @@ import LwButton from '@/components/ui/LwButton.vue'
 import LwCard from '@/components/ui/LwCard.vue'
 import LwPageState from '@/components/ui/LwPageState.vue'
 import LwTag from '@/components/ui/LwTag.vue'
+import ObservePanel from '@/components/monitor/ObservePanel.vue'
 import { usePermission } from '@/composables/usePermission'
 import { useMonitorStore } from '@/stores/monitor'
 
-/** 健康监控：PostgreSQL / Redis / MinIO / RabbitMQ / Python 逐项探测 + 运行时状态 */
+/** 健康监控：组件探测 + Python 运行时 + SQL/HTTP 调用观测 */
 const { t } = useI18n()
 const { hasPerm } = usePermission()
 const monitorStore = useMonitorStore()
@@ -126,5 +127,7 @@ onMounted(load)
         </LwButton>
       </div>
     </LwCard>
+
+    <ObservePanel />
   </div>
 </template>

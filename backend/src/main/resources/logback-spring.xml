@@ -115,6 +115,13 @@
         <appender-ref ref="ASYNC_MANTICORE"/>
     </logger>
 
+    <!-- 调用观测：SQL 与 HTTP 审计量大，不上控制台只进全量文件与检索索引 -->
+    <logger name="com.liteworkbench.observability" level="INFO" additivity="false">
+        <appender-ref ref="ASYNC_ALL"/>
+        <appender-ref ref="ASYNC_ERROR"/>
+        <appender-ref ref="ASYNC_MANTICORE"/>
+    </logger>
+
     <logger name="org.springframework" level="WARN"/>
     <logger name="com.zaxxer.hikari" level="WARN"/>
 

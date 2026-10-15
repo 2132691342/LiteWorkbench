@@ -124,6 +124,10 @@ onMounted(load)
     </template>
 
     <LwPageState :loading="loading" :error="error" :empty="!list.length" @retry="load">
+      <p v-if="!list.length" class="text-xs leading-relaxed" style="color: var(--lw-ink-muted)">
+        {{ t('settings.provider.emptyTip') }}
+      </p>
+
       <div class="flex flex-col gap-2">
         <div
           v-for="item in list"

@@ -18,8 +18,10 @@ import com.liteworkbench.domain.vo.HealthRESP;
 import com.liteworkbench.domain.vo.LogDocVO;
 import com.liteworkbench.domain.vo.LogPageVO;
 import com.liteworkbench.domain.vo.LogStatsVO;
+import com.liteworkbench.domain.vo.ObserveRESP;
 import com.liteworkbench.domain.vo.OverviewRESP;
 import com.liteworkbench.domain.vo.PythonStatusVO;
+import com.liteworkbench.observability.ObserveStats;
 import com.liteworkbench.mapper.HealthMapper;
 import com.liteworkbench.mapper.LogSearchMapper;
 import com.liteworkbench.mapper.WbEventMapper;
@@ -81,6 +83,7 @@ public class MonitorService {
     private final StringRedisTemplate redisTemplate;
     private final UtilsApi manticoreUtilsApi;
     private final StorageProperties storageProperties;
+    private final ObserveStats observeStats;
 
     /** 探测走入库池：探测多为阻塞 IO，宁可慢也不让健康检查假阳性 */
     @Qualifier(ExecutorConfig.PROBE_EXECUTOR)
@@ -213,6 +216,16 @@ public class MonitorService {
     public void reprobePython() {
         pythonRuntime.resetProbe();
         pythonRuntime.detect();
+    }
+
+    /** 调用观测快照：进程内窗口指标，不落库不缓存，读到即当前值 */
+    public ObserveRESP observe() {
+        return observeStats.snapshot();
+    }
+
+    /** 重置调用观测窗口：计数与慢调用榜归零，窗口起点挪到当前 */
+    public void resetObserve() {
+        observeStats.reset();
     }
 
     /** 仪表盘汇总指标，全局口径，Redis 缓存 60s 避免高频重算 */

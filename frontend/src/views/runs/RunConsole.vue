@@ -1,11 +1,15 @@
 <script setup lang="ts">
+import { Coin, Download, Flag, Refresh, Timer, Upload } from '@element-plus/icons-vue'
 import { computed, onBeforeUnmount, ref, shallowRef } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { runApi, traceApi } from '@/api'
 import type { RunEvent, RunVO, TraceRunVO, TraceSpanVO, UsageStatsVO } from '@/types/api'
 import LwButton from '@/components/ui/LwButton.vue'
+import LwEmpty from '@/components/ui/LwEmpty.vue'
+import LwErrorBar from '@/components/ui/LwErrorBar.vue'
 import LwMarkdown from '@/components/ui/LwMarkdown.vue'
+import LwMetricCard from '@/components/ui/LwMetricCard.vue'
 import LwPageState from '@/components/ui/LwPageState.vue'
 import LwSegmented from '@/components/ui/LwSegmented.vue'
 import LwTag from '@/components/ui/LwTag.vue'
@@ -302,6 +306,20 @@ async function loadTree(sessionId?: string): Promise<void> {
   }
 }
 
+/** 链路瀑布单独重试：只刷 spans，不重置视图与详情 */
+async function retrySpans(): Promise<void> {
+  if (!detail.value) return
+  loadingTrace.value = true
+  traceError.value = ''
+  try {
+    spans.value = await traceApi.spans(detail.value.runId)
+  } catch (error) {
+    traceError.value = (error as Error).message
+  } finally {
+    loadingTrace.value = false
+  }
+}
+
 async function loadUsage(): Promise<void> {
   loadingUsage.value = true
   try {
@@ -483,22 +501,14 @@ void loadRuns()
             </div>
 
             <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div class="lw-card flex flex-col gap-1 py-3">
-                <span class="text-xs" style="color: var(--lw-ink-muted)">{{ t('runs.metricDuration') }}</span>
-                <span class="text-lg font-bold" style="color: var(--lw-ink)">{{ formatDuration(detail.durationMs) }}</span>
-              </div>
-              <div class="lw-card flex flex-col gap-1 py-3">
-                <span class="text-xs" style="color: var(--lw-ink-muted)">{{ t('runs.metricTokens') }}</span>
-                <span class="text-lg font-bold" style="color: var(--lw-ink)">{{ tokenSummary(detail) }}</span>
-              </div>
-              <div class="lw-card flex flex-col gap-1 py-3">
-                <span class="text-xs" style="color: var(--lw-ink-muted)">{{ t('runs.metricIters') }}</span>
-                <span class="text-lg font-bold" style="color: var(--lw-ink)">{{ detail.iterCount ?? 0 }}</span>
-              </div>
-              <div class="lw-card flex flex-col gap-1 py-3">
-                <span class="text-xs" style="color: var(--lw-ink-muted)">{{ t('runs.metricStop') }}</span>
-                <span class="text-lg font-bold" style="color: var(--lw-ink)">{{ detail.stopReason || '-' }}</span>
-              </div>
+              <LwMetricCard
+                :label="t('runs.metricDuration')"
+                :value="formatDuration(detail.durationMs)"
+                :icon="Timer"
+              />
+              <LwMetricCard :label="t('runs.metricTokens')" :value="tokenSummary(detail)" tone="secondary" :icon="Coin" />
+              <LwMetricCard :label="t('runs.metricIters')" :value="String(detail.iterCount ?? 0)" tone="ink" :icon="Refresh" />
+              <LwMetricCard :label="t('runs.metricStop')" :value="detail.stopReason || '-'" :icon="Flag" />
             </div>
 
             <div class="lw-card flex flex-col gap-4">
@@ -523,9 +533,7 @@ void loadRuns()
               <!-- 时间线 -->
               <template v-if="view === 'timeline'">
                 <div v-if="replaying" class="replay-banner">{{ t('runs.replayMode') }}</div>
-                <div v-if="visibleBlocks.length === 0" class="text-sm" style="color: var(--lw-ink-muted)">
-                  {{ t('runs.noEvents') }}
-                </div>
+                <LwEmpty v-if="visibleBlocks.length === 0" :description="t('runs.noEvents')" />
                 <div v-for="(block, index) in visibleBlocks" :key="index" class="flex flex-col gap-3">
                   <details v-if="block.kind === 'thinking'" class="tl-thinking">
                     <summary>{{ t('runs.thinking') }} · {{ (block.text ?? '').length }} {{ t('runs.chars') }}</summary>
@@ -557,9 +565,7 @@ void loadRuns()
 
               <!-- 工具链 -->
               <template v-else-if="view === 'tools'">
-                <div v-if="toolBlocks.length === 0" class="text-sm" style="color: var(--lw-ink-muted)">
-                  {{ t('runs.noTools') }}
-                </div>
+                <LwEmpty v-if="toolBlocks.length === 0" :description="t('runs.noTools')" />
                 <div v-for="(tool, index) in toolBlocks" :key="index" class="tl-tool">
                   <div class="flex items-center gap-2">
                     <span class="text-sm font-bold" style="color: var(--lw-ink)">{{ index + 1 }}. {{ tool.name }}</span>
@@ -580,33 +586,36 @@ void loadRuns()
 
               <!-- 链路：瀑布图 -->
               <template v-else-if="view === 'trace'">
-                <div v-if="traceError" class="text-sm" style="color: var(--lw-error-ink)">{{ traceError }}</div>
+                <LwErrorBar v-if="traceError" :message="traceError" @retry="retrySpans" />
                 <TraceWaterfall :spans="spans" />
               </template>
 
               <!-- Run 树 -->
               <template v-else-if="view === 'tree'">
-                <div v-if="traceError" class="text-sm" style="color: var(--lw-error-ink)">{{ traceError }}</div>
+                <LwErrorBar v-if="traceError" :message="traceError" @retry="loadTree(detail.sessionId)" />
                 <RunTree :tree="tree" :active-run-id="detail.runId" @select="selectRun" />
               </template>
 
               <!-- 用量：本次运行账目 + 窗口内归因 -->
               <template v-else>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div class="lw-card flex flex-col gap-1">
-                    <span class="text-xs" style="color: var(--lw-ink-muted)">{{ t('runs.inputTokens') }}</span>
-                    <span class="text-xl font-bold" style="color: var(--lw-primary)">{{ detail.inputTokens ?? 0 }}</span>
-                  </div>
-                  <div class="lw-card flex flex-col gap-1">
-                    <span class="text-xs" style="color: var(--lw-ink-muted)">{{ t('runs.outputTokens') }}</span>
-                    <span class="text-xl font-bold" style="color: var(--lw-secondary)">{{ detail.outputTokens ?? 0 }}</span>
-                  </div>
-                  <div class="lw-card flex flex-col gap-1">
-                    <span class="text-xs" style="color: var(--lw-ink-muted)">{{ t('runs.totalTokens') }}</span>
-                    <span class="text-xl font-bold" style="color: var(--lw-ink)">
-                      {{ (detail.inputTokens ?? 0) + (detail.outputTokens ?? 0) }}
-                    </span>
-                  </div>
+                  <LwMetricCard
+                    :label="t('runs.inputTokens')"
+                    :value="String(detail.inputTokens ?? 0)"
+                    :icon="Upload"
+                  />
+                  <LwMetricCard
+                    :label="t('runs.outputTokens')"
+                    :value="String(detail.outputTokens ?? 0)"
+                    tone="secondary"
+                    :icon="Download"
+                  />
+                  <LwMetricCard
+                    :label="t('runs.totalTokens')"
+                    :value="String((detail.inputTokens ?? 0) + (detail.outputTokens ?? 0))"
+                    tone="ink"
+                    :icon="Coin"
+                  />
                 </div>
                 <p class="text-xs leading-relaxed" style="color: var(--lw-ink-muted)">{{ detail.prompt }}</p>
 

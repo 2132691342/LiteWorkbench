@@ -385,7 +385,7 @@ export interface ProviderPresetVO {
   providerCode: string
   baseUrl?: string
   defaultModel?: string
-  protocol: 'openai' | 'ollama'
+  protocol: 'openai'
   requiresKey: boolean
 }
 
@@ -424,6 +424,45 @@ export interface OverviewRESP {
   runTrend: TrendPoint[]
   tokenTrend: TrendPoint[]
   toolDistribution: Record<string, number>
+}
+
+/* ===== 调用观测 ===== */
+
+export interface CallStatVO {
+  /** 观测键：SQL 语句模板或 HTTP 路由模式 */
+  key: string
+  count: number
+  /** 平均耗时，毫秒 */
+  avgMs: number
+  /** 最慢一次耗时，毫秒 */
+  maxMs: number
+  /** 最近一次发生时间，毫秒时间戳 */
+  lastTs: number
+  /** 附加样本：SQL 为 mapper 方法，HTTP 为查询串 */
+  sample?: string
+}
+
+export interface SqlObserve {
+  count: number
+  slowCount: number
+  avgMs: number
+  maxMs: number
+  top: CallStatVO[]
+}
+
+export interface HttpObserve {
+  count: number
+  errorCount: number
+  avgMs: number
+  maxMs: number
+  top: CallStatVO[]
+}
+
+export interface ObserveRESP {
+  windowStartMs: number
+  windowMs: number
+  sql: SqlObserve
+  http: HttpObserve
 }
 
 /* ===== 日志 ===== */

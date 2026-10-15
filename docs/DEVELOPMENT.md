@@ -151,6 +151,7 @@ cd backend && mvn test
 | 加一个权限点 | `config/DataInitializer.java` 的菜单种子（`menu_type=button`）+ 控制器注解，`PermissionContractTest` 会校验一致性 |
 | 加一个内置角色 | `domain/constant/RoleCodeConst.java` + `DataInitializer` 的角色与授权 |
 | 加一类日志检索字段 | `observability/ManticoreLogAppender.java` + `mapper/LogSearchMapper.java` 表定义 |
+| 改 SQL / HTTP 调用审计 | `observability/SqlAuditInterceptor.java` / `HttpAuditFilter.java` / `ObserveStats.java`；脱敏规则集中在 `observability/LogSanitizer.java`，阈值在 `config/ObserveProperties.java` |
 | 加一种知识库文档格式 | `service/DocTextExtractor.java` + `domain/constant/KbConst.java` 扩展名清单 |
 | 加一个 AI 辅助动作 | `domain/constant/DocConst.java` 的 `ASSIST_TEMPLATES` + 前端动作下拉与文案 |
 | 加一种在线预览格式 | `views/files/FileList.vue` 的 `kindOf` 与对应渲染分支 |

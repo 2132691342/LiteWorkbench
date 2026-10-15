@@ -3,10 +3,15 @@ import { WarningFilled } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 import LwButton from './LwButton.vue'
 
-/** 错误条：内联展示 + 重试，不弹全屏遮罩 */
-defineProps<{
-  message?: string
-}>()
+/** 错误条：内联展示 + 可选重试，不弹全屏遮罩 */
+withDefaults(
+  defineProps<{
+    message?: string
+    /** 表单类错误无可重放的动作，置 false 即收起重试按钮 */
+    retryable?: boolean
+  }>(),
+  { retryable: true },
+)
 
 defineEmits<{ (e: 'retry'): void }>()
 
@@ -22,6 +27,6 @@ const { t } = useI18n()
       <el-icon><WarningFilled /></el-icon>
       <span>{{ message || t('common.failed') }}</span>
     </div>
-    <LwButton variant="text" size="sm" @click="$emit('retry')">{{ t('common.retry') }}</LwButton>
+    <LwButton v-if="retryable" variant="text" size="sm" @click="$emit('retry')">{{ t('common.retry') }}</LwButton>
   </div>
 </template>

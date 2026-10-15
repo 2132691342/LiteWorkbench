@@ -8,8 +8,8 @@ const props = withDefaults(defineProps<{ tone?: Tone }>(), { tone: 'primary' })
 
 const style = computed(() => {
   const map: Record<Tone, { color: string; bg: string }> = {
-    primary: { color: 'var(--lw-primary)', bg: 'var(--lw-primary-tint)' },
-    secondary: { color: 'var(--lw-secondary)', bg: 'var(--lw-secondary-tint)' },
+    primary: { color: 'var(--lw-primary-ink)', bg: 'var(--lw-primary-tint)' },
+    secondary: { color: 'var(--lw-primary-ink)', bg: 'var(--lw-secondary-tint)' },
     success: { color: 'var(--lw-success-ink)', bg: 'var(--lw-success-tint)' },
     warning: { color: 'var(--lw-warning-ink)', bg: 'var(--lw-warning-tint)' },
     error: { color: 'var(--lw-error-ink)', bg: 'var(--lw-error-tint)' },

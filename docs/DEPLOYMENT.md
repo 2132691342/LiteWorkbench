@@ -86,12 +86,30 @@ RabbitMQ 拓扑由应用声明：`lw.log.exchange` / `lw.log.index.queue`（死�
 podman build -f deploy/Dockerfile -t liteworkbench:latest .
 ```
 
+### 4.1 本地容器冒烟
+
+本机（Docker Desktop）跑一遍全链路：中间件按 §3 起在默认网络并把端口发布到 `127.0.0.1`，应用容器不加入该网络，改用 `host.docker.internal` 回连宿主端口——省掉一次网络接入，也便于直接用宿主上的 psql / redis-cli 排障。
+
+```bash
+docker build -f deploy/Dockerfile -t liteworkbench:local .
+docker run -d --name lw-smoke -p 24399:8080 --add-host=host.docker.internal:host-gateway \
+  -e LITEWORKBENCH_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/postgres \
+  -e LITEWORKBENCH_REDIS_HOST=host.docker.internal -e LITEWORKBENCH_MANTICORE_URL=http://host.docker.internal:9308 \
+  -e LITEWORKBENCH_STORAGE_ENDPOINT=http://host.docker.internal:9000 \
+  -e LITEWORKBENCH_MQ_HOST=host.docker.internal \
+  …其余口令取自 .env.infra
+```
+
+冒烟顺序：`GET /actuator/health` → 取公钥 → RSA 加密口令登录（种子账号首登会走强制改密）→ 重新登录 → 调业务接口 → `GET /api/v1/monitor/observe` 看 SQL / HTTP 计数是否在涨 → `GET /api/v1/log/search?logger=com.liteworkbench.observability.*` 确认审计日志已进索引。
+
+种子账号口令只在 `pwd_reset_required = true` 时才被 `LITEWORKBENCH_ADMIN_PASSWORD` 覆盖；库里已激活的账号不会被改写，此时把该标记置回 true 再重启容器即可重新对齐。
+
 `deploy/docker-compose.app.yaml` 的镜像地址为 `${LITEWORKBENCH_IMAGE:?...}`，**无默认值**，由 `deploy-app.sh <镜像:tag>` 注入。等价的手工 run 形态（口令取自 `.env.infra`）：
 
 ```bash
 podman run -d --name liteworkbench -p ${LITEWORKBENCH_PORT:-24399}:8080 \
   --network ${LITEWORKBENCH_NETWORK:-liteworkbench_default} \
-  --memory 1152m \
+  --memory 1024m \
   --env-file deploy/.env.infra \
   -e LITEWORKBENCH_DATASOURCE_URL=jdbc:postgresql://postgres:5432/postgres \
   -e LITEWORKBENCH_REDIS_HOST=redis \
@@ -100,9 +118,11 @@ podman run -d --name liteworkbench -p ${LITEWORKBENCH_PORT:-24399}:8080 \
   liteworkbench:latest
 ```
 
-`--network` 指向中间件编排所在网络，使 `postgres`、`redis` 等主机名可解析。`--memory 1152m` 与编排内 `mem_limit` 一致：2GB 小主机上给中间件留足余量，JVM `MaxRAMPercentage=70` 据此收敛堆上限。
+`--network` 指向中间件编排所在网络，使 `postgres`、`redis` 等主机名可解析。`--memory 1024m` 与编排内 `mem_limit` 一致：2GB 小主机上给中间件留足余量；堆上限由 `JAVA_OPTS` 的 `-Xmx` 绝对值决定，不依赖这个数字。
 
-`deploy/Dockerfile` 三阶段：Maven 编译后端（跳过测试）→ Node 构建前端并拷入 `static/` → 运行时基于 `openjdk:17-jdk-alpine`，容器内直接安装 `python3` / `curl` / `tzdata`，并以 `--spring.web.resources.static-locations` 指向拷入的前端产物。
+`deploy/Dockerfile` 三阶段：Maven 编译后端（跳过测试）→ Node 构建前端并拷入 `static/` → 运行时基于 `openjdk:17-jdk-alpine`，容器内直接安装 `python3` / `curl` / `tzdata`，并以 `--spring.web.resources.static-locations` 指向拷入的前端产物。运行时阶段先 `mkdir -p /var/log/liteworkbench /var/lib/liteworkbench`：`-Xlog` 的 gc 日志文件在 JVM 启动最早期就要打开，晚于任何应用代码，没挂卷的 `docker run` 会直接以「Could not create the Java Virtual Machine」退出。
+
+构建上下文由仓库根 `.dockerignore` 裁剪：CI 上 `node_modules` 与 `target` 不存在所以不出问题，本机缺了这份文件会把 Windows 下的 `node_modules` 送进上下文并被 `COPY frontend .` 拷进 Linux 镜像，node 直接跑不起来；同时它挡掉 `deploy/.env.infra`，避免机密进镜像层。
 
 ### 4.1 镜像构建的三个必守项
 
@@ -162,7 +182,7 @@ podman run -d --name liteworkbench -p ${LITEWORKBENCH_PORT:-24399}:8080 \
 | 内置角色 | `super_admin`、`admin`、`user`（代码常量定义，不可删除改码） |
 | 菜单树 | 仪表盘、工作台、运行记录、创作台、提示词、文件、技能、知识库、日志、监控、设置、组件库、系统管理（含按钮权限点） |
 | 内置工具 | Python 执行、文件读写、HTTP 请求、知识库检索（固定 ID 幂等重放） |
-| 内置供应方 | `ollama` 本地供应方（无密钥，指向宿主机 Ollama） |
+| 内置供应方 | 无。协议集合固定为 OpenAI 兼容族，供应方全部由管理员在「设置-供应方」按实际云端端点添加 |
 | 内置提示词 | 文章大纲、标题构思、润色改写、要点摘要、中英互译、代码讲解（固定 ID 幂等重放，只读） |
 
 Manticore 的 `lw_log`、`lw_msg`、`lw_kbchunk`、`lw_doc` 表在应用启动时幂等创建。升级版本新增的菜单会自动补齐到 `super_admin` / `admin` / `user` 角色，无需手工重新授权。
@@ -245,24 +265,41 @@ Manticore 无文档级 TTL，日志表保留由应用定时任务（每日一次
 云主机规格小，容器固定以下一组参数（`deploy/Dockerfile` 的 `ENV JAVA_OPTS`）：
 
 ```
--XX:+UseG1GC -XX:MaxGCPauseMillis=200
--XX:MaxRAMPercentage=70
--XX:+UseStringDeduplication
--XX:+UseCompressedOops -XX:+UseCompressedClassPointers
+-Xms32m -Xmx256m
+-XX:MinHeapFreeRatio=15 -XX:MaxHeapFreeRatio=35
+-XX:+UseSerialGC
+-XX:MaxMetaspaceSize=128m -XX:MaxDirectMemorySize=48m -XX:ReservedCodeCacheSize=64m
+-XX:TieredStopAtLevel=1 -XX:CICompilerCount=1
 -Xss512k
+-Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8
 -XX:+ExitOnOutOfMemoryError
 ```
 
-容器内存上限由 `docker-compose.app.yaml` 的 `mem_limit: 1152m` 设定。
+容器内存上限由 `docker-compose.app.yaml` 的 `mem_limit: 1024m` 设定。**实测（`--memory=1024m`，Serial GC 全程）**：启动后容器 228MiB，90 次接口调用压测后 238MiB，JVM `VmRSS` 257–267MB。构成：元空间常驻约 88MB（两万个类，压不下去），堆随负载在 30–250MB 间伸缩并会被 GC 归还，其余为线程栈、代码缓存与 JVM 自身。
+
+`JAVA_OPTS` 可在 `docker run` 时用 `-e JAVA_OPTS=…` 整体覆盖；只想改堆上限就整段替换，别只追加——`-Xmx` 与 `MaxRAMPercentage` 同时出现时前者生效，混着写会让人误判。
 
 | 参数 | 理由 |
 |---|---|
-| `UseG1GC` + `MaxGCPauseMillis=200` | 小堆下停顿可控 |
-| `MaxRAMPercentage=70` | 给堆外内存与 PageCache 留位置，避免容器 OOM Kill |
-| `UseStringDeduplication` | 日志与事件文本重复率高，去重省堆 |
-| `UseCompressedOops` / `UseCompressedClassPointers` | 指针与对象头压缩，显式声明防止被覆盖 |
+| `-Xms32m -Xmx256m` | **堆用绝对值钉死，不用 `MaxRAMPercentage`**：百分比依赖 JVM 能否读到 cgroup 限额，读不到就按宿主物理内存算（实测 Docker Desktop 下读到 16G，62% 直接算出 9.5G 上限）。小机上绝对值才是可控的 |
+| `-Xms` 取 32m | **初值必须小**：给大初值等于开机就把堆提交掉，之后只能往上长，常驻内存被初值直接抬高 |
+| `MinHeapFreeRatio=15` / `MaxHeapFreeRatio=35` | 让 Serial GC 在 Full GC 后把空闲过半的堆**还给操作系统**（默认 40/70 几乎不还）。实测稳态堆能缩到 69MB，这是压住常驻的关键一条 |
+| `UseSerialGC` | **单线程 Serial GC，内存足迹最小**：无并发标记线程、无卡表与 Remembered Set，比 G1 少约 30–40MB 常驻。单容器单用户工作台，QPS 低、堆小，并行/并发回收器的附加结构纯属浪费。代价是 Full GC 停顿比 G1 长——省内存优先于低延迟 |
+| `TieredStopAtLevel=1` / `CICompilerCount=1` | 只留 C1，砍掉 C2：省掉 C2 的 CodeHeap 与两个编译线程（约 15–25MB）。代价是峰值吞吐下降——但本应用的时间花在等模型流式响应上，实测 90 次接口调用 1.16s（13ms/次），换内存划算 |
+| `MaxMetaspaceSize=128m` | 元空间常驻 88MB（20406 个类，由 Spring Boot + 各 SDK 决定，压不下去），封顶 128m 防它一路涨到容器被杀 |
+| `MaxDirectMemorySize=48m` | Manticore / MinIO 直接内存上界，防堆外把容器顶爆 |
+| `ReservedCodeCacheSize=64m` | C1-only 后默认 240MB 全是浪费 |
+| `-Djava.awt.headless=true` | AWT 无头模式，省掉图形子系统初始化 |
+| `-Dfile.encoding=UTF-8` / `-Dsun.jnu.encoding=UTF-8` | Alpine 基础镜像 locale 常为 POSIX，JDK 17 不像 JDK 18+ 默认 UTF-8；不显式指定则文件名与子进程 IO 按 ASCII 处理，中文路径与 Python 输出直接乱码 |
+| `-Djava.security.egd=file:/dev/./urandom` | 登录 RSA 密钥对与 PBKDF2 都要 SecureRandom，指向 urandom 避免熵不足阻塞启动 |
+| `-XX:-UsePerfData` | 关 jvmstat 共享内存，少一个 mmap 与后台线程；代价是 `jps` / `jstat` 不可用，排障改看 GC 日志 |
+| `Xlog:gc` | Unified Logging：GC 进 `/var/log/liteworkbench/gc.log`，不占主日志；2×4MB 滚动上限。**不写 `gc*` 与 `safepoint`**——两者会输出 trace/debug 级与安全点级日志，量级差一个数量级且对排障无额外价值 |
+| `HeapDumpOnOutOfMemoryError` | OOM 落堆转储到已挂卷的日志目录，排障可直接取 |
+| `-XX:-OmitStackTraceInFastThrow` | 保留异常栈，避免 NPE 被 JIT 优化成无栈快抛后线上排障只剩一行 |
 | `Xss512k` | 线程栈从默认 1m 降到 512k，同等内存支撑更多 SSE 与工具线程 |
 | `ExitOnOutOfMemoryError` | OOM 直接退出交给编排重启，不留半死状态 |
+
+`UseStringDeduplication` 只在 G1 下生效，Serial GC 上无效，故不配置；`-XX:+UseCompressedOops` / `UseCompressedClassPointers` 在 256m 堆下本就是默认开启，不写。
 
 ## 12. CI/CD
 

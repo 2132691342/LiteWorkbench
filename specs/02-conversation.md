@@ -43,7 +43,7 @@ queued ──► running ──► success   (stop_reason = completed)
 
 供应方配置存 `wb_provider`，为平台级定义（`UNIQUE(provider_code)`），由管理角色维护；密钥加密存储，读取时解密，对外一律脱敏。
 
-**供应方预设的端点与默认模型取自 hutool-ai 的常量，协议固定为 OpenAI 兼容通道与 Ollama 本地通道**（依赖使用边界见 AGENTS.md §15.1），预设五个：
+**供应方预设的端点与默认模型取自 hutool-ai 的常量，协议固定为 OpenAI 兼容通道**（依赖使用边界见 AGENTS.md §15.1），预设四个：
 
 | 预设 | code | 默认 base_url | 默认模型 | 协议通道 | 密钥 |
 |---|---|---|---|---|---|
@@ -51,15 +51,11 @@ queued ──► running ──► success   (stop_reason = completed)
 | DeepSeek | `deepseek` | `https://api.deepseek.com` | `deepseek-chat` | OpenAI 兼容 | 必填 |
 | 豆包 | `doubao` | `https://ark.cn-beijing.volces.com/api/v3` | `doubao-1.5-lite-32k-250115` | OpenAI 兼容 | 必填 |
 | Grok | `grok` | `https://api.x.ai/v1` | `grok-2-1212` | OpenAI 兼容 | 必填 |
-| Ollama | `ollama` | `http://localhost:11434` | 预设不提供，部署方填写 | Ollama | 不需要 |
-
-协议通道由 `provider_code` 判定：命中 `ollama` 走 Ollama（`{baseUrl}/api/chat`，NDJSON，一行一个 JSON）；**其余一律按 OpenAI 兼容处理**（`{baseUrl}/chat/completions`，`data:` SSE + `[DONE]` 终止），因此任何兼容端点（自建 vLLM、网关等）用自定义 `provider_code` + `base_url` 即可接入。预设码是"端点与模型的默认值来源"，不是协议白名单。
-
-协议出站两个实现（`OpenAiCompatClient` / `OllamaClient`），共用 `HttpModelSupport`：JDK `HttpURLConnection` 建连 → 逐行读取 → 剥协议前缀（`data:` / NDJSON）→ 解析增量（正文 / 思考 / `tool_calls` 按 index 累积）→ 回调内核监听器。**取消是轮询式**：每个增量行先查取消标志，命中即停止读取并在 `finally` 断开连接。流式出站与工具调用自研，因为需要逐行剥协议前缀、累积工具调用增量、按 `usage` 入账，并让取消立即生效。
+协议出站唯一实现（`OpenAiCompatClient`，基于 `HttpModelSupport`）：JDK `HttpURLConnection` 建连 → 逐行读取 → 剥 `data:` 前缀（`[DONE]` 终止）→ 解析增量（正文 / 思考 / `tool_calls` 按 index 累积）→ 回调内核监听器。**取消是轮询式**：每个增量行先查取消标志，命中即停止读取并在 `finally` 断开连接。因此任何兼容端点（自建 vLLM、网关等）用自定义 `provider_code` + `base_url` 即可接入。流式出站与工具调用自研，因为需要逐行剥协议前缀、累积工具调用增量、按 `usage` 入账，并让取消立即生效。
 
 同步文本路径（`ModelCaller`，供创作台 AI 辅助、会话自动命名与连通性测试复用）优先走依赖提供的原生同步服务（`ProviderAIConfig` 实现其配置契约），返回空文本或抛异常再回退自研客户端；自研回退路径空文本抛 `MODEL_OUTPUT_INVALID`，出站失败抛 `MODEL_CALL_FAILED`。
 
-**默认供应方**（会话未指定时）按优先级取：启用且 `baseUrl` 与密钥齐备的云端供应方 → 启用的 `ollama` → 任一启用项；一个都没有则抛 `PROVIDER_NOT_CONFIGURED` 并提示去设置页配置。**模型名四级兜底**：会话指定 > `wb_provider.default_model` > 预设默认模型（`ProviderPresetEnum`） > `liteworkbench.agent.model.default-name`。**端点兜底**：供应方 `base_url` 为空时回落预设默认值。
+**默认供应方**（会话未指定时）按优先级取：启用且 `baseUrl` 与密钥齐备的供应方 → 任一启用项；一个都没有则抛 `PROVIDER_NOT_CONFIGURED` 并提示去设置页配置。**模型名四级兜底**：会话指定 > `wb_provider.default_model` > 预设默认模型（`ProviderPresetEnum`） > `liteworkbench.agent.model.default-name`。**端点兜底**：供应方 `base_url` 为空时回落预设默认值。
 
 **密钥存储**：AES/GCM（12 字节随机 IV 前置后 Base64），解密优先 GCM、失败回退兼容旧记录；密钥由 `liteworkbench.security.secret` 经 SHA-256 摘要取前 16 字节得到。脱敏：明文保留前 3 后 4 位，原文不足 8 位只保留前 3 位加 `***`，解密失败返回 `***`。`update` 收到含 `***` 的值视为不修改密钥。
 
@@ -72,7 +68,7 @@ queued ──► running ──► success   (stop_reason = completed)
 ```java
 public interface ModelClient {
 
-    /** 协议码：openai（兼容族）/ ollama */
+    /** 协议码：openai（兼容族） */
     String protocol();
 
     /** 客户端实际使用的模型名 */
@@ -137,7 +133,7 @@ ModelFactory.client(providerCode, modelName)
   ├─ 2 供应方配置：Redis lw:cache:provider:{code} 存 providerId，TTL 5 分钟，未命中回源查库
   ├─ 3 校验 enabled，否则抛 PROVIDER_NOT_CONFIGURED
   ├─ 4 构建 ProviderAIConfig：apiUrl（端点兜底）、model、解密后的 apiKey、连接与读超时、temperature
-  ├─ 5 云端预设无密钥即抛 PROVIDER_NOT_CONFIGURED；按协议选 OllamaClient 或 OpenAiCompatClient 并落缓存
+  ├─ 5 无密钥即抛 PROVIDER_NOT_CONFIGURED；构建 OpenAiCompatClient 并落缓存
 
 client.stream(request, listener, cancelled)
   ├─ 1 按协议拼请求体：messages / tools / temperature / stream（OpenAI 侧另开 include_usage）

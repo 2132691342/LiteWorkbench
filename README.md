@@ -28,6 +28,7 @@ LiteWorkbench 解决两件事：**Agent 跑起来之后看不见它在干什么*
 | 文件空间 | MinIO 对象存储，按用户隔离前缀，支持在线预览与预签名下载 |
 | 日志中心 | 应用日志汇聚 Manticore（traceId / userId / sessionId / runId 全链路标识），管理员看全局、普通用户看本人，带分布概览与时间直方图 |
 | 健康监控 | 数据库、Redis、Manticore、MinIO、RabbitMQ、Python 运行时逐项探测 |
+| 调用观测 | SQL 与 HTTP 逐次调用的输入 / 输出 / 耗时审计，窗口内汇总与慢调用榜，明细进日志中心按 logger 检索 |
 | 仪表盘 | 运行量、Token 消耗、工具调用分布的可视化统计 |
 | 组件库 | 设计规范的可视化样例：五态按钮、语义色、异步三态、图表 |
 
@@ -73,7 +74,7 @@ LiteWorkbench 解决两件事：**Agent 跑起来之后看不见它在干什么*
 | 持久 | MyBatis Spring Boot Starter | 3.0.4 | SQL 映射，注解优先、XML 兜底 |
 | 工具 | Hutool（含 `hutool-ai`） | 5.8.46 | 字符串 / 集合 / 日期 / 加解密 / 模型出站 |
 | Agent | 自研内核 | — | 推理循环、工具注册、事件归一、规划、记忆、子运行，无第三方 Agent 框架依赖 |
-| 模型出站 | `agent/model` | — | OpenAI 兼容通道（OpenAI / DeepSeek / Doubao / Grok）与 Ollama 本地通道，含增量解析、工具调用累积与取消 |
+| 模型出站 | `agent/model` | — | OpenAI 兼容通道（OpenAI / DeepSeek / Doubao / Grok），含增量解析、工具调用累积与取消 |
 | 认证 | Sa-Token | 1.42.0 | 登录、权限注解、会话管理 |
 | ID | ulid-creator | 5.1.0 | ULID 生成 |
 | 数据库 | PostgreSQL（pgvector 镜像） | 16 | 业务数据；pgvector 扩展已就位，当前不建向量列 |
@@ -111,7 +112,7 @@ LiteWorkbench/
 │       ├── mq/{producer,consumer}/  RabbitMQ 生产与消费
 │       ├── agent/               自研 Agent 内核：模型协议、推理循环、工具、规划、事件归一
 │       ├── runtime/             内置 Python 运行时的探测与执行
-│       ├── observability/       日志汇聚与健康指标
+│       ├── observability/       日志汇聚、SQL 与 HTTP 调用观测、健康指标
 │       └── common/              统一响应、异常、分页、ULID、登录上下文、加解密
 │   └── src/main/resources/
 │       ├── mapper/*.xml         仅动态 SQL 与长 SQL；单表增删改查走注解，Manticore 与检索类查询走 Java 实现不落 XML
@@ -187,7 +188,7 @@ npm run build    # 产物在 frontend/dist
 | [specs/02-conversation.md](specs/02-conversation.md) | 会话与运行：状态机、并发控制、模型供应方与出站 |
 | [specs/03-workspace-assets.md](specs/03-workspace-assets.md) | 工作台资产：技能、文件空间、提示词库 |
 | [specs/04-knowledge-doc.md](specs/04-knowledge-doc.md) | 知识库解析与检索、创作台与 AI 辅助写作 |
-| [specs/05-observability.md](specs/05-observability.md) | 可观测：日志双写与检索、运行记录、链路瀑布、Run 树、用量归因、健康监控 |
+| [specs/05-observability.md](specs/05-observability.md) | 可观测：日志双写与检索、SQL 与 HTTP 调用观测、运行记录、链路瀑布、Run 树、用量归因、健康监控 |
 | [specs/06-security.md](specs/06-security.md) | 安全：数据归属、RBAC 与赋权守门、登录安全 |
 | [specs/07-frontend.md](specs/07-frontend.md) | 前端外壳：目录划分、动态路由、状态管理、关键流程 |
 

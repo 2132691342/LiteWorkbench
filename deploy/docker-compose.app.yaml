@@ -9,8 +9,8 @@ services:
     # 加入中间件所在网络后，postgres / redis / manticore / minio / rabbitmq 主机名可直接解析
     networks:
       - infra
-    # 2GB 小主机：容器限内存，JVM 的 MaxRAMPercentage 据此收敛堆上限
-    mem_limit: 1152m
+    # 2GB 小主机：容器限内存，给中间件留足余量；堆上限由 JAVA_OPTS 的 -Xmx 绝对值决定，不依赖这个数字
+    mem_limit: 1024m
     environment:
       # rootless podman 的端口转发只识别 IPv4 监听，显式绑定 IPv4 通配地址
       SERVER_ADDRESS: 0.0.0.0
@@ -28,8 +28,8 @@ services:
       LITEWORKBENCH_MQ_USERNAME: ${LITEWORKBENCH_MQ_USERNAME:?未设置消息队列账号，请先执行 deploy/gen-secrets.sh}
       LITEWORKBENCH_MQ_PASSWORD: ${LITEWORKBENCH_MQ_PASSWORD:?未设置消息队列口令，请先执行 deploy/gen-secrets.sh}
       LITEWORKBENCH_SECURITY_SECRET: ${LITEWORKBENCH_SECURITY_SECRET:?未设置签名密钥，请先执行 deploy/gen-secrets.sh}
-      # 种子账号初始密码：留空则由应用随机生成并仅在启动日志 WARN 打印一次，账号首登强制改密
-      LITEWORKBENCH_ADMIN_PASSWORD: ${LITEWORKBENCH_ADMIN_PASSWORD:-}
+      # 种子账号初始密码：只对尚未激活的账号生效，首登强制改密
+      LITEWORKBENCH_ADMIN_PASSWORD: admin@123
       LITEWORKBENCH_LOG_DIR: /var/log/liteworkbench
       LITEWORKBENCH_RUNTIME_DATA_DIR: /var/lib/liteworkbench
     ports:

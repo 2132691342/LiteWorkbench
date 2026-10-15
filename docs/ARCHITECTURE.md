@@ -52,7 +52,7 @@ api ──► service ──► mapper ──► domain
 | `config` | 配置绑定与基础设施装配：Sa-Token、线程池、Web 兜底、Manticore、MinIO、MQ 拓扑、启动自检 |
 | `agent` | 自研内核：推理循环、工具、模型协议适配、上下文压缩、事件归一；只读平台级配置，端口实现在 service |
 | `runtime` | 内置 Python 运行时的探测与执行，无业务依赖 |
-| `observability` | Logback 扩展、日志下游投递与保留清理 |
+| `observability` | Logback 扩展、日志下游投递与保留清理、SQL 与 HTTP 调用审计、窗口指标聚合 |
 | `mq` | `producer` / `consumer`，削峰管道 |
 | `anno` / `aspect` | 幂等、限流等横切能力的声明与实现 |
 | `common` | 跨层基础件：`R` / `PageResult` / `IdGenerator` / `BizException` / `ErrorCodeEnum` / `LoginContext` / `LoginUser` / `TraceFilter` / `TimeUtil` / `TimestamptzTypeHandler` / `PasswordUtil` / `SecretCodec` / `OutputSanitizer` / `GlobalExceptionHandler` |
@@ -135,6 +135,8 @@ GET /api/v1/log/search ｜ /api/v1/log/stats
   └─ 视角判定（持 monitor:log:global 走全局，否则服务端强制 user_id = 当前用户）
        └─ 等值过滤（level / logger / trace_id / user_id）+ ts 范围 + message 全文匹配
 ```
+
+SQL 与 HTTP 的调用审计也走这条管道：审计日志只是普通 `info` / `warn` 事件，由 `observability` 包下的 MyBatis 拦截器与 Servlet 过滤器产出，落库与检索方式与业务日志完全一致，页面按 `logger` 过滤即可分开看。
 
 MDC 注入点三处：`TraceFilter` 注入 `traceId`，`LoginContextInterceptor` 注入 `userId`，`RunService` 在运行编排期注入 `sessionId` / `runId`；异步 Appender 从 Logback 事件快照读这四个键（异步线程的 ThreadLocal MDC 为空），匿名请求与系统线程允许为空。降级：MQ 投递失败即只落文件，不重试、不阻塞业务线程；Manticore 检索异常降级为空结果并告警，原文仍在滚动文件里。文件名、级别切分与检索字段分工见 [specs/05-observability.md](../specs/05-observability.md)，级别与打点规则见 AGENTS.md §9。
 
@@ -229,7 +231,7 @@ MDC 注入点三处：`TraceFilter` 注入 `traceId`，`LoginContextInterceptor`
 
 | 依赖 | 取用 | 自研补齐 |
 |---|---|---|
-| hutool-ai | 供应方配置契约（`AIConfig`）、各厂商默认端点与默认模型、同步文本补全 | 流式出站（`agent/model/*Client`）、请求体构造、响应解析、工具调用下发与增量累积、`usage` 与 `finish_reason` 解析。协议集合固定为 OpenAI 兼容 + Ollama 本地通道 |
+| hutool-ai | 供应方配置契约（`AIConfig`）、各厂商默认端点与默认模型、同步文本补全 | 流式出站（`agent/model/*Client`）、请求体构造、响应解析、工具调用下发与增量累积、`usage` 与 `finish_reason` 解析。协议集合固定为 OpenAI 兼容通道 |
 | Hutool | 字符串 / 集合 / 日期 / JSON / 加解密 / HTTP 工具类 | 业务 ID 生成（`common/IdGenerator` 出 ULID，前缀 + ULID 字典序近似时间序） |
 | Sa-Token | 登录态存 Redis、`@SaCheckPermission` 注解鉴权、踢人下线 | 权限点来源与缓存（`config/StpInterfaceImpl`）、登录快照装配、菜单种子对账（`config/DataInitializer`） |
 | MyBatis | SQL 映射与事务 | 归属隔离条件的写入、注解 / XML 的取舍、`jsonb` 列的显式 `CAST`、`timestamptz` 全局 TypeHandler |

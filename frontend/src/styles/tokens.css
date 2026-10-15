@@ -1,58 +1,61 @@
 :root {
-  /* 紫色序列四色：全站唯一色值源头，组件一律引用语义别名 */
-  --purple_sequential-color-1: #f2f0f7;
-  --purple_sequential-color-2: #cbc9e2;
-  --purple_sequential-color-3: #9e9ac8;
-  --purple_sequential-color-4: #6a51a3;
+  /* SaaS 五色调色板：全站唯一色值源头，组件一律引用语义别名，禁止直接引用本组变量 */
+  --saas_dashboard-color-1: #6366f1; /* 主靛：品牌、主按钮底、图表主序列 */
+  --saas_dashboard-color-2: #818cf8; /* 辅助靛：选中态、次序列、输入强调边 */
+  --saas_dashboard-color-3: #e0e7ff; /* 靛蓝淡底：头像底、选中按钮底、思考块底 */
+  --saas_dashboard-color-4: #f8fafc; /* 页面底 */
+  --saas_dashboard-color-5: #1e293b; /* 主文本 */
 
-  /* 语义别名：主色深紫承载文字与主按钮，辅助色浅紫承载选中态与图表主序列 */
-  --lw-primary: var(--purple_sequential-color-4);
-  --lw-primary-hover: #5a448c;
-  --lw-primary-active: #4a3a73;
-  --lw-primary-tint: rgba(106, 81, 163, 0.08);
-  --lw-secondary: var(--purple_sequential-color-3);
-  --lw-secondary-hover: #8a85b8;
-  --lw-secondary-tint: rgba(158, 154, 200, 0.14);
-  --lw-secondary-selected: rgba(158, 154, 200, 0.1);
-  --lw-accent-soft: var(--purple_sequential-color-2);
-  --lw-surface-subtle: var(--purple_sequential-color-1);
-  --lw-surface: #f8fafc;
+  /* 语义别名：主靛承载底与图形，主靛 ink 承载浅底上的文字 */
+  --lw-primary: var(--saas_dashboard-color-1);
+  --lw-primary-hover: #4f46e5;
+  --lw-primary-active: #4338ca;
+  --lw-primary-ink: #4f46e5;
+  --lw-primary-tint: rgba(99, 102, 241, 0.08);
+  --lw-secondary: var(--saas_dashboard-color-2);
+  --lw-secondary-hover: #6366f1;
+  --lw-secondary-tint: rgba(129, 140, 248, 0.14);
+  --lw-secondary-selected: rgba(129, 140, 248, 0.1);
+  --lw-accent-soft: var(--saas_dashboard-color-3);
+  --lw-surface-subtle: var(--saas_dashboard-color-3);
+  --lw-surface: var(--saas_dashboard-color-4);
   --lw-surface-raised: #ffffff;
-  --lw-surface-disabled: var(--purple_sequential-color-1);
+  --lw-surface-disabled: #f1f5f9;
   --lw-border: #e2e8f0;
-  --lw-border-strong: var(--purple_sequential-color-2);
-  --lw-ink: var(--purple_sequential-color-4);
+  --lw-border-strong: var(--saas_dashboard-color-2);
+  --lw-ink: var(--saas_dashboard-color-5);
   --lw-ink-muted: #64748b;
   --lw-ink-disabled: #94a3b8;
   --lw-on-primary: #ffffff;
-  --lw-on-secondary: #2e2536;
+  --lw-on-secondary: var(--saas_dashboard-color-5);
   --lw-overlay: rgba(15, 23, 42, 0.45);
 
-  /* 语义色：低饱和，不与品牌紫抢注意力 */
-  --lw-success: #5abf8a;
-  --lw-warning: #d6a85c;
-  --lw-error: #d46a6a;
+  /* 语义色：低饱和，不与品牌靛抢注意力 */
+  --lw-success: #10b981;
+  --lw-warning: #f59e0b;
+  --lw-error: #ef4444;
   --lw-info: var(--lw-primary);
 
   /* 语义派生色：文字加深与交互态，集中在此定义 */
-  --lw-success-ink: #3d8f62;
-  --lw-warning-ink: #a97e33;
-  --lw-error-ink: #b45555;
-  --lw-error-hover: #c25555;
-  --lw-error-active: #a94747;
-  --lw-success-tint: rgba(90, 191, 138, 0.14);
-  --lw-warning-tint: rgba(214, 168, 92, 0.16);
-  --lw-error-tint: rgba(212, 106, 106, 0.14);
+  --lw-success-ink: #047857;
+  --lw-warning-ink: #b45309;
+  --lw-error-ink: #b91c1c;
+  --lw-error-hover: #dc2626;
+  --lw-error-active: #b91c1c;
+  --lw-success-tint: rgba(16, 185, 129, 0.12);
+  --lw-warning-tint: rgba(245, 158, 11, 0.14);
+  --lw-error-tint: rgba(239, 68, 68, 0.1);
   --lw-muted-tint: rgba(100, 116, 139, 0.12);
 
   /* 主色派生色：仅供 Element Plus 主题映射 */
-  --lw-primary-light-3: #9785bf;
-  --lw-primary-light-5: #b5a8d1;
-  --lw-primary-light-7: #d2cbe3;
-  --lw-primary-light-8: #e1dced;
+  --lw-primary-light-3: #9294f5;
+  --lw-primary-light-5: #b2b2f8;
+  --lw-primary-light-7: #d0d1fb;
+  --lw-primary-light-8: #e0e0fc;
+  --lw-primary-dark-2: #4f52c1;
 
   /* 主色之上的文字色与骨架屏底色 */
-  --lw-skeleton-a: var(--purple_sequential-color-1);
+  --lw-skeleton-a: var(--saas_dashboard-color-3);
 
   /* 阴影仅两级 */
   --lw-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
@@ -69,4 +72,16 @@
   /* 布局尺寸 */
   --lw-topbar-h: 64px;
   --lw-sidebar-w: 208px;
+
+  /* 圆角令牌：与 UnoCSS rounded-card / rounded-control / rounded-tag 同值，供纯 CSS 场景引用 */
+  --lw-radius-card: 12px;
+  --lw-radius-control: 8px;
+  --lw-radius-tag: 6px;
+  --lw-radius-pill: 999px;
+
+  /* 输入类控件边框：静止取辅助靛 1.5px，聚焦转主靛并加淡底光晕 */
+  --lw-field-border: 1.5px solid var(--lw-border-strong);
+  --lw-field-border-hover: 1.5px solid var(--lw-secondary);
+  --lw-field-border-focus: 1.5px solid var(--lw-primary);
+  --lw-field-focus-ring: 0 0 0 3px var(--lw-primary-tint);
 }

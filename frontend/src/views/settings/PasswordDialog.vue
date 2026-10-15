@@ -5,6 +5,7 @@ import { reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { authApi } from '@/api'
 import LwButton from '@/components/ui/LwButton.vue'
+import LwErrorBar from '@/components/ui/LwErrorBar.vue'
 import { useUserStore } from '@/stores/user'
 import { encryptSecret, resetPublicKey } from '@/utils/crypto'
 
@@ -126,9 +127,7 @@ async function submit(): Promise<void> {
           </button>
         </div>
       </label>
-      <p v-if="errorMessage" class="text-xs px-3 py-2 rounded-control" style="color: var(--lw-error-ink); background: var(--lw-error-tint)">
-        {{ errorMessage }}
-      </p>
+      <LwErrorBar v-if="errorMessage" :message="errorMessage" :retryable="false" />
     </form>
     <template #footer>
       <div class="flex justify-end gap-3">

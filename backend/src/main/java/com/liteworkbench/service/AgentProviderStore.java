@@ -26,26 +26,19 @@ public class AgentProviderStore implements ProviderStore {
         return providerMapper.selectById(providerId);
     }
 
-    /** 默认可用供应方：配置完整的云端供应方（OpenAI 兼容族）优先，其次 ollama，再其次任一启用项 */
+    /** 默认可用供应方：配置完整的云端供应方（OpenAI 兼容族）优先，再其次任一启用项 */
     @Override
     public WbProviderDO findDefault() {
         List<WbProviderDO> enabled = providerMapper.selectAll().stream()
                 .filter(provider -> Boolean.TRUE.equals(provider.getEnabled()))
                 .toList();
         return enabled.stream().filter(this::isReadyCloud).findFirst()
-                .orElseGet(() -> enabled.stream().filter(provider -> isProtocol(provider, "ollama"))
-                        .findFirst().orElse(enabled.isEmpty() ? null : enabled.get(0)));
+                .orElse(enabled.isEmpty() ? null : enabled.get(0));
     }
 
-    /** 云端供应方：ollama 之外均按 OpenAI 兼容族处理，要求密钥与端点齐备 */
+    /** 云端供应方：OpenAI 兼容族，要求密钥与端点齐备 */
     private boolean isReadyCloud(WbProviderDO provider) {
-        return !isProtocol(provider, "ollama")
-                && StrUtil.isNotBlank(provider.getBaseUrl())
+        return StrUtil.isNotBlank(provider.getBaseUrl())
                 && StrUtil.isNotBlank(provider.getApiKeyEnc());
-    }
-
-    /** 协议判定：编码含协议关键字即命中，未知编码按 OpenAI 兼容处理 */
-    private boolean isProtocol(WbProviderDO provider, String protocol) {
-        return provider.getProviderCode().toLowerCase().contains(protocol);
     }
 }

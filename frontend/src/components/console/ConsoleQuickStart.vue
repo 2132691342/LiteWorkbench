@@ -38,7 +38,7 @@ const entries = [
           <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
         </svg>
       </div>
-      <h3 class="text-base font-bold mt-3" style="color: var(--lw-primary)">{{ t('console.quickTitle') }}</h3>
+      <h3 class="text-base font-bold mt-3" style="color: var(--lw-primary-ink)">{{ t('console.quickTitle') }}</h3>
       <p class="text-xs mt-1" style="color: var(--lw-ink-muted)">{{ t('console.quickDesc') }}</p>
     </div>
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -50,13 +50,13 @@ const entries = [
         @click="router.push(entry.route)"
       >
         <span class="w-9 h-9 rounded-lg flex items-center justify-center"
-              style="background: var(--lw-primary-tint); color: var(--lw-primary)">
+              style="background: var(--lw-primary-tint); color: var(--lw-primary-ink)">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                stroke-linecap="round" stroke-linejoin="round">
             <path :d="entry.icon" />
           </svg>
         </span>
-        <span class="text-sm font-bold" style="color: var(--lw-primary)">{{ t(entry.titleKey) }}</span>
+        <span class="text-sm font-bold" style="color: var(--lw-primary-ink)">{{ t(entry.titleKey) }}</span>
         <span class="text-xs leading-relaxed" style="color: var(--lw-ink-muted)">{{ t(entry.descKey) }}</span>
       </button>
     </div>

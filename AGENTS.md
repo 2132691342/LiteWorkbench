@@ -347,7 +347,8 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 | 密码 | 密码字段一律 `type="password"` 且提交前用 `utils/crypto.ts` 加密，禁止明文进 store 持久化 |
 | 路由 | 动态菜单由后端 `sys_menu` 下发，路由守卫校验登录态与权限标识，权限不足跳 `/403` |
 | 权限 | 按钮级权限用 `usePermission().hasPerm()` 或 `v-perm` 指令判断，权限码与后端 `PermConst` 严格一致 |
-| 分段切换 | 视图 / 时间 / 范围切换统一用 `components/ui/LwSegmented.vue`（五态），选中态浅紫底 + 主紫字 + 轻阴影，禁止各页自造 |
+| 分段切换 | 视图 / 时间 / 范围切换统一用 `components/ui/LwSegmented.vue`（五态），选中态浅靛底 + 主靛字 + 轻阴影，禁止各页自造 |
+| 输入控件 | 一律 `el-input` / `el-select` / `el-textarea` 或 `.lw-field` 包裹的原生字段，静止边框 `1.5px var(--lw-border-strong)`；禁止无框线裸 `<input>`，禁止用 `--lw-border` 浅灰做输入边框 |
 | 对齐 | 同行控件等高（默认档 h-10），筛选区不混排尺寸；表单标签统一左对齐同宽 |
 | 错误页 | `403` / `404` / `500` 三个独立页面；无权限访问业务路由跳 `/403` 并说明所需权限 |
 
@@ -400,8 +401,8 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 |---|---|
 | 配置层复用 hutool-ai 的 `AIConfig` 契约：`ProviderAIConfig` 承载 `apiUrl` / `apiKey` / `model` / 连接与读超时 / 动态参数 | 一处配置，内核与同步路径共用 |
 | 同步文本路径（`ModelCaller`）优先走 hutool-ai 的原生服务，失败或空文本再回退 `agent/model` 的客户端 | 复用现成实现，同时保证异常路径可用 |
-| 协议集合固定为五家：`openai` / `deepseek` / `doubao` / `grok` 走 OpenAI 兼容通道，`ollama` 走本地通道；默认端点与默认模型取 hutool-ai `XxxConfig` 的常量，不自行发明；未列入的协议一律不做 | 前后端协议集合一处定义，新增协议必须有人维护请求体与增量解析 |
-| 流式出站与工具调用自研：`agent/model` 的 `OpenAiCompatClient` / `OllamaClient` 共用 `HttpModelSupport` | 需要逐行剥协议前缀、累积工具调用增量、按 `usage` 入账，并且取消必须立即关闭连接 |
+| 协议集合固定为四家：`openai` / `deepseek` / `doubao` / `grok`，全部走 OpenAI 兼容通道；默认端点与默认模型取 hutool-ai `XxxConfig` 的常量，不自行发明；未列入的协议一律不做 | 前后端协议集合一处定义，新增协议必须有人维护请求体与增量解析 |
+| 流式出站与工具调用自研：`agent/model` 的 `OpenAiCompatClient` 基于 `HttpModelSupport` | 需要逐行剥协议前缀、累积工具调用增量、按 `usage` 入账，并且取消必须立即关闭连接 |
 | 工具调用请求体、消息模型、`usage` 与 `finish_reason` 解析全部自研 | 依赖只返回裸响应体，没有对应的 POJO |
 
 ### 15.2 Hutool 与 Sa-Token
@@ -434,13 +435,26 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 
 | 参数 | 值 | 理由 |
 |---|---|---|
-| `-XX:+UseG1GC -XX:MaxGCPauseMillis=200` | — | 小堆下停顿可控 |
-| `-XX:MaxRAMPercentage=70` | 70% | 给堆外与 PageCache 留空间 |
-| `-XX:+UseStringDeduplication` | — | 日志与事件文本重复率高 |
-| `-XX:+UseCompressedOops -XX:+UseCompressedClassPointers` | — | 指针与对象头压缩，省内存 |
+| `-Xms32m -Xmx256m` | 32m / 256m | 堆用绝对值钉死：**不用 `MaxRAMPercentage`**，百分比依赖 JVM 能否读到 cgroup 限额，读不到就按宿主物理内存算，小机上会把堆放大到 GB 级。`-Xms` 必须取小——给大初值等于开机就把堆提交掉，之后只能往上长 |
+| `-XX:MinHeapFreeRatio=15 -XX:MaxHeapFreeRatio=35` | 15 / 35 | 让 Serial GC 在 Full GC 后把空闲过半的堆还给操作系统（默认 40/70 几乎不还）。这是压住常驻内存的关键一条 |
+| `-XX:+UseSerialGC` | — | **单线程 Serial GC，内存足迹最小**：无并发标记线程、无卡表与 Remembered Set，比 G1 少约 30–40MB 常驻；本应用是单容器单用户工作台，QPS 低、堆小，并行/并发回收器的附加结构纯属浪费 |
+| `-XX:TieredStopAtLevel=1 -XX:CICompilerCount=1` | 1 / 1 | 只留 C1：省掉 C2 的 CodeHeap 与两个编译线程。代价是峰值吞吐下降，但本应用的耗时在等模型流式响应上，换内存划算 |
+| `-XX:MaxMetaspaceSize=128m` | 128m | 元空间常驻约 88MB（两万个类，由 Spring Boot 与各 SDK 决定，压不下去），封顶 128m 防它一路涨到容器被杀 |
+| `-XX:MaxDirectMemorySize=48m` | 48m | Manticore / MinIO 直接内存上界，防堆外把容器顶爆 |
+| `-XX:ReservedCodeCacheSize=64m` | 64m | C1-only 后默认 240MB 全是浪费 |
+| `-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/var/log/liteworkbench/` | — | OOM 落堆转储到已挂卷的日志目录，排障可直接取 |
+| `-Djava.awt.headless=true` | — | AWT 无头模式，省掉图形子系统初始化 |
+| `-Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8` | UTF-8 | Alpine 基础镜像 locale 常为 POSIX，JDK 17 不像 JDK 18+ 默认 UTF-8；不显式指定则文件名与子进程 IO 按 ASCII 处理，中文路径与 Python 输出直接乱码 |
+| `-Djava.security.egd=file:/dev/./urandom` | — | 登录 RSA 密钥对与 PBKDF2 都要 SecureRandom，指向 urandom 避免熵不足阻塞启动 |
+| `-XX:-UsePerfData` | — | 关 jvmstat 共享内存，少一个 mmap 与后台线程；代价是 `jps` / `jstat` 不可用，容器内排障改看 GC 日志 |
+| `-Xlog:gc:file=/var/log/liteworkbench/gc.log:time,uptime,level,tags:filecount=2,filesize=4m` | — | Unified Logging 进独立文件，不占主日志；2×4MB 滚动上限。`gc*` 与 `safepoint` 会输出 trace/安全点级日志，量级差一个数量级且对排障无额外价值 |
+| `-XX:-OmitStackTraceInFastThrow` | — | 保留异常栈，避免 NPE 被 JIT 优化成无栈快抛后线上排障只剩一行 |
 | `-Xss512k` | — | 线程栈从默认 1m 降到 512k，支撑更多 SSE 线程 |
 | `-XX:+ExitOnOutOfMemoryError` | — | OOM 直接退出，交给编排重启，不留半死状态 |
 
+**Serial GC 的取舍**：Full GC 停顿是单线程的，比 G1 长；换来的是最小内存足迹与最少 GC 附加结构。依据是部署形态——单容器、限 1024m、单用户工作台，**省内存优先于低延迟**。若将来改多实例或放开内存限制，改回 G1 只动 `JAVA_OPTS` 一处。
+
+**实测**（`--memory=1024m`，Serial GC 全程）：启动后容器 228MiB，90 次接口调用压测后 238MiB，JVM `VmRSS` 257–267MB；稳态堆被 GC 归还后约 64MB。其中元空间 88MB 是压不下去的地板，再往下只能靠削减依赖。
 镜像同时固定 `SPRING_PROFILES_ACTIVE=prod`：prod 是「配置已由编排注入」的声明，用于让启动自检在缺失关键配置时拒绝启动（当前校验供应方加密因子），本地无 profile 运行只告警不拦截。
 
 ### 16.1 容器化硬约定

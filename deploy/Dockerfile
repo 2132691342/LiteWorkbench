@@ -21,15 +21,29 @@ RUN npm run build
 FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/openjdk:17-jdk-alpine
 WORKDIR /app
 # 内置 Python 运行时（唯一预置脚本运行时），所需工具直接在镜像内下载
-RUN apk add --no-cache python3 curl tzdata
+# 日志与数据目录必须先在镜像里建出来：-Xlog 的 gc 日志文件在 JVM 启动最早期就要打开，
+# 晚于任何应用代码，没挂卷的 `docker run` 会直接「Could not create the Java Virtual Machine」退出
+RUN apk add --no-cache python3 curl tzdata \
+    && mkdir -p /var/log/liteworkbench /var/lib/liteworkbench
 COPY --from=backend-build /build/backend/target/lite-workbench-server.jar app.jar
 COPY --from=frontend-build /build/frontend/dist ./static/
 ENV LITEWORKBENCH_LOG_DIR=/var/log/liteworkbench \
     LITEWORKBENCH_RUNTIME_DATA_DIR=/var/lib/liteworkbench \
     SPRING_PROFILES_ACTIVE=prod \
-    JAVA_OPTS="-XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:MaxRAMPercentage=70 \
--XX:+UseStringDeduplication -XX:+UseCompressedOops -XX:+UseCompressedClassPointers \
--Xss512k -XX:+ExitOnOutOfMemoryError"
+    # 堆用绝对值钉死，不用 MaxRAMPercentage：百分比依赖 JVM 能否读到 cgroup 限额，
+    # 读不到就按宿主物理内存算（实测 Docker Desktop 下读到 16G），小机上直接把堆放大到 GB 级。
+    # InitialRAMPercentage / -Xms 一律取小：Serial GC 下给它大初值等于开机就把堆提交掉，
+    # 省内存的唯一正确姿势是「小初值 + 让 GC 自己长 + 用完还回去」。
+    JAVA_OPTS="-Xms32m -Xmx256m \
+-XX:MinHeapFreeRatio=15 -XX:MaxHeapFreeRatio=35 \
+-XX:+UseSerialGC \
+-XX:MaxMetaspaceSize=128m -XX:MaxDirectMemorySize=48m -XX:ReservedCodeCacheSize=64m \
+-XX:TieredStopAtLevel=1 -XX:CICompilerCount=1 \
+-Xss512k -Djava.awt.headless=true -XX:-UsePerfData \
+-Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8 -Djava.security.egd=file:/dev/./urandom \
+-XX:+ExitOnOutOfMemoryError -XX:+HeapDumpOnOutOfMemoryError \
+-XX:HeapDumpPath=/var/log/liteworkbench/ -XX:-OmitStackTraceInFastThrow \
+-Xlog:gc:file=/var/log/liteworkbench/gc.log:time,uptime,level,tags:filecount=2,filesize=4m"
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
   CMD curl -f http://localhost:8080/actuator/health || exit 1

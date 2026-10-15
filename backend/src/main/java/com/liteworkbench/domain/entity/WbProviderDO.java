@@ -23,12 +23,12 @@ public class WbProviderDO implements Serializable {
 
     /** 供应方 ID，PROV_ 前缀 */
     private String providerId;
-    /** 供应方编码，预设 openai / deepseek / doubao / grok / ollama，全局唯一 */
+    /** 供应方编码，预设 openai / deepseek / doubao / grok，全局唯一 */
     private String providerCode;
     private String providerName;
     /** 端点，OpenAI 兼容方必填 */
     private String baseUrl;
-    /** AES 加密的 API Key，ollama 可空 */
+    /** AES 加密的 API Key */
     private String apiKeyEnc;
     /** 默认模型名，可空 */
     private String defaultModel;

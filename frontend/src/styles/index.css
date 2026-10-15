@@ -503,7 +503,7 @@ body {
 
 /* ===== Element Plus 输入与下拉：默认档统一 40px，与 LwButton md 档同高同圆角 =====
    之前输入 32px / 按钮 40px 混排在同一筛选行，是「按钮没对齐」的根因。
-   边框取 --lw-border-strong（辅助紫）而非 --lw-border（浅灰）：白底上浅灰 1px 几乎不可见，
+   边框取 1.5px --lw-border-strong（辅助靛）而非 --lw-border（浅灰）：白底上浅灰 1px 几乎不可见，
    用户找不到输入框；卡片分隔才用浅灰，输入类控件必须一眼可辨 */
 .el-input:not(.el-input--small) .el-input__wrapper,
 .el-select:not(.el-select--small) .el-select__wrapper {
@@ -514,18 +514,41 @@ body {
 .el-select__wrapper,
 .el-textarea__inner {
   border-radius: 8px;
-  box-shadow: 0 0 0 1px var(--lw-border-strong) inset;
+  box-shadow: 0 0 0 1.5px var(--lw-border-strong) inset;
 }
 
 .el-input__wrapper:hover,
 .el-select__wrapper:hover,
 .el-textarea__inner:hover {
-  box-shadow: 0 0 0 1px var(--lw-secondary) inset;
+  box-shadow: 0 0 0 1.5px var(--lw-secondary) inset;
 }
 
 .el-input__wrapper.is-focus,
 .el-select__wrapper.is-focused {
-  box-shadow: 0 0 0 1px var(--lw-primary) inset;
+  box-shadow: 0 0 0 1.5px var(--lw-primary) inset;
+}
+
+/* 搜索框与带前后缀的输入同样吃强调边框，避免站内出现"无框线输入" */
+.el-input .el-input__wrapper,
+.el-input-group .el-input__wrapper {
+  box-shadow: 0 0 0 1.5px var(--lw-border-strong) inset;
+}
+
+/* 日期 / 时间选择：EP 用 el-input 外壳，补齐同样三态 */
+.el-date-editor .el-input__wrapper,
+.el-date-editor.el-input__wrapper {
+  box-shadow: 0 0 0 1.5px var(--lw-border-strong) inset;
+}
+
+/* 数字输入与滑块容器 */
+.el-input-number .el-input__wrapper {
+  box-shadow: 0 0 0 1.5px var(--lw-border-strong) inset;
+}
+
+/* 级联、树选择、自动补全的下拉触发面统一 */
+.el-cascader .el-input__wrapper,
+.el-autocomplete .el-input__wrapper {
+  box-shadow: 0 0 0 1.5px var(--lw-border-strong) inset;
 }
 
 .el-dialog {
@@ -734,7 +757,21 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* ===== 原生输入字段：外层包装负责边框与圆角，内层必须透明，否则浏览器默认边框画出第二道深色线 ===== */
+/* ===== 原生输入字段：外层 .lw-field 负责 1.5px 边框与圆角，内层必须透明，
+      否则浏览器默认边框会画出第二道深色线，与令牌的圆角、色阶都不对齐 ===== */
+.lw-field {
+  border: var(--lw-field-border);
+}
+
+.lw-field:hover {
+  border: var(--lw-field-border-hover);
+}
+
+.lw-field:focus-within {
+  border: var(--lw-field-border-focus);
+  box-shadow: var(--lw-field-focus-ring);
+}
+
 .lw-field input,
 .lw-field textarea {
   border: none;
@@ -742,6 +779,81 @@ body {
   background: transparent;
   height: 100%;
   color: var(--lw-ink);
+}
+
+/* 对话输入区：解除 .lw-field 的固定 h-10，高度随多行内容与内层按钮自适应 */
+.lw-field--auto {
+  height: auto;
+  min-height: 40px;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+/* 多行原生字段：高度自适应内容，最小 80px */
+.lw-field--textarea {
+  height: auto;
+  min-height: 80px;
+  align-items: flex-start;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.lw-field--textarea textarea {
+  resize: vertical;
+  line-height: 1.6;
+}
+
+/* 禁用态：保留边框，只让底色与文字退场，控件不整块消失 */
+.lw-field.is-disabled {
+  background: var(--lw-surface-disabled);
+  color: var(--lw-ink-disabled);
+  border-color: var(--lw-border);
+  cursor: not-allowed;
+}
+
+/* 裸 <input> / <textarea> 兜底：忘了套 .lw-field 也不能退化成无框线 */
+input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not(
+    .el-input__inner
+  ):not(.lw-field input):not(.lw-field textarea),
+textarea:not(.el-textarea__inner):not(.lw-field textarea) {
+  border: var(--lw-field-border);
+  border-radius: 8px;
+  padding: 0 12px;
+  height: 40px;
+  background: var(--lw-surface-raised);
+  color: var(--lw-ink);
+  outline: none;
+  transition: all var(--lw-dur) var(--lw-ease);
+}
+
+textarea:not(.el-textarea__inner):not(.lw-field textarea) {
+  height: auto;
+  min-height: 80px;
+  padding: 8px 12px;
+  line-height: 1.6;
+}
+
+input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not(
+    .el-input__inner
+  ):hover:not(:disabled):not(.lw-field input),
+textarea:not(.el-textarea__inner):hover:not(:disabled) {
+  border: var(--lw-field-border-hover);
+}
+
+input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not(
+    .el-input__inner
+  ):focus:not(.lw-field input),
+textarea:not(.el-textarea__inner):focus {
+  border: var(--lw-field-border-focus);
+  box-shadow: var(--lw-field-focus-ring);
+}
+
+input:disabled,
+textarea:disabled {
+  background: var(--lw-surface-disabled);
+  color: var(--lw-ink-disabled);
+  border-color: var(--lw-border);
+  cursor: not-allowed;
 }
 
 .lw-field input::placeholder,

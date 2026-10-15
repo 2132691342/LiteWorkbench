@@ -448,7 +448,7 @@ onBeforeUnmount(() => {
 
     <LwCard>
       <LwPageState :loading="loading" :error="error" :empty="!docs.length" :skeleton-rows="8" @retry="search">
-        <div v-if="traceMode" class="text-xs mb-3 px-3 py-2 rounded-lg" style="background: var(--lw-secondary-tint); color: var(--lw-primary)">
+        <div v-if="traceMode" class="text-xs mb-3 px-3 py-2 rounded-lg" style="background: var(--lw-secondary-tint); color: var(--lw-primary-ink)">
           {{ t('logs.traceModeTip', { total }) }}
         </div>
         <div class="flex flex-col gap-2">
@@ -530,7 +530,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .lw-mark {
   background-color: var(--lw-secondary-tint);
-  color: var(--lw-primary);
+  color: var(--lw-primary-ink);
   border-radius: 2px;
   padding: 0 1px;
 }

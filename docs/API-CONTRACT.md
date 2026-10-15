@@ -368,8 +368,8 @@ data: {"runId":"RUN_..","sessionId":"SESS_..","seq":42,"eventType":"text.delta",
 | POST | `/provider/test/{providerId}` | — → `ProviderVO`（连通性测试） | `wb:provider:update` | `provider:test` |
 
 - `ProviderVO`：`providerId` / `providerCode` / `providerName` / `baseUrl` / `apiKeyMasked`（如 `sk-***abcd`）/ `hasApiKey` / `defaultModel` / `enabled` / `updatedAt`。密钥永不回显明文。
-- `ProviderPresetVO`：`providerCode` / `baseUrl` / `defaultModel`（Ollama 为空）/ `protocol`（`openai` / `ollama`）/ `requiresKey`。预设码为 `openai` / `deepseek` / `doubao` / `grok` / `ollama`，`providerCode` 决定协议通道，`baseUrl` 与 `defaultModel` 留空则取预设默认值。
-- 供应方配置变更后清 `lw:cache:provider:{code}` 缓存，即时生效。无可用供应方时调用返回 `PROVIDER_NOT_CONFIGURED` `4001`。
+- `ProviderPresetVO`：`providerCode` / `baseUrl` / `defaultModel` / `protocol`（固定 `openai`）/ `requiresKey`（固定 `true`）。预设码为 `openai` / `deepseek` / `doubao` / `grok`，`baseUrl` 与 `defaultModel` 留空则取预设默认值。
+- 供应方配置变更后清 `lw:cache:provider:{code}` 缓存，即时生效。启动不预置任何供应方（避免内置一个跑不通的端点误导用户），无可用供应方时调用返回 `PROVIDER_NOT_CONFIGURED` `4001`，前端设置页给出新建引导。
 
 ## 14. 日志与监控
 
@@ -381,6 +381,8 @@ data: {"runId":"RUN_..","sessionId":"SESS_..","seq":42,"eventType":"text.delta",
 | GET | `/monitor/overview` | — → `OverviewRESP` | `monitor:health:list` |
 | GET | `/runtime/python` | — → `PythonStatusVO` | `monitor:health:list` |
 | POST | `/runtime/python/reprobe` | — → `PythonStatusVO` | `monitor:python:reprobe`，`@Idempotent("runtime:reprobe", ttl = 5)` |
+| GET | `/monitor/observe` | — → `ObserveRESP` | `monitor:health:list` |
+| POST | `/monitor/observe/reset` | — → `R<String>` | `monitor:observe:reset`，`@Idempotent("monitor:observe:reset", ttl = 5)` |
 
 **视角隔离**：持有 `monitor:log:global` 的角色（超级管理员、平台管理员）检索全局日志，并可用 `userId` / `runId` 反查；其余用户由服务端强制追加 `user_id = 自己`，传了 `userId` 也无效。响应首部 `scope` 回传 `"global"` / `"self"`，前端据此展示视角标识。
 
@@ -402,6 +404,7 @@ data: {"runId":"RUN_..","sessionId":"SESS_..","seq":42,"eventType":"text.delta",
 - `LogStatsVO`：`scope`、`levels[{level,count}]`、`histogram[{hour,count}]`（桶起点毫秒时间戳升序）、`bucketMs`（3600000 或 86400000）。`log/stats` 时间范围缺省为近 24 小时；区间超过 7 天自动改按天分桶，小时分桶上限 168 个、天分桶上限 90 个。
 - `HealthRESP`：`status`（`UP` / `DEGRADED` / `DOWN`，核心组件 Postgres / Redis 任一 DOWN 即整体 DOWN，其余组件 DOWN 为 DEGRADED）、`components[{name,status,detail,costMs}]`，组件名固定 `postgres` / `redis` / `manticore` / `minio` / `rabbitmq` / `python`。
 - `OverviewRESP`：`sessionCount` / `runCount` / `successRunCount` / `todayRunCount` / `totalTokens` / `runTrend` / `tokenTrend`（`[{date,yyyyMMdd},{value}]`，近 7 天补齐 0）/ `toolDistribution`（工具名 → 调用次数）。全局口径，Redis 缓存 60 秒。
+- `ObserveRESP`：`windowStartMs` / `windowMs`（统计窗口，自启动或上次重置起算）/ `sql{count,slowCount,avgMs,maxMs,top[]}` / `http{count,errorCount,avgMs,maxMs,top[]}`；`top[]` 元素为 `{key,count,avgMs,maxMs,lastTs,sample}`，SQL 的 `key` 是语句模板、`sample` 是 mapper 方法，HTTP 的 `key` 是 `方法 + 路由模式`（路径里的 ID 片段归一为 `{id}`）、`sample` 是查询串。进程内窗口值，不落库不缓存。
 - `PythonStatusVO`：`status`（`READY` / `NOT_FOUND` / `BAD_VERSION`）/ `version` / `source` / `ok`。
 
 ## 15. 创作文档

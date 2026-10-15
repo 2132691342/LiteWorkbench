@@ -217,17 +217,17 @@
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | `provider_id` | varchar(40) PK | `PROV_` |
-| `provider_code` | varchar(24) NOT NULL | 供应方码；预设 `openai` / `deepseek` / `doubao` / `grok` / `ollama` |
+| `provider_code` | varchar(24) NOT NULL | 供应方码；预设 `openai` / `deepseek` / `doubao` / `grok` |
 | `provider_name` | varchar(64) NOT NULL | 展示名 |
 | `base_url` | varchar(512) | 端点 |
-| `api_key_enc` | varchar(512) | 加密存储的密钥，`ollama` 可空 |
+| `api_key_enc` | varchar(512) | 加密存储的密钥 |
 | `default_model` | varchar(64) | 默认模型 |
 | `enabled` | boolean NOT NULL DEFAULT true | 是否启用 |
 | 审计 | | `created_by` `created_at` `updated_by` `updated_at` `deleted` `remark` |
 
 索引：`uk_wb_provider_code` 唯一 `(provider_code) WHERE deleted = false`。
 
-预设端点与默认模型（`ProviderPresetEnum`，前端新建时下拉选择自动填充；协议通道由 `provider_code` 判定，`ollama` 走 Ollama 协议，其余走 OpenAI 兼容协议）：
+预设端点与默认模型（`ProviderPresetEnum`，前端新建时下拉选择自动填充；协议通道固定为 OpenAI 兼容）：
 
 | 预设 | base_url | default_model |
 |---|---|---|
@@ -235,7 +235,6 @@
 | `deepseek` | `https://api.deepseek.com` | `deepseek-chat` |
 | `doubao` | `https://ark.cn-beijing.volces.com/api/v3` | `doubao-1.5-lite-32k-250115` |
 | `grok` | `https://api.x.ai/v1` | `grok-2-1212` |
-| `ollama` | `http://localhost:11434` | 由部署方填写 |
 
 ### 5.8 wb_kb
 

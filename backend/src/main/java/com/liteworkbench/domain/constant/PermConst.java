@@ -29,6 +29,8 @@ public interface PermConst {
     /** 日志全局视角：命中即可检索全体用户日志并用 userId / runId 反查 */
     String MONITOR_LOG_GLOBAL = "monitor:log:global";
     String MONITOR_PYTHON_REPROBE = "monitor:python:reprobe";
+    /** 调用观测窗口重置：清空 SQL 与 HTTP 的累计指标，重新开始统计 */
+    String MONITOR_OBSERVE_RESET = "monitor:observe:reset";
 
     // 工作台 · 工具
     String WB_TOOL_LIST = "wb:tool:list";

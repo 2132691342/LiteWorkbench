@@ -502,7 +502,7 @@ void loadKbOptions()
         <div v-if="assistText || assistRunning" class="flex flex-col gap-2">
           <div class="flex items-center gap-2">
             <div class="lw-label">{{ t('writer.assistResult') }}</div>
-            <span v-if="assistRunning" class="text-xs" style="color: var(--lw-primary)">
+            <span v-if="assistRunning" class="text-xs" style="color: var(--lw-primary-ink)">
               {{ t('writer.assistGenerating') }}
             </span>
           </div>

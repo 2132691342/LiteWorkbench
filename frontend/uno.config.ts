@@ -9,6 +9,7 @@ export default defineConfig({
         primary: 'var(--lw-primary)',
         primaryHover: 'var(--lw-primary-hover)',
         primaryActive: 'var(--lw-primary-active)',
+        primaryInk: 'var(--lw-primary-ink)',
         primaryTint: 'var(--lw-primary-tint)',
         secondary: 'var(--lw-secondary)',
         secondaryHover: 'var(--lw-secondary-hover)',
@@ -19,11 +20,12 @@ export default defineConfig({
         onSecondary: 'var(--lw-on-secondary)',
         surface: 'var(--lw-surface)',
         raised: 'var(--lw-surface-raised)',
+        disabled: 'var(--lw-surface-disabled)',
         border: 'var(--lw-border)',
         borderStrong: 'var(--lw-border-strong)',
         ink: 'var(--lw-ink)',
         muted: 'var(--lw-ink-muted)',
-        disabled: 'var(--lw-ink-disabled)',
+        disabledInk: 'var(--lw-ink-disabled)',
         success: 'var(--lw-success)',
         successInk: 'var(--lw-success-ink)',
         warning: 'var(--lw-warning)',
@@ -52,10 +54,13 @@ export default defineConfig({
     'lw-title': 'text-2xl font-bold tracking-tight text-lw-ink',
     'lw-subtitle': 'text-sm text-lw-muted',
     'lw-label': 'text-xs font-bold text-lw-muted',
-    // 输入框锁定 h-10（40px）：与 LwButton md、el-input、LwSegmented 同高，同行控件天然对齐；
-    // 边框用强调紫而非浅灰——白底上浅灰 1px 几乎不可见
+    // 输入框锁定 h-10（40px）：与 LwButton md、el-input、LwSegmented 同高，同行控件天然对齐。
+    // 边框取辅助靛 1.5px 而非浅灰——白底上 1px 浅灰几乎不可见，用户找不到输入框
     'lw-input':
-      'w-full h-10 px-3 rounded-control border border-lw-borderStrong bg-transparent text-sm text-lw-ink outline-none transition-all duration-200 focus:border-lw-primary',
+      'w-full h-10 px-3 rounded-control border-1.5 border-lw-borderStrong bg-transparent text-sm text-lw-ink outline-none transition-all duration-200 hover:border-lw-secondary focus:border-lw-primary',
+    // 原生输入字段包装：负责画边框与焦点光晕，内层 input/textarea 强制透明
+    'lw-field':
+      'flex items-center w-full h-10 px-3 rounded-control bg-transparent border-1.5 border-lw-borderStrong transition-all duration-200 hover:border-lw-secondary focus-within:border-lw-primary focus-within:shadow-[0_0_0_3px_var(--lw-primary-tint)]',
     // 表格统一圆角内收，避免直角贴着卡片边框；表头 / 行高主题见 styles/index.css
     'lw-table': 'w-full overflow-hidden rounded-control',
     'lw-center': 'flex items-center justify-center',

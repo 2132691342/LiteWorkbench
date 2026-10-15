@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import { DataLine, Download, Timer, Upload } from '@element-plus/icons-vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { UsageStatsVO } from '@/types/api'
 import LwEmpty from '@/components/ui/LwEmpty.vue'
+import LwMetricCard from '@/components/ui/LwMetricCard.vue'
 import LwSkeleton from '@/components/ui/LwSkeleton.vue'
 
 /** 用量归因：总量 + 按天趋势 + 按模型分解，数据全部来自 wb_run 的账目字段 */
@@ -48,24 +50,24 @@ function formatNumber(value?: number): string {
   <LwEmpty v-else-if="!stats || (stats.daily?.length ?? 0) === 0" :description="t('trace.usageEmpty')" />
   <div v-else class="flex flex-col gap-4">
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-      <div class="lw-card flex flex-col gap-1 py-3">
-        <span class="text-xs" style="color: var(--lw-ink-muted)">{{ t('trace.totalRuns') }}</span>
-        <span class="text-lg font-bold" style="color: var(--lw-ink)">{{ formatNumber(totals.runCount) }}</span>
-      </div>
-      <div class="lw-card flex flex-col gap-1 py-3">
-        <span class="text-xs" style="color: var(--lw-ink-muted)">{{ t('runs.inputTokens') }}</span>
-        <span class="text-lg font-bold" style="color: var(--lw-primary)">{{ formatNumber(totals.inputTokens) }}</span>
-      </div>
-      <div class="lw-card flex flex-col gap-1 py-3">
-        <span class="text-xs" style="color: var(--lw-ink-muted)">{{ t('runs.outputTokens') }}</span>
-        <span class="text-lg font-bold" style="color: var(--lw-secondary)">{{ formatNumber(totals.outputTokens) }}</span>
-      </div>
-      <div class="lw-card flex flex-col gap-1 py-3">
-        <span class="text-xs" style="color: var(--lw-ink-muted)">{{ t('trace.avgDuration') }}</span>
-        <span class="text-lg font-bold" style="color: var(--lw-ink)">
-          {{ ((totals.avgDurationMs ?? 0) / 1000).toFixed(1) }}s
-        </span>
-      </div>
+      <LwMetricCard
+        :label="t('trace.totalRuns')"
+        :value="formatNumber(totals.runCount)"
+        tone="ink"
+        :icon="DataLine"
+      />
+      <LwMetricCard :label="t('runs.inputTokens')" :value="formatNumber(totals.inputTokens)" :icon="Upload" />
+      <LwMetricCard
+        :label="t('runs.outputTokens')"
+        :value="formatNumber(totals.outputTokens)"
+        tone="secondary"
+        :icon="Download"
+      />
+      <LwMetricCard
+        :label="t('trace.avgDuration')"
+        :value="`${((totals.avgDurationMs ?? 0) / 1000).toFixed(1)}s`"
+        :icon="Timer"
+      />
     </div>
 
     <!-- 按天趋势：柱高表示当日 token，柱顶数字为运行数 -->

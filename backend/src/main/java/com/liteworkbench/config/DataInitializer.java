@@ -12,7 +12,6 @@ import com.liteworkbench.domain.constant.UserStateEnum;
 import com.liteworkbench.domain.entity.SysMenuDO;
 import com.liteworkbench.domain.entity.SysRoleDO;
 import com.liteworkbench.domain.entity.SysUserDO;
-import com.liteworkbench.domain.entity.WbProviderDO;
 import com.liteworkbench.mapper.SysMenuMapper;
 import com.liteworkbench.mapper.SysRoleMapper;
 import com.liteworkbench.mapper.SysUserMapper;
@@ -254,22 +253,10 @@ public class DataInitializer implements ApplicationRunner {
         return generated;
     }
 
-    /** 默认供应方：本地 Ollama，开箱可测；OpenAI / Anthropic 由管理员在页面添加 */
+    /** 供应方种子：不预置任何默认供应方，全部由管理员在设置页按实际云端端点添加 */
     private void initProviders() {
-        if (Objects.nonNull(providerMapper.selectByCode("ollama"))) {
-            return;
-        }
-        WbProviderDO provider = new WbProviderDO();
-        provider.setProviderId(IdGenerator.generate(IdPrefixConst.PROVIDER));
-        provider.setProviderCode("ollama");
-        provider.setProviderName("Ollama 本地模型");
-        provider.setBaseUrl("http://localhost:11434");
-        provider.setDefaultModel("qwen2.5:7b");
-        provider.setEnabled(true);
-        provider.setCreatedBy(SYSTEM);
-        provider.setRemark("默认供应方，需本机 11434 端口运行 Ollama；生产环境请在设置页改为实际端点");
-        providerMapper.insert(provider);
-        log.info("[data.init.provider] code=ollama");
+        // 预置一个跑不通的本地端点只会误导用户；空表时前端设置页会给出明确的新建引导
+        log.info("[data.init.provider] skip: 未预置供应方，由管理员在设置页配置");
     }
 
     private String createRole(String roleCode, String roleName, int sortNo) {
@@ -477,6 +464,7 @@ public class DataInitializer implements ApplicationRunner {
         seeds.add(new MenuSeed(33, 30, "menu.systemMenuDelete", button, null, null, null, "system:menu:delete", 3));
         // 监控页操作点
         seeds.add(new MenuSeed(50, 6, "menu.monitorPythonReprobe", button, null, null, null, "monitor:python:reprobe", 1));
+        seeds.add(new MenuSeed(52, 6, "menu.monitorObserveReset", button, null, null, null, "monitor:observe:reset", 2));
         // 日志中心操作点：全局视角开关，只授管理角色
         seeds.add(new MenuSeed(51, 5, "menu.logsGlobal", button, null, null, null, "monitor:log:global", 1));
         // 技能页操作点
