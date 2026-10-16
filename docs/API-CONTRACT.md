@@ -49,12 +49,12 @@
 | HTTP | 触发场景 | 代表 code |
 |---|---|---|
 | 200 | 成功 | `0` |
-| 400 | 参数校验失败、畸形 JSON、原密码错、密码强度不足、凭据解密失败、供应方未配置、文档格式/正文超限、变量缺失 | `1001` `2005` `2008` `2009` `4001` `8604` `8703` `8804` `8902` `7004` |
+| 400 | 参数校验失败、畸形 JSON、原密码错、密码强度不足、凭据解密失败、供应方未配置、文档格式/正文超限、变量缺失 | `1001` `2005` `2008` `2009` `4001` `8604` `8703` `8902` `7004` |
 | 401 | 未登录、令牌过期、用户名或密码错误 | `2001` `2002` `2004` |
 | 403 | 无权限点、强制改密期访问业务接口、登录失败锁定、账号停用 | `2003` `2006` `2007` `2203` `2404` |
-| 404 | 资源不存在（含归属校验失败与未命中的 `/api/**`） | `1002` `2201` `2301` `2401` `3001` `3101` `5001` `6001` `8601` `8603` `8701` `8704` `8801` `8901` |
+| 404 | 资源不存在（含归属校验失败与未命中的 `/api/**`） | `1002` `2201` `2301` `2401` `3001` `3101` `5001` `6001` `8601` `8603` `8701` `8704` `8901` |
 | 405 | 方法与接口声明不符（PUT / PATCH / DELETE） | `1005` |
-| 409 | 状态冲突、重复提交、唯一性冲突、需确认的工具、文档未就绪 | `1003` `2501` `2202` `2204` `2302` `2303` `2304` `2402` `2403` `3002` `3102` `3103` `5002` `5005` `8602` `8606` `8702` `8802` `8803` `8903` |
+| 409 | 状态冲突、重复提交、唯一性冲突、需确认的工具、文档未就绪 | `1003` `2501` `2202` `2204` `2302` `2303` `2304` `2402` `2403` `3002` `3102` `3103` `5002` `5005` `8602` `8606` `8702` `8903` |
 | 413 | 上传超过大小上限 | `6003` |
 | 415 | 请求体类型不符 | `1006` |
 | 429 | 限流触发 | `1004` |
@@ -199,10 +199,17 @@ POST /api/v1/chat/stream
 Content-Type: application/json
 Authorization: <token>
 
-{ "sessionId": "SESS_...", "content": "帮我分析这份数据" }
+{ "sessionId": "SESS_...", "content": "帮我分析这份数据 /data_brief @会议纪要.txt" }
 ```
 
-入参 `ChatStreamREQ`（`sessionId` 必填，`content` 必填且 ≤32000）。接口带 `@RateLimit(run:chat, 20 次 / 60 秒, 按用户)` 与 `@Idempotent("chat", ttl = 3)`。
+入参 `ChatStreamREQ`（`sessionId` 必填，`content` 必填且 ≤32000）：
+
+| 字段 | 类型 | 含义 |
+|---|---|---|
+| `skillCodes` | `string[]`，≤5 | 输入框 `/` 点名的技能码，命中即强制展开正文，不看触发词 |
+| `refs` | `RunRefREQ[]`，≤8 | 输入框 `@` 引用的上下文，`{type: kb / file / doc, id, label}`；`kb` 按当前问题预取分块，`file` 注入文本正文（非文本给提示），`doc` 注入文档正文 |
+
+`content` 里保留 `/code` 与 `@名称` 标记（模型可见），但以 `skillCodes` / `refs` 为准；`run.ref` 日志给出注入条数与字符数。类型非法抛 `PARAM_INVALID`。接口带 `@RateLimit(run:chat, 20 次 / 60 秒, 按用户)` 与 `@Idempotent("chat", ttl = 3)`。
 
 响应 `Content-Type: text/event-stream`，连接超时 30 分钟。帧格式（`api/SseRunSink` 实现 `service/RunSink`）：
 
@@ -370,6 +377,7 @@ data: {"runId":"RUN_..","sessionId":"SESS_..","seq":42,"eventType":"text.delta",
 - `ProviderVO`：`providerId` / `providerCode` / `providerName` / `baseUrl` / `apiKeyMasked`（如 `sk-***abcd`）/ `hasApiKey` / `defaultModel` / `enabled` / `updatedAt`。密钥永不回显明文。
 - `ProviderPresetVO`：`providerCode` / `baseUrl` / `defaultModel` / `protocol`（固定 `openai`）/ `requiresKey`（固定 `true`）。预设码为 `openai` / `deepseek` / `doubao` / `grok`，`baseUrl` 与 `defaultModel` 留空则取预设默认值。
 - 供应方配置变更后清 `lw:cache:provider:{code}` 缓存，即时生效。启动不预置任何供应方（避免内置一个跑不通的端点误导用户），无可用供应方时调用返回 `PROVIDER_NOT_CONFIGURED` `4001`，前端设置页给出新建引导。
+- `create` 与 `update` 对 `providerCode` 做预设白名单校验：仅接受 `openai` / `deepseek` / `doubao` / `grok`，其余编码（含本地 ollama 端点）返回 `PARAM_INVALID`。存量非预设行仅可读可删，页面展示「协议不受支持」标签。
 
 ## 14. 日志与监控
 
@@ -441,24 +449,9 @@ data: {"runId":"RUN_..","sessionId":"SESS_..","seq":42,"eventType":"text.delta",
 
 不发送心跳与 `retry`；`assist.end` 与 `assist.error` 必有且仅有其一。
 
-## 16. 提示词
+## 16. 提示词（已下线）
 
-权限点前缀 `wb:prompt:`。
-
-| 方法 | 路径 | 入参 → 出参 | 权限 | 幂等 |
-|---|---|---|---|---|
-| GET | `/prompt/page` | `PageREQ` + `category` → `PageResult<PromptVO>` | `wb:prompt:list` | — |
-| GET | `/prompt/detail/{promptId}` | — → `PromptVO` | `wb:prompt:list` | — |
-| POST | `/prompt/create` | `PromptREQ` → `R<String>` | `wb:prompt:create` | `prompt:create` |
-| POST | `/prompt/update` | `PromptREQ` → `R<Void>` | `wb:prompt:update` | `prompt:update` |
-| POST | `/prompt/delete/{promptId}` | — → `R<Void>` | `wb:prompt:delete` | `prompt:delete` |
-| POST | `/prompt/copy/{promptId}` | — → `R<String>`（复制出的自有模板 ID） | `wb:prompt:create` | `prompt:copy` |
-| POST | `/prompt/render` | `PromptRenderREQ` → `R<String>`（渲染后文本） | `wb:prompt:list` | — |
-
-约定：
-
-- 内置模板归属 `user_id = 'builtin'`、`builtin = true`，列表对所有用户可见，修改与删除返回 `PROMPT_BUILTIN_READONLY` `8802`；同名冲突 `PROMPT_TITLE_CONFLICT` `8803`。
-- `PromptRenderREQ`：`promptId`（必填）+ `variables`（`name → value`）。模板变量为 `[{name,label,defaultValue}]`，渲染按 `{{name}}` 占位替换，缺失且无默认值抛 `PROMPT_VARIABLE_MISSING` `8804`。
+提示词模板模块已移除，模板能力并入技能（见 §10）。接口不再提供，`8800` 错误码段保留不回收、状态码映射表中不再列出；历史数据表 `wb_prompt` 在升级时由 `db/schema.sql` 直接 `DROP`。
 
 ## 17. 长期记忆
 

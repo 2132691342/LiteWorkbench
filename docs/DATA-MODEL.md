@@ -28,7 +28,7 @@
 
 **ID**：前缀表、ULID 规则与生成入口见 `AGENTS.md §6`。数据侧补充两点：
 
-- 种子数据（菜单、内置提示词、内置工具）不随机生成，用 `前缀_` + 26 位零填充序号，保证升级对账时 ID 稳定，如 `MENU_00000000000000000000000011`、`TOOL_00000000000000000000000001`。
+- 种子数据（内置工具、内置技能、内置角色、菜单与权限点、角色授权）不随机生成，用 `前缀_` + 26 位零填充序号，保证升级对账时 ID 稳定，如 `MENU_00000000000000000000000011`、`TOOL_00000000000000000000000001`。
 - Manticore 文档的数字主键由引擎自动分配，业务主键走 string 列：`MESG_`（`lw_msg.message_id`）、`KBCHUNK_`（`lw_kbchunk.chunk_id`）、`LOGD_`（`lw_log.log_id`）。
 
 **审计字段**：语义与取值口径见 `AGENTS.md §7`。本库落地宽度：`created_by` / `updated_by` varchar(40)，`state` varchar(24)（`wb_run` / `wb_kb_doc` / `wb_memory` 为 varchar(16)），`remark` varchar(512)。各表「审计」行只列实际存在的列，通用 `state` 取值见 `StateEnum`（`normal` / `disabled` / `archived`）。
@@ -83,11 +83,12 @@
 | `sort_no` | int NOT NULL DEFAULT 0 | 排序 |
 | `visible` | boolean NOT NULL DEFAULT true | 是否显示 |
 | `state` | varchar(24) NOT NULL DEFAULT 'normal' | `normal` `disabled` `archived` |
+| `seeded` | boolean NOT NULL DEFAULT false | 平台种子标记：`db/data.sql` 写入的行置位，管理员自建菜单为 false |
 | 审计 | | `created_by` `created_at` `updated_by` `updated_at` `deleted` `remark` |
 
 索引：`uk_sys_menu_perm` 唯一 `(perm_code) WHERE deleted = false AND perm_code IS NOT NULL`；`idx_sys_menu_parent` `(parent_id)`。
 
-`menu_name` 的 i18n key 规则与种子对账逻辑见 `AGENTS.md §2.5`；数据侧事实是菜单种子按固定 `menu_id` upsert，并软删路由或权限点命中种子、但 ID 不在种子内的残留行。
+`menu_name` 的 i18n key 规则见 `AGENTS.md §2.5`，种子对账规则见 `AGENTS.md §2.6`；数据侧事实是菜单种子按固定 `menu_id` upsert 并置 `seeded = true`，先软删「路由或权限码命中种子、但 ID 不在种子内且非种子行」的残留，再软删已下线菜单并摘除其 `sys_role_menu` 授权。
 
 ### 4.4 sys_user_role / sys_role_menu
 
@@ -191,6 +192,7 @@
 | `content` | text | 正文，命中后展开 |
 | `trigger_words` | varchar(512) | 触发词，逗号分隔 |
 | `enabled` | boolean NOT NULL DEFAULT true | 是否启用 |
+| `builtin` | boolean | 是否内置技能副本，`wb_skill_seed` 复制而来，种子不回写覆盖 |
 | 审计 | | `created_by` `created_at` `updated_by` `updated_at` `deleted` `remark` |
 
 索引：`uk_wb_skill_code` 唯一 `(user_id, skill_code) WHERE deleted = false`。
@@ -313,21 +315,19 @@
 
 每次保存正文即写一条版本，保留最近 30 条（`DocConst.VERSION_KEEP`），超出由清理接口按 `version_no` 裁剪。
 
-### 5.12 wb_prompt（提示词）
+### 5.12 wb_skill_seed（平台级：内置技能定义）
+
+平台级只读表，13 条技能种子由 `db/data.sql` 写入并随版本 upsert；用户副本在启动期复制进 `wb_skill`（`specs/03`）。主键用自然键 `skill_code`，不参与业务 ID 规范。
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
-| `prompt_id` | varchar(40) PK | `PRPT_`，内置行为 26 位零填充序号 |
-| `user_id` | varchar(40) NOT NULL | 归属用户；内置行为 `builtin` |
-| `prompt_title` | varchar(128) NOT NULL | 标题 |
-| `category` | varchar(64) | 分类（写作 / 改写 / 摘要 / 翻译 / 代码 …） |
-| `content` | text NOT NULL | 模板正文，变量写作 `{{name}}` |
-| `variables` | jsonb | 变量定义数组：`[{name, label, defaultValue}]` |
-| `builtin` | boolean NOT NULL DEFAULT false | 是否内置（内置只读，用户可复制为自有） |
-| `use_count` | int NOT NULL DEFAULT 0 | 使用次数，排序用 |
-| 审计 | | `created_by` `created_at` `updated_by` `updated_at` `deleted` `remark` |
-
-索引：`idx_wb_prompt_owner` `(user_id, created_at DESC) WHERE deleted = false`。
+| `skill_code` | varchar(64) PK | 技能标识，如 `novel_craft` |
+| `skill_name` | varchar(128) NOT NULL | 展示名 |
+| `summary` | varchar(512) | 摘要，常驻系统提示 |
+| `content` | text | 操作手册正文，命中或点名后展开 |
+| `trigger_words` | varchar(512) | 触发词，逗号分隔 |
+| `sort_no` | int NOT NULL DEFAULT 0 | 展示与复制顺序 |
+| `updated_at` | timestamptz NOT NULL DEFAULT now() | 种子版本时间戳 |
 
 ### 5.13 wb_memory（长期记忆）
 

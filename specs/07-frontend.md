@@ -13,11 +13,11 @@
 | 目录 | 内容 |
 |---|---|
 | `router/` | 静态路由 + 后端菜单驱动的动态注册 + 登录与权限守卫 |
-| `views/` | 路由页：`Login` / `ForcePassword` / `Dashboard`、`console/`、`runs/`、`writer/`、`prompts/`、`files/`、`skills/`、`kb/`、`logs/`、`monitor/`、`settings/`、`system/`、`showcase/`、`error/`(403/404/500) |
+| `views/` | 路由页：`Login` / `ForcePassword` / `Dashboard`、`console/`、`runs/`、`writer/`、`files/`、`skills/`、`kb/`、`logs/`、`monitor/`、`settings/`、`system/`、`showcase/`、`error/`(403/404/500) |
 | `components/layout/` | 外壳与导航：`AppShell`、`TheSideBar`、`TheSideMenu`、`TheTopBar`、`icons.ts`（图标按需具名引入） |
 | `components/ui/` | 基础件：`LwButton`、`LwCard`、`LwEmpty`、`LwErrorBar`、`LwErrorPage`、`LwMarkdown`、`LwMetricCard`、`LwPageState`、`LwProgressBar`、`LwSegmented`、`LwSkeleton`、`LwTag` |
 | `components/charts/` | 图表封装：`LwAreaChart`、`LwBarChart`、`LwDonutChart`（色值经 `utils/theme.ts` 读令牌） |
-| `components/console/` | 工作台业务件：`ConsoleQuickStart`、`PlanChecklist` |
+| `components/console/` | 工作台业务件：`ConsoleQuickStart`、`MessageComposer`、`PlanChecklist`、`ThinkingBlock`、`ToolStepCard` |
 | `components/runs/` | 运行记录业务件：`TraceWaterfall`、`RunTree`、`UsagePanel` |
 | `components/settings/` | 设置业务件：`ProviderPanel`、`ToolPanel`、`MemoryPanel` |
 | `components/monitor/` | 监控业务件：`ObservePanel`（调用观测：指标卡 + 慢 SQL / 慢接口榜 + 定时刷新 + 重置窗口） |
@@ -33,7 +33,7 @@
 
 ### 路由
 
-静态路由仅 `/login`、`/force-password`、外壳 `/`（`AppShell`，重定向 `/dashboard`）、错误页 `/403` `/500` 与兜底 `/:pathMatch(.*)*`；其余由后端 `menu/user-tree` 下发后 `router.addRoute('shell', ...)` 注册。
+静态路由仅 `/login`、`/force-password`、外壳 `/`（`AppShell`，重定向 `/dashboard`）、错误页 `/403` `/500` 与兜底 `/:pathMatch(.*)*`；其余由后端 `menu/user-tree` 下发后 `router.addRoute('shell', ...)` 注册。路由为历史模式，启动时把 `/#/xxx` 形式的哈希入口（书签与手输习惯）重写为 `/xxx`，否则哈希会被当锚点忽略、用户被弹回仪表盘。
 
 | 路径 | 页面 | 权限 |
 |---|---|---|
@@ -43,7 +43,6 @@
 | `/console` | 工作台（会话 + 运行时间线） | 登录 |
 | `/runs` | 运行记录（列表 + 时间线/工具链/链路/Run 树/用量 + 回放） | 登录 |
 | `/writer` | 创作台（文档编辑 + 版本 + AI 辅助） | 登录 |
-| `/prompt` | 提示词库 | 登录 |
 | `/files` | 文件空间（含在线预览） | 登录 |
 | `/skills` | 技能 | 登录 |
 | `/kb` | 知识库 | 登录 |
@@ -79,6 +78,32 @@
 
 大对象一律 `shallowRef`，标量用 `ref`。
 
+### 工作台输入框
+
+`components/console/MessageComposer.vue` 承担 `/` 与 `@` 两种唤出。**已选项以 chip 为准，不以正文文本为准**：选中后正文里的标记立即移除，结构化数据单独随请求提交，这是"看得见、点得掉"的前提。
+
+| 触发 | 面板内容 | 选中后 | 随请求提交 |
+|---|---|---|---|
+| `/` | 内置命令（新建会话）+ 启用技能列表（`skillCode` + 摘要） | 技能 chip | `skillCodes: string[]` |
+| `@` | 知识库 / 文件 / 创作文档三类（各按 `hasPerm` 决定是否拉取） | 引用 chip | `refs: [{type, id, label}]` |
+
+- 触发符必须位于行首或空白之后，查询串不含空格才认为面板处于激活态；面板打开时才拉列表，不按 `/` 与 `@` 就不产生额外请求。
+- 面板排序：`前缀命中 > 类型序（命令 → 技能 → 引用）> 字典序`，最多 8 条，保证三四个字符就能靠回车命中。
+- 输入框自增高到上限后内部滚动；容器是单一圆角框（`--lw-field-border` + 聚焦光环），不再套一层内部输入边框。
+- 视觉与键盘契约（含 chip 形态、发送/中断按钮、Esc 中断、↑ 历史回填、字数计数）见 [DESIGN.md §5.11](../DESIGN.md)。
+
+### 工作台时间线
+
+`views/console/Console.vue` 只负责编排（会话选中、发送、中断、回放、滚动容器），时间线内部的三类块各自独立成件：
+
+| 组件 | 职责 |
+|---|---|
+| `components/console/ThinkingBlock.vue` | 思考过程折叠块，默认折叠，流式期间自动展开 |
+| `components/console/ToolStepCard.vue` | 工具调用卡，头部状态随 `phase` 在 执行中 / 完成 / 失败 间过渡，输出可折叠 |
+| `components/console/PlanChecklist.vue` | 规划清单（`plan.updated` 是覆盖式快照） |
+
+三者都由 `stores/run.ts` 的唯一 reducer 喂数，实时流与回放同路径。
+
 ## 契约
 
 ```ts
@@ -95,7 +120,7 @@ setToken(token: string): void
 clearToken(): void
 
 // 按域分组的方法表：authApi / userApi / roleApi / menuApi / sessionApi / runApi /
-// traceApi / memoryApi / toolApi / skillApi / fileApi / kbApi / docApi / promptApi /
+// traceApi / memoryApi / toolApi / skillApi / fileApi / kbApi / docApi /
 // providerApi / monitorApi / logApi
 
 // 权限：模板用 v-perm 或 hasPerm
@@ -119,6 +144,20 @@ await runStore.replay(runId)
 ```
 
 `openRunStream` 处理 SSE 帧时按类型分流：`run.snapshot` 的 `watermark` 大于本地已投递最大 `seq` 时按 `afterSeq` 从 `/run/events` 补齐丢帧（补齐失败不阻断实时流）；`run.end` 取 `payload.status === 'aborted'` 作为中断标记；`error` 帧转 `onError`。返回一个 `AbortController.abort` 包装的中断函数。
+
+```ts
+// components/console/MessageComposer.vue —— 唯一输入入口
+defineModel<string>('modelValue')                 // 正文草稿，由宿主持有，发送成功后才清空
+defineProps<{ streaming: boolean; replaying: boolean }>()
+defineEmits<{
+  send: [{ skillCodes: string[]; refs: RunRefREQ[]; content: string }]
+  abort: []
+  newSession: []
+}>()
+defineExpose({ focus: () => void; clear: () => void })
+```
+
+宿主的 `send` 必须在**流真正建立之后**才清空草稿——先清空会在建会话失败时丢掉用户输入；清空正文的同时一并清空 chip。
 
 按钮五态、`LwButton` 唯一实现与组件库按钮的全局覆盖规则见 [DESIGN.md](../DESIGN.md)。
 

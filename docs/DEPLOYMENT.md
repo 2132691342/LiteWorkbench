@@ -124,13 +124,9 @@ podman run -d --name liteworkbench -p ${LITEWORKBENCH_PORT:-24399}:8080 \
 
 构建上下文由仓库根 `.dockerignore` 裁剪：CI 上 `node_modules` 与 `target` 不存在所以不出问题，本机缺了这份文件会把 Windows 下的 `node_modules` 送进上下文并被 `COPY frontend .` 拷进 Linux 镜像，node 直接跑不起来；同时它挡掉 `deploy/.env.infra`，避免机密进镜像层。
 
-### 4.1 镜像构建的三个必守项
+### 4.2 镜像构建的必守项
 
-| 文件 | 作用 | 删掉或改错的后果 |
-|---|---|---|
-| `.dockerignore` | 排除 `**/node_modules`、`**/target`、本地日志与数据 | `COPY frontend .` 会把宿主机（Windows）二进制覆盖进 Alpine 镜像，构建直接失败；构建上下文还会多出数百 MB |
-| `deploy/maven-settings.xml` | 容器内 Maven 走可达仓库（`repo1.maven.org`） | 直连 `repo.maven.apache.org` 在部分网络下 SSL 握手中断，CI 构建必失败；该文件放在 cache mount 挂载目标之外，否则被缓存遮蔽读不到 |
-| `backend/lombok.config` | 声明 `@Qualifier` 可复制到构造参数 | 缺它则四个线程池的 `@Qualifier` 注入退化为按类型匹配，容器启动报 `No qualifying bean of type ExecutorService` |
+`.dockerignore` 的排除规则、`deploy/maven-settings.xml` 的挂载位置、`backend/lombok.config` 的复制路径、指标自动配置排除与启动失败显式退出这五条约束，统一由 [AGENTS.md](../AGENTS.md) §16.1「容器化硬约定」定义，此处不重复。
 
 构建期还用 `RUN --mount=type=cache` 挂载 `/root/.m2` 与 `/root/.npm`，避免每次 CI 都全量下载依赖。
 
@@ -170,7 +166,7 @@ podman run -d --name liteworkbench -p ${LITEWORKBENCH_PORT:-24399}:8080 \
 
 ## 6. 初始化
 
-首次启动自动执行 `resources/db/schema.sql`（`spring.sql.init.mode=always` 配合幂等 `CREATE TABLE IF NOT EXISTS`），并写入种子数据：
+首次启动按 `spring.sql.init` 顺序执行两个脚本：`resources/db/schema.sql` 负责建表（`mode=always` 配合幂等 `CREATE TABLE IF NOT EXISTS`），`resources/db/data.sql` 负责平台级种子（工具、内置技能、内置角色、菜单与权限点、角色授权，全部按固定 ID upsert 并软删冲突残留）。两者都幂等，可重复执行。`DataInitializer` 只补两件事：种子账号与用户级内置技能副本。种子内容如下：
 
 | 类型 | 内容 |
 |---|---|
@@ -180,10 +176,10 @@ podman run -d --name liteworkbench -p ${LITEWORKBENCH_PORT:-24399}:8080 \
 | 中间件与应用共用凭据 | 两者必须读同一份 `deploy/.env.infra`：中间件按它设口令，应用按它连库。两侧不一致时表现为连接认证失败，而不是静默降级 |
 | 主机本地机密 | `gen-secrets.sh` 生成 `.env.infra`（600 权限，不入仓库）；`deploy-app.sh` 另会 source 同目录 `.env.app`（存在才加载）存放只属于该主机的值 |
 | 内置角色 | `super_admin`、`admin`、`user`（代码常量定义，不可删除改码） |
-| 菜单树 | 仪表盘、工作台、运行记录、创作台、提示词、文件、技能、知识库、日志、监控、设置、组件库、系统管理（含按钮权限点） |
+| 菜单树 | 仪表盘、工作台、运行记录、创作台、文件、技能、知识库、日志、监控、设置、组件库、系统管理（含按钮权限点），种子 52 条 |
 | 内置工具 | Python 执行、文件读写、HTTP 请求、知识库检索（固定 ID 幂等重放） |
 | 内置供应方 | 无。协议集合固定为 OpenAI 兼容族，供应方全部由管理员在「设置-供应方」按实际云端端点添加 |
-| 内置提示词 | 文章大纲、标题构思、润色改写、要点摘要、中英互译、代码讲解（固定 ID 幂等重放，只读） |
+| 内置技能种子 | 13 条，存 `wb_skill_seed`（`db/data.sql` 写入，按 `skill_code` upsert）；用户副本在启动时按 `(userId, skill_code)` 补种到 `wb_skill`，用户改过或删过的不再覆盖 |
 
 Manticore 的 `lw_log`、`lw_msg`、`lw_kbchunk`、`lw_doc` 表在应用启动时幂等创建。升级版本新增的菜单会自动补齐到 `super_admin` / `admin` / `user` 角色，无需手工重新授权。
 

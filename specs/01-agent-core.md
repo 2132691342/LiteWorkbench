@@ -6,7 +6,7 @@
 
 边界：向下依赖 `agent/model`（模型出站）与 `agent/tool`（工具实现），只读平台级配置（`AgentProperties` / `RuntimeProperties`）与 `domain` 常量；向上只暴露 `AgentRuntime` 一个门面，不引用 `api`，不直接访问 `mapper`。
 
-不回答：内核实现约定与工具契约（见 AGENTS.md §19）；内置 Python 运行时约定（见 AGENTS.md §20）；不变量表（见 AGENTS.md §18）；线程池清单（见 AGENTS.md §17）；依赖使用边界（见 AGENTS.md §15.1）；`wb_event` / `wb_run` 字段（见 docs/DATA-MODEL.md §5.2、§5.3）；运行状态机、落库路径与 SSE 帧形态（见 specs/02 与 docs/API-CONTRACT.md §8.1）；系统提示词装配（平台提示 + 会话补充 + 技能展开 + 长期记忆，见 specs/02）。
+不回答：内核实现约定与工具契约（见 AGENTS.md §19）；内置 Python 运行时约定（见 AGENTS.md §20）；不变量表（见 AGENTS.md §18）；线程池清单（见 AGENTS.md §17）；依赖使用边界（见 AGENTS.md §15.1）；`wb_event` / `wb_run` 字段（见 docs/DATA-MODEL.md §5.2、§5.3）；运行状态机、落库路径与 SSE 帧形态（见 specs/02 与 docs/API-CONTRACT.md §8.1）；系统提示词装配（平台提示 + 会话补充 + 技能展开 + @ 引用注入 + 长期记忆，见 specs/02）。
 
 ## 设计
 

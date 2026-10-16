@@ -28,7 +28,7 @@ Agent 执行 ──► 内核事件 ──► 归一为 RunEventDTO（seq 递增
 
 | 中间件 | 存什么 | 读写路径与边界 |
 |---|---|---|
-| PostgreSQL | 关系与主数据：用户 / 角色 / 菜单、会话、运行、事件、技能、文件、知识库与文档元数据、创作文档与版本、提示词、长期记忆、工具、供应方 | MyBatis，单表注解优先、复杂 SQL 落 XML（AGENTS.md §2.3）；跑 pgvector 镜像，但当前 schema 无向量列，语义检索未启用 |
+| PostgreSQL | 关系与主数据：用户 / 角色 / 菜单、会话、运行、事件、技能与技能种子、文件、知识库与文档元数据、创作文档与版本、长期记忆、工具、供应方 | MyBatis，单表注解优先、复杂 SQL 落 XML（AGENTS.md §2.3）；跑 pgvector 镜像，但当前 schema 无向量列，语义检索未启用 |
 | Manticore | 一切要检索的文本：`lw_msg`（会话消息）、`lw_kbchunk`（知识库分块）、`lw_doc`（创作文档）、`lw_log`（业务日志） | 建表 DDL 走 `/cli`，写入与检索走 HTTP JSON API；无关系约束、无事务 |
 | MinIO | 原件：用户上传文件、知识库文档 | 按 `user/{userId}/...` 前缀存放，按用户隔离，删除走级联 |
 | Redis | 派生数据：登录态（Sa-Token）、权限缓存、菜单树缓存、会话运行锁、幂等键、限流计数 | 全部可失效，丢失只影响性能与在线状态，不影响数据正确性 |
@@ -93,7 +93,7 @@ TraceFilter（最高优先级）           traceId 入 MDC 并回写响应头
 POST /api/v1/chat/stream（SSE，produces text/event-stream）
   ├─ 1 会话归属校验 + Redis 会话运行锁（setIfAbsent，TTL = SSE 超时 + 60s）      SessionService / RunService
   ├─ 2 建 Run（queued → running）+ 用户消息写 Manticore lw_msg；
-  │     系统提示 = 平台提示 + 会话补充 + 技能展开 + 长期记忆（记忆放末尾），历史取最近 40 条并经 AgentMemory 压缩
+  │     系统提示 = 平台提示 + 会话补充 + 技能展开与 @ 引用注入（RunRefService）+ 长期记忆（记忆放末尾），历史取最近 40 条并经 AgentMemory 压缩
   ├─ 3 活动实例登记进进程内运行注册表，内核任务提交到 lwRunExecutor               AgentKernelRuntime
   ├─ 4 内核循环（模型流式出站；工具执行走 lwToolExecutor）
   │     ├─ 内核事件 → AgentEventAdapter 归一 + seq 递增
@@ -233,7 +233,7 @@ MDC 注入点三处：`TraceFilter` 注入 `traceId`，`LoginContextInterceptor`
 |---|---|---|
 | hutool-ai | 供应方配置契约（`AIConfig`）、各厂商默认端点与默认模型、同步文本补全 | 流式出站（`agent/model/*Client`）、请求体构造、响应解析、工具调用下发与增量累积、`usage` 与 `finish_reason` 解析。协议集合固定为 OpenAI 兼容通道 |
 | Hutool | 字符串 / 集合 / 日期 / JSON / 加解密 / HTTP 工具类 | 业务 ID 生成（`common/IdGenerator` 出 ULID，前缀 + ULID 字典序近似时间序） |
-| Sa-Token | 登录态存 Redis、`@SaCheckPermission` 注解鉴权、踢人下线 | 权限点来源与缓存（`config/StpInterfaceImpl`）、登录快照装配、菜单种子对账（`config/DataInitializer`） |
+| Sa-Token | 登录态存 Redis、`@SaCheckPermission` 注解鉴权、踢人下线 | 权限点来源与缓存（`config/StpInterfaceImpl`）、登录快照装配、SSE 异步派发跳过拦截器（`config/AsyncSafeInterceptor`） |
 | MyBatis | SQL 映射与事务 | 归属隔离条件的写入、注解 / XML 的取舍、`jsonb` 列的显式 `CAST`、`timestamptz` 全局 TypeHandler |
 | Manticore | 全文检索（ICU 中文分词）与分组聚合 | 四张表的 DDL、文档结构、写入与检索路径（见 [specs/05-observability.md](../specs/05-observability.md)） |
 | RabbitMQ | 异步削峰 | 消费失败降级：日志回退到只落文件、知识库解析置失败态 |

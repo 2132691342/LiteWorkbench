@@ -11,7 +11,7 @@
 ### 数据归属
 
 - 不做多租户。共享库共享表 + 行级 `user_id`，不做分库，不做 MyBatis 全局拦截器——归属条件显式写进每条 SQL。
-- 用户拥有的资源（会话、运行、事件、技能、文件、知识库与文档、创作文档与版本、提示词、长期记忆）只允许归属用户读写；与之对应的 Mapper（`WbSessionMapper` / `WbRunMapper` / `WbSkillMapper` / `WbFileMapper` / `WbKbMapper` / `WbKbDocMapper` / `WbDocMapper` / `WbDocVersionMapper` / `WbPromptMapper` / `WbMemoryMapper` / `SysUserMapper`）查询条件一律携带 `user_id = #{userId}`。
+- 用户拥有的资源（会话、运行、事件、技能、文件、知识库与文档、创作文档与版本、长期记忆）只允许归属用户读写；与之对应的 Mapper（`WbSessionMapper` / `WbRunMapper` / `WbSkillMapper` / `WbFileMapper` / `WbKbMapper` / `WbKbDocMapper` / `WbDocMapper` / `WbDocVersionMapper` / `WbMemoryMapper` / `SysUserMapper`）查询条件一律携带 `user_id = #{userId}`。
 - 平台级表（`sys_menu`、`sys_user_role`、`sys_role_menu`、`wb_tool`、`wb_provider`）不带 `user_id`，由权限点控制写入。
 - 身份唯一起点是 `LoginContext`：请求线程内 `LoginContext.userId()` 取当前用户，先读 ThreadLocal、回退 Sa-Token 会话快照，未登录抛 `UNAUTHORIZED`；禁止从请求体采信 `userId`。请求上下文之外（异步线程、MQ 消费）把 `userId` 作为第一个业务参数显式传递。
 - 单资源访问按 `(主键, user_id)` 查询（如 `selectByIdAndUser` / `getOwned`），查不到直接 `RESOURCE_NOT_FOUND`，不泄露他人资源是否存在。
@@ -43,7 +43,7 @@
 - 树形三级：`dir` 目录 / `menu` 路由页 / `button` 权限点；`perm_code` 格式 `域:资源:动作`，配置在 `PermConst`。
 - `menu_name` 存 i18n key（规则见 AGENTS.md §2.5），前端经 `menuLabel()` 渲染，翻译缺失也不裸显 key。
 - `visible = false` 的菜单不进用户菜单树（管理树仍可见可维护），用于临时下线入口而不删定义。
-- 种子 ID 为 `MENU_` + 26 位零填充序号；`DataInitializer` 启动时按 ID upsert 回写全部结构字段（名称、路由、组件、权限码、图标、排序），并软删"`route_path` 或 `perm_code` 命中种子但 ID 不在种子内"的残留行；已下线菜单按固定 ID 显式软删并摘除授权。显隐与状态是运营字段，已存在行不覆盖。
+- 种子 ID 为 `MENU_` + 26 位零填充序号；菜单对账在 `db/data.sql` 内完成：先软删"`route_path` 或 `perm_code` 命中种子但 ID 不在种子内"的残留行，再 upsert 全部结构字段（名称、路由、组件、权限码、图标、排序）；已下线菜单按固定 ID 显式软删并摘除授权。显隐与状态是运营字段，已存在行不覆盖。
 - 权限契约（api 包注解与 `PermConst` 声明的权限点必须都存在于菜单种子）由测试兜住，见 AGENTS.md §14。
 
 **权限点清单**：
@@ -58,7 +58,6 @@
 | 文件 | `wb:file:delete`（其余动作登录即可用） |
 | 知识库 | `wb:kb:list` / `create` / `update` / `delete` / `upload` / `search` |
 | 创作文档 | `wb:doc:list` / `create` / `update` / `delete` / `search` |
-| 提示词 | `wb:prompt:list` / `create` / `update` / `delete` |
 | 供应方 | `wb:provider:list` / `create` / `update` / `delete` |
 | 监控 | `monitor:health:list` / `monitor:log:list` / `monitor:log:global` / `monitor:python:reprobe` |
 

@@ -106,7 +106,7 @@ public class SysUserDO implements Serializable { ... }
 
 同一个 Mapper 允许注解与 XML 共存：XML 里只留上述复杂语句，且不得与注解方法重名。
 
-**写入 `jsonb` 列必须显式 `CAST(#{x} AS jsonb)`**：PG 不做 varchar 参数到 jsonb 的隐式转换。现有列：`wb_event.payload`、`wb_prompt.variables`、`wb_tool.schema_json`。
+**写入 `jsonb` 列必须显式 `CAST(#{x} AS jsonb)`**：PG 不做 varchar 参数到 jsonb 的隐式转换。现有列：`wb_event.payload`、`wb_tool.schema_json`。
 
 可空判断用 SQL 空值兜底，保持语句静态：
 
@@ -147,7 +147,23 @@ public class RunService {
 | 目录 | `menu.groupSystem` | `menu.system` 同时被当叶子用 |
 | 权限点 | `menu.<路由key><Action>`，如 `menu.userManageCreate` | `menu.system.user.create` |
 
-**菜单种子对账**：`DataInitializer` 对每个种子按固定 `menu_id` 做 **upsert**（已存在则回写 `menu_name` / `route_path` / `component` / `perm_code` / `icon` / `sort_no`），并在同一次运行里软删"`route_path` 或 `perm_code` 与种子冲突但 ID 不在种子内"的历史残留行，避免升级后出现重复菜单。
+### 2.6 种子数据：脚本化，不进 Java 常量
+
+平台级种子一律写在 `resources/db/data.sql`，由 `spring.sql.init` 在 `schema.sql` 之后执行；`DataInitializer` 只处理**必须运行时参与**的种子（口令需加密、ID 需按用户生成）。
+
+| 内容 | 位置 |
+|---|---|
+| 建表与列补齐 | `resources/db/schema.sql`，全部 `IF NOT EXISTS`，可重复执行 |
+| 平台级种子 | `resources/db/data.sql`：内置工具、内置技能种子、内置角色、菜单与权限点、角色授权 |
+| 运行时种子 | `DataInitializer`：种子账号（口令来自环境变量或随机生成 + PBKDF2 摘要）、用户级技能副本 |
+
+规则：
+
+- 种子行用**固定 ID**（`MENU_` / `ROLE_` / `TOOL_` + 26 位序号），upsert 幂等重放；`sys_menu.seeded = true` 标记平台种子，与管理员自建菜单区分。
+- 菜单对账在脚本内完成，顺序固定：**先软删冲突残留，再 upsert 种子**——否则老库里的同权限码行会撞 `uk_sys_menu_perm`。裁剪判据同时限定"`route_path` 或 `perm_code` 与种子相同"且"ID 不在种子内"，缺任一条都会误删种子行本身。
+- 已下线菜单不在种子里，必须按固定 ID 显式软删并摘除 `sys_role_menu` 授权，否则会以孤儿菜单形式留在树上。
+- 技能种子存 `wb_skill_seed`（自然主键 `skill_code`），是平台级只读定义；用户副本由 `SkillService.seedBuiltinForUser` 按 `(userId, skill_code)` 判重复制，用户改过或删过的不覆盖、不复活。
+- 种子脚本必须能在**全新库**与**老库升级**两种路径下重复执行且结果一致，改动后两种路径都要验证一遍。
 
 ## 3. 角色与权限
 
@@ -155,8 +171,8 @@ public class RunService {
 
 ### 3.1 数据归属模型
 
-- 用户拥有的业务表（会话、运行、事件、技能、文件、知识库、知识库文档、创作文档、文档版本、提示词）带 `user_id varchar(40)`，行级隔离；会话消息与知识库分块不落库表，分别存 Manticore 表（`lw_msg`、`lw_kbchunk`），同样带 `user_id` 过滤。
-- 平台级表不带 `user_id`，仅管理角色可写：`sys_menu`、`sys_user_role`、`sys_role_menu`、`wb_tool`、`wb_provider`。
+- 用户拥有的业务表（会话、运行、事件、技能、文件、知识库、知识库文档、创作文档、文档版本、长期记忆）带 `user_id varchar(40)`，行级隔离；会话消息与知识库分块不落库表，分别存 Manticore 表（`lw_msg`、`lw_kbchunk`），同样带 `user_id` 过滤。
+- 平台级表不带 `user_id`，仅管理角色可写：`sys_menu`、`sys_user_role`、`sys_role_menu`、`wb_tool`、`wb_provider`、`wb_skill_seed`。
 - 用户身份由 `common.LoginContext` 提供，禁止从请求体采信 `userId`；Service 在请求线程内一律 `LoginContext.userId()` 取当前用户。请求上下文之外（异步线程、MQ 消费）必须把 `userId` 作为第一个业务参数显式传递。
 - 用户拥有的资源，Mapper 查询条件必须显式携带 `user_id`（平台级表除外）。
 
@@ -243,7 +259,6 @@ public R<String> create(@RequestBody @Valid UserREQ req) { ... }
 | `KBCHUNK_` | 知识库分块（Manticore） |
 | `DOC_` | 创作文档 |
 | `DOCV_` | 创作文档版本 |
-| `PRPT_` | 提示词 |
 | `MEMO_` | 长期记忆 |
 | `LOGD_` | 日志文档（Manticore） |
 
@@ -350,6 +365,7 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 | 分段切换 | 视图 / 时间 / 范围切换统一用 `components/ui/LwSegmented.vue`（五态），选中态浅靛底 + 主靛字 + 轻阴影，禁止各页自造 |
 | 输入控件 | 一律 `el-input` / `el-select` / `el-textarea` 或 `.lw-field` 包裹的原生字段，静止边框 `1.5px var(--lw-border-strong)`；禁止无框线裸 `<input>`，禁止用 `--lw-border` 浅灰做输入边框 |
 | 对齐 | 同行控件等高（默认档 h-10），筛选区不混排尺寸；表单标签统一左对齐同宽 |
+| 命令面板 | 输入框内的唤出面板（`/` 技能与命令、`@` 引用资料）统一用 `components/console/MessageComposer.vue` 的实现：触发符须处在行首或空白之后，↑↓ 选择、Enter/Tab 确认、Esc 关闭，选中即从正文移除标记并落成一枚可删除的 chip，结构化字段单独交给请求体；五态与键盘契约见 DESIGN.md §5.11 |
 | 错误页 | `403` / `404` / `500` 三个独立页面；无权限访问业务路由跳 `/403` 并说明所需权限 |
 
 ## 13. 代码风格与注释
@@ -383,7 +399,7 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 | 文件 | 用例 | 覆盖 |
 |---|---|---|
 | `service/RunEventPipelineTest` | 1 | 事件长链路一条链跑通：内核事件归一、批内合帧（增量合并、类型切换保序）、工具起止与结果、模型用量入账，以及超长裁剪、失败工具标记、异常事件不带正文 |
-| `config/PermissionContractTest` | 1 | 跨模块契约：控制器注解 + `PermConst` + 菜单种子三处声明的权限点必须一致，漏一处即测试失败 |
+| `config/PermissionContractTest` | 1 | 跨模块契约：控制器注解 + `PermConst` + 菜单种子三处声明的权限点必须一致，漏一处即测试失败；菜单种子从 `db/data.sql` 解析 |
 
 **明确不写的测试**：Mapper XML 的解析由应用启动即校验（错了起不来）；路由兜底的命中范围由容器验收清单里的一次 `curl` 探活覆盖——在测试里手工模拟 Spring 容器初始化只会复制框架行为，并随框架升级失效。
 
@@ -401,7 +417,7 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 |---|---|
 | 配置层复用 hutool-ai 的 `AIConfig` 契约：`ProviderAIConfig` 承载 `apiUrl` / `apiKey` / `model` / 连接与读超时 / 动态参数 | 一处配置，内核与同步路径共用 |
 | 同步文本路径（`ModelCaller`）优先走 hutool-ai 的原生服务，失败或空文本再回退 `agent/model` 的客户端 | 复用现成实现，同时保证异常路径可用 |
-| 协议集合固定为四家：`openai` / `deepseek` / `doubao` / `grok`，全部走 OpenAI 兼容通道；默认端点与默认模型取 hutool-ai `XxxConfig` 的常量，不自行发明；未列入的协议一律不做 | 前后端协议集合一处定义，新增协议必须有人维护请求体与增量解析 |
+| 协议集合固定为四家：`openai` / `deepseek` / `doubao` / `grok`，全部走 OpenAI 兼容通道；默认端点与默认模型取 hutool-ai `XxxConfig` 的常量，不自行发明；未列入的协议一律不做。`ProviderService` 的 create / update 对 `providerCode` 强制白名单校验，非预设编码（如本地 ollama 端点）直接 `PARAM_INVALID`；存量非预设行可读可删、不可改，页面打「协议不受支持」标签引导删除重建 | 前后端协议集合一处定义，新增协议必须有人维护请求体与增量解析 |
 | 流式出站与工具调用自研：`agent/model` 的 `OpenAiCompatClient` 基于 `HttpModelSupport` | 需要逐行剥协议前缀、累积工具调用增量、按 `usage` 入账，并且取消必须立即关闭连接 |
 | 工具调用请求体、消息模型、`usage` 与 `finish_reason` 解析全部自研 | 依赖只返回裸响应体，没有对应的 POJO |
 
@@ -431,31 +447,18 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 
 ## 16. 运行参数约定
 
-云主机规格小，容器启动参数固定以下一组（见 `deploy/Dockerfile`）：
+容器启动参数只允许在 `deploy/Dockerfile` 的 `ENV JAVA_OPTS` 一处声明，编排文件与文档不重复定义，改动只动这一处。
 
-| 参数 | 值 | 理由 |
+| 约束 | 取值 | 理由 |
 |---|---|---|
-| `-Xms32m -Xmx256m` | 32m / 256m | 堆用绝对值钉死：**不用 `MaxRAMPercentage`**，百分比依赖 JVM 能否读到 cgroup 限额，读不到就按宿主物理内存算，小机上会把堆放大到 GB 级。`-Xms` 必须取小——给大初值等于开机就把堆提交掉，之后只能往上长 |
-| `-XX:MinHeapFreeRatio=15 -XX:MaxHeapFreeRatio=35` | 15 / 35 | 让 Serial GC 在 Full GC 后把空闲过半的堆还给操作系统（默认 40/70 几乎不还）。这是压住常驻内存的关键一条 |
-| `-XX:+UseSerialGC` | — | **单线程 Serial GC，内存足迹最小**：无并发标记线程、无卡表与 Remembered Set，比 G1 少约 30–40MB 常驻；本应用是单容器单用户工作台，QPS 低、堆小，并行/并发回收器的附加结构纯属浪费 |
-| `-XX:TieredStopAtLevel=1 -XX:CICompilerCount=1` | 1 / 1 | 只留 C1：省掉 C2 的 CodeHeap 与两个编译线程。代价是峰值吞吐下降，但本应用的耗时在等模型流式响应上，换内存划算 |
-| `-XX:MaxMetaspaceSize=128m` | 128m | 元空间常驻约 88MB（两万个类，由 Spring Boot 与各 SDK 决定，压不下去），封顶 128m 防它一路涨到容器被杀 |
-| `-XX:MaxDirectMemorySize=48m` | 48m | Manticore / MinIO 直接内存上界，防堆外把容器顶爆 |
-| `-XX:ReservedCodeCacheSize=64m` | 64m | C1-only 后默认 240MB 全是浪费 |
-| `-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/var/log/liteworkbench/` | — | OOM 落堆转储到已挂卷的日志目录，排障可直接取 |
-| `-Djava.awt.headless=true` | — | AWT 无头模式，省掉图形子系统初始化 |
-| `-Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8` | UTF-8 | Alpine 基础镜像 locale 常为 POSIX，JDK 17 不像 JDK 18+ 默认 UTF-8；不显式指定则文件名与子进程 IO 按 ASCII 处理，中文路径与 Python 输出直接乱码 |
-| `-Djava.security.egd=file:/dev/./urandom` | — | 登录 RSA 密钥对与 PBKDF2 都要 SecureRandom，指向 urandom 避免熵不足阻塞启动 |
-| `-XX:-UsePerfData` | — | 关 jvmstat 共享内存，少一个 mmap 与后台线程；代价是 `jps` / `jstat` 不可用，容器内排障改看 GC 日志 |
-| `-Xlog:gc:file=/var/log/liteworkbench/gc.log:time,uptime,level,tags:filecount=2,filesize=4m` | — | Unified Logging 进独立文件，不占主日志；2×4MB 滚动上限。`gc*` 与 `safepoint` 会输出 trace/安全点级日志，量级差一个数量级且对排障无额外价值 |
-| `-XX:-OmitStackTraceInFastThrow` | — | 保留异常栈，避免 NPE 被 JIT 优化成无栈快抛后线上排障只剩一行 |
-| `-Xss512k` | — | 线程栈从默认 1m 降到 512k，支撑更多 SSE 线程 |
-| `-XX:+ExitOnOutOfMemoryError` | — | OOM 直接退出，交给编排重启，不留半死状态 |
+| 堆用绝对值钉死 | `-Xms32m -Xmx256m` | 不用 `MaxRAMPercentage`：百分比依赖 JVM 能否读到 cgroup 限额，读不到就按宿主物理内存算，小机上会把堆放大到 GB 级；`-Xms` 偏大等于开机就提交堆，之后只能往上长 |
+| 回收器固定 Serial | `-XX:+UseSerialGC` | 单容器单用户工作台、QPS 低、堆小，Serial 比 G1 少约 30–40MB 常驻结构，**省内存优先于低延迟** |
+| 堆归还打开 | `MinHeapFreeRatio=15` / `MaxHeapFreeRatio=35` | 默认 40/70 几乎不把空闲堆还给操作系统，这是压住常驻内存的关键一条 |
+| 编译分层只到 C1 | `TieredStopAtLevel=1` / `CICompilerCount=1` | 省掉 C2 的 CodeHeap 与编译线程；本应用耗时在等模型流式响应上，换内存划算 |
+| 编码显式指定 | `-Dfile.encoding=UTF-8` / `-Dsun.jnu.encoding=UTF-8` | Alpine 基础镜像 locale 常为 POSIX，JDK 17 不默认 UTF-8，否则中文路径与子进程 IO 乱码 |
+| profile 固定 prod | `SPRING_PROFILES_ACTIVE=prod` | prod 是「配置已由编排注入」的声明，用于让启动自检在缺失关键配置时拒绝启动；本地无 profile 运行只告警 |
 
-**Serial GC 的取舍**：Full GC 停顿是单线程的，比 G1 长；换来的是最小内存足迹与最少 GC 附加结构。依据是部署形态——单容器、限 1024m、单用户工作台，**省内存优先于低延迟**。若将来改多实例或放开内存限制，改回 G1 只动 `JAVA_OPTS` 一处。
-
-**实测**（`--memory=1024m`，Serial GC 全程）：启动后容器 228MiB，90 次接口调用压测后 238MiB，JVM `VmRSS` 257–267MB；稳态堆被 GC 归还后约 64MB。其中元空间 88MB 是压不下去的地板，再往下只能靠削减依赖。
-镜像同时固定 `SPRING_PROFILES_ACTIVE=prod`：prod 是「配置已由编排注入」的声明，用于让启动自检在缺失关键配置时拒绝启动（当前校验供应方加密因子），本地无 profile 运行只告警不拦截。
+逐参数的完整理由、实测内存构成与覆盖方式见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) §11。
 
 ### 16.1 容器化硬约定
 

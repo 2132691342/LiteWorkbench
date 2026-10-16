@@ -28,10 +28,10 @@ backend/src/main/java/com/liteworkbench/
   config/ anno/ aspect/ mq/{producer,consumer}/ agent/ runtime/
   observability/ common/
 backend/src/main/resources/
-  mapper/*.xml  db/schema.sql  logback-spring.xml  application.yaml
+  mapper/*.xml  db/{schema.sql,data.sql}  logback-spring.xml  application.yaml
 
 frontend/src/
-  api/ components/{layout,ui,charts,console,runs,settings}/ composables/ directives/
+  api/ components/{layout,ui,charts,console,runs,settings,monitor}/ composables/ directives/
   locales/ router/ stores/ styles/ types/ utils/ views/
 ```
 
@@ -43,7 +43,7 @@ frontend/src/
 2. `mapper` 加接口（单表增删改查写注解，动态 SQL 才落 XML）；
 3. `service` 加编排；
 4. `api` 加控制器（GET/POST、路径参数放末尾、写接口加 `@Idempotent` 与 `@SaCheckPermission`）；
-5. `specs/` 补设计文档，[API-CONTRACT.md](API-CONTRACT.md) 补接口，`AGENTS.md` 如需新增权限点则同步菜单种子。
+5. `specs/` 补设计文档，[API-CONTRACT.md](API-CONTRACT.md) 补接口，新增权限点同步 `resources/db/data.sql` 的菜单种子。
 
 ## 4. 起服务
 
@@ -95,67 +95,35 @@ npm run build       # 产物 frontend/dist
 
 ### 5.1 本地容器验证（可选）
 
-`mvn spring-boot:run` + `npm run dev` 覆盖业务链路，要验证镜像本身（静态资源、深链回落、内置 Python、prod 自检）时再跑这一步：
-
-```bash
-# 1. 构建镜像（.dockerignore 已排除 node_modules / target，上下文很小）
-docker build -f deploy/Dockerfile -t liteworkbench:local .
-
-# 2. 加入中间件所在网络运行；网络名以 docker network ls 为准
-docker run -d --name lw-local -p 24400:8080 --network <中间件网络名> \
-  -e LITEWORKBENCH_DATASOURCE_URL=jdbc:postgresql://postgres:5432/postgres \
-  -e LITEWORKBENCH_DATASOURCE_USERNAME=postgres \
-  -e LITEWORKBENCH_DATASOURCE_PASSWORD=<口令> \
-  -e LITEWORKBENCH_REDIS_HOST=redis \
-  -e LITEWORKBENCH_REDIS_PASSWORD=<口令> \
-  -e LITEWORKBENCH_MANTICORE_URL=http://manticore:9308 \
-  -e LITEWORKBENCH_STORAGE_ENDPOINT=http://minio:9000 \
-  -e LITEWORKBENCH_STORAGE_ACCESS_KEY=<账号> \
-  -e LITEWORKBENCH_STORAGE_SECRET_KEY=<口令> \
-  -e LITEWORKBENCH_MQ_HOST=rabbitmq \
-  -e LITEWORKBENCH_MQ_USERNAME=<账号> \
-  -e LITEWORKBENCH_MQ_PASSWORD=<口令> \
-  -e LITEWORKBENCH_SECURITY_SECRET=<任意长随机串> \
-  liteworkbench:local
-
-# 3. 验收：健康、内置运行时、静态资源与深链
-curl http://localhost:24400/actuator/health
-curl http://localhost:24400/api/v1/runtime/python      # 期望 READY + 版本号
-curl -o /dev/null -w '%{http_code}\n' http://localhost:24400/                # 期望 200
-curl -o /dev/null -w '%{http_code}\n' http://localhost:24400/dashboard       # 期望 200（SPA 深链回落）
-```
-
-`LITEWORKBENCH_SECURITY_SECRET` 在容器内**必填**：镜像固定 `SPRING_PROFILES_ACTIVE=prod`，仍用内置开发因子时启动自检直接拒绝启动，这是预期行为，用来防止把密钥用已知因子加密后入库。
+`mvn spring-boot:run` + `npm run dev` 覆盖业务链路，要验证镜像本身（静态资源、深链回落、内置 Python、prod 自检）时再跑这一步。构建命令、容器启动参数与冒烟顺序的**唯一清单在 [DEPLOYMENT.md](DEPLOYMENT.md) §4.1**，此处不重复。
 
 ## 6. 测试
-
-当前 2 个文件 2 个用例，一次 `mvn test` 跑完（约 1 秒），全部不依赖中间件与 Spring 容器。用例清单与保留标准见 [AGENTS.md](../AGENTS.md) §14。
 
 ```bash
 cd backend && mvn test
 ```
 
-前端只有类型检查，没有测试运行器；`npm run build` 自带 `vue-tsc --noEmit`（类型不过直接中断构建），`npm run typecheck` 用于单独快速校验，两者就是前端 CI 的全部校验。
+用例清单、保留标准与「明确不写的测试」见 [AGENTS.md](../AGENTS.md) §14——只有长链路与跨模块契约测试，随 `mvn test` 一次跑完（约 1 秒），全部不依赖中间件与 Spring 容器。前端只有类型检查，没有测试运行器；`npm run build` 自带 `vue-tsc --noEmit`（类型不过直接中断构建），`npm run typecheck` 用于单独快速校验，两者就是前端 CI 的全部校验。
 
 ## 7. 常见改动入口
 
 | 想改什么 | 改哪里 |
 |---|---|
-| 加一个工具 | `agent/tool/WorkbenchTools.java` + `resources/db/schema.sql` 的 `wb_tool` 种子 |
+| 加一个工具 | `agent/tool/WorkbenchTools.java` + `resources/db/data.sql` 的 `wb_tool` 种子 |
 | 加一个模型协议 | `agent/model/` 新增客户端 + `agent/ModelFactory.java` 登记 + `domain/constant/ProviderPresetEnum.java` |
 | 改推理循环 | `agent/loop/AgentLoop.java`（纯逻辑，可离线单测） |
 | 改事件归一 | `agent/AgentEventAdapter.java` + `domain/constant/EventTypeEnum.java` |
 | 改推送节拍或水位快照 | `service/RunService.java` 的 `pumpLocked` / `pushSnapshotIfNeeded` + `domain/constant/RunConst.java` 的节拍常量 |
 | 改规划器 / 记忆 / 子运行 | `agent/tool/PlanNormalizer.java`、`service/MemoryService.java`、`service/SubRunService.java` |
 | 多出一个线程池 | `config/ExecutorConfig.java`（禁止在业务类里裸建线程池，见 AGENTS.md §17） |
-| 加一个权限点 | `config/DataInitializer.java` 的菜单种子（`menu_type=button`）+ 控制器注解，`PermissionContractTest` 会校验一致性 |
-| 加一个内置角色 | `domain/constant/RoleCodeConst.java` + `DataInitializer` 的角色与授权 |
+| 加一个权限点 | `resources/db/data.sql` 的菜单种子（`menu_type=button`）+ 控制器注解，`PermissionContractTest` 会校验一致性 |
+| 加一个内置角色 | `domain/constant/RoleCodeConst.java` + `resources/db/data.sql` 的角色与授权 |
 | 加一类日志检索字段 | `observability/ManticoreLogAppender.java` + `mapper/LogSearchMapper.java` 表定义 |
 | 改 SQL / HTTP 调用审计 | `observability/SqlAuditInterceptor.java` / `HttpAuditFilter.java` / `ObserveStats.java`；脱敏规则集中在 `observability/LogSanitizer.java`，阈值在 `config/ObserveProperties.java` |
 | 加一种知识库文档格式 | `service/DocTextExtractor.java` + `domain/constant/KbConst.java` 扩展名清单 |
 | 加一个 AI 辅助动作 | `domain/constant/DocConst.java` 的 `ASSIST_TEMPLATES` + 前端动作下拉与文案 |
 | 加一种在线预览格式 | `views/files/FileList.vue` 的 `kindOf` 与对应渲染分支 |
-| 加一个前端页面 | `frontend/src/views/` + `DataInitializer` 菜单种子（`component` 指向该文件） |
+| 加一个前端页面 | `frontend/src/views/` + `resources/db/data.sql` 菜单种子（`component` 指向该文件） |
 | 改配色或控件形态 | `frontend/src/styles/tokens.css`（唯一色值来源）+ `components/ui/` |
 | 加一个写接口 | `@SaCheckPermission` + `@Idempotent` + `@PostMapping` |
 
