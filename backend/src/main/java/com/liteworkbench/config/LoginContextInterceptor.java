@@ -10,12 +10,12 @@ import com.liteworkbench.domain.constant.UserStateEnum;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.MDC;
-import org.springframework.web.servlet.HandlerInterceptor;
+import org.springframework.web.servlet.AsyncHandlerInterceptor;
 
 import java.util.Objects;
 
 /** 请求进入时把登录用户放入线程上下文与 MDC，并拦截未改密的种子账号 */
-public class LoginContextInterceptor implements HandlerInterceptor {
+public class LoginContextInterceptor implements AsyncHandlerInterceptor {
 
     /** 惰性加载登录用户到 ThreadLocal；已登录同时把 userId 注入 MDC；停用账号与未改密种子账号在此拦截 */
     @Override
@@ -53,6 +53,13 @@ public class LoginContextInterceptor implements HandlerInterceptor {
         MDC.remove(AppConst.MDC_USER_ID);
         MDC.remove(AppConst.MDC_SESSION_ID);
         MDC.remove(AppConst.MDC_RUN_ID);
+    }
+
+    /** 异步请求（SSE）交出请求线程时就要清理：afterCompletion 会在异步派发后执行，可能落在另一个线程上 */
+    @Override
+    public void afterConcurrentHandlingStarted(HttpServletRequest request, HttpServletResponse response,
+                                               Object handler) {
+        clearContext();
     }
 
     /** 强制改密白名单：仅放行取公钥、当前用户、改密与登出，前缀相等匹配防误放行 */

@@ -72,10 +72,7 @@ public class ExecutorConfig {
         return scheduler;
     }
 
-    /**
-     * 统一收尾的三段式池：Bean 类型即 ExecutorService，注入点无需感知实现。
-     * 关闭顺序必须是「停收 → 等在途 → 超时中断」，否则在途运行会被直接掐断。
-     */
+    /** 统一收尾的三段式池：关闭顺序必须「停收 → 等在途 → 超时中断」，否则在途运行被直接掐断 */
     private static final class GracefulExecutor extends ThreadPoolExecutor {
 
         private final String prefix;

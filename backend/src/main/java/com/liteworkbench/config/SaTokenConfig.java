@@ -18,13 +18,13 @@ public class SaTokenConfig implements WebMvcConfigurer {
             "/actuator/health/**",
     };
 
-    /** 注册登录校验与上下文拦截器 */
+    /** 注册登录校验与上下文拦截器；两者都包一层异步跳过，否则 SSE 收尾的异步派发会重跑拦截器链并抛 SaTokenContextException */
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(new SaInterceptor(handle -> StpUtil.checkLogin()))
+        registry.addInterceptor(new AsyncSafeInterceptor(new SaInterceptor(handle -> StpUtil.checkLogin())))
                 .addPathPatterns("/api/**")
                 .excludePathPatterns(WHITE_LIST);
-        registry.addInterceptor(new LoginContextInterceptor())
+        registry.addInterceptor(new AsyncSafeInterceptor(new LoginContextInterceptor()))
                 .addPathPatterns("/api/**");
     }
 }

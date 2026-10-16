@@ -61,12 +61,6 @@ public interface PermConst {
     String WB_DOC_DELETE = "wb:doc:delete";
     String WB_DOC_SEARCH = "wb:doc:search";
 
-    // 工作台 · 提示词
-    String WB_PROMPT_LIST = "wb:prompt:list";
-    String WB_PROMPT_CREATE = "wb:prompt:create";
-    String WB_PROMPT_UPDATE = "wb:prompt:update";
-    String WB_PROMPT_DELETE = "wb:prompt:delete";
-
     // 工作台 · 模型供应方
     String WB_PROVIDER_LIST = "wb:provider:list";
     String WB_PROVIDER_CREATE = "wb:provider:create";

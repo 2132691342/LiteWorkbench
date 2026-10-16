@@ -17,8 +17,7 @@ public class LiteWorkbenchApplication {
         try {
             SpringApplication.run(LiteWorkbenchApplication.class, args);
         } catch (Throwable e) {
-            // 启动失败必须显式退出：连接池、MQ 客户端等第三方组件会留下非守护线程，
-            // 只靠主线程结束无法终止 JVM，容器会停在假 Up 状态直到被编排强杀
+            // 启动失败必须显式退出：第三方组件的非守护线程会让容器停在假 Up 状态
             log.error("[app.startup] 应用启动失败，进程退出: {}", e.getMessage());
             System.exit(1);
         }

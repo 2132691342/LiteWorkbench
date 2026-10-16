@@ -45,7 +45,7 @@ public class ProviderService {
         return providerMapper.selectAll().stream().map(this::toVO).toList();
     }
 
-    /** 预设列表：与 hutool-ai 对齐的五个预设，前端新建表单下拉用 */
+    /** 预设列表：与 hutool-ai 对齐的四个预设，前端新建表单下拉用 */
     public List<ProviderPresetVO> presets() {
         return Arrays.stream(ProviderPresetEnum.values()).map(preset -> {
             ProviderPresetVO vo = new ProviderPresetVO();
@@ -61,6 +61,8 @@ public class ProviderService {
     /** 新建供应方：端点与默认模型留空时回落预设默认值 */
     @Transactional(rollbackFor = Exception.class)
     public String create(ProviderREQ req, String userId) {
+        // 协议集合固定为四家 OpenAI 兼容预设，未知编码（如本地 ollama 端点）没有对应协议通道，直接拒绝
+        requirePresetCode(req.getProviderCode());
         var conflict = providerMapper.countByCodeExclude(req.getProviderCode(), "");
         if (conflict > 0) {
             throw new BizException(ErrorCodeEnum.STATE_CONFLICT, "供应方编码已存在");
@@ -88,6 +90,7 @@ public class ProviderService {
         if (StrUtil.isBlank(req.getProviderId())) {
             throw new BizException(ErrorCodeEnum.PARAM_INVALID, "providerId 不能为空");
         }
+        requirePresetCode(req.getProviderCode());
         WbProviderDO exists = require(req.getProviderId());
         var conflict = providerMapper.countByCodeExclude(req.getProviderCode(), req.getProviderId());
         if (conflict > 0) {
@@ -141,6 +144,13 @@ public class ProviderService {
             throw new BizException(ErrorCodeEnum.RESOURCE_NOT_FOUND, providerId);
         }
         return provider;
+    }
+
+    /** 协议码白名单：只接受四家预设，存量自定义行可读可删，但不允许新建或改写成未知协议 */
+    private void requirePresetCode(String code) {
+        if (Objects.isNull(ProviderPresetEnum.ofCode(code))) {
+            throw new BizException(ErrorCodeEnum.PARAM_INVALID, "不支持的供应方协议，仅支持：openai / deepseek / doubao / grok");
+        }
     }
 
     private String encryptIfPresent(String apiKey) {

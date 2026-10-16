@@ -1,4 +1,4 @@
--- LiteWorkbench 库表定义：全部幂等，可重复执行；账号/角色/菜单/供应方种子由 DataInitializer 写入，工具种子见文末
+-- LiteWorkbench 库表定义：全部幂等，可重复执行；种子数据见同目录 data.sql（先建表后写数，由 spring.sql.init 顺序执行）
 -- 公共约定：主键 = 业务前缀_ULID；时间 timestamptz；逻辑删除 deleted；用户资源带 user_id
 
 -- ============================== 用户与权限 ==============================
@@ -65,6 +65,8 @@ CREATE TABLE IF NOT EXISTS sys_menu (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uk_sys_menu_perm ON sys_menu (perm_code) WHERE deleted = false AND perm_code IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_sys_menu_parent ON sys_menu (parent_id);
+-- 种子标记：data.sql 写入的行置位，管理员自建菜单为 false，对账时据此区分"平台种子"与"运营新增"
+ALTER TABLE sys_menu ADD COLUMN IF NOT EXISTS seeded boolean NOT NULL DEFAULT false;
 
 -- 用户-角色
 CREATE TABLE IF NOT EXISTS sys_user_role (
@@ -181,6 +183,18 @@ CREATE TABLE IF NOT EXISTS wb_skill (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uk_wb_skill_code ON wb_skill (user_id, skill_code) WHERE deleted = false;
 ALTER TABLE wb_skill ADD COLUMN IF NOT EXISTS builtin boolean NOT NULL DEFAULT false;
+
+-- 内置技能种子：平台级定义（data.sql 写入），用户首次使用与升级补种时按此表复制成 wb_skill 行
+-- 自然主键用 skill_code：种子按码对账，不参与业务 ID 规范
+CREATE TABLE IF NOT EXISTS wb_skill_seed (
+    skill_code    varchar(64)  PRIMARY KEY,
+    skill_name    varchar(128) NOT NULL,
+    summary       varchar(512),
+    content       text,
+    trigger_words varchar(512),
+    sort_no       int          NOT NULL DEFAULT 0,
+    updated_at    timestamptz  NOT NULL DEFAULT now()
+);
 
 -- 文件对象
 CREATE TABLE IF NOT EXISTS wb_file (
@@ -299,25 +313,6 @@ CREATE TABLE IF NOT EXISTS wb_doc_version (
 CREATE UNIQUE INDEX IF NOT EXISTS uk_wb_doc_version_no ON wb_doc_version (doc_id, version_no);
 CREATE INDEX IF NOT EXISTS idx_wb_doc_version_doc ON wb_doc_version (doc_id, version_no DESC);
 
--- 提示词模板（内置行 user_id = 'builtin'）
-CREATE TABLE IF NOT EXISTS wb_prompt (
-    prompt_id    varchar(40)  PRIMARY KEY,
-    user_id      varchar(40)  NOT NULL,
-    prompt_title varchar(128) NOT NULL,
-    category     varchar(64),
-    content      text         NOT NULL,
-    variables    jsonb,
-    builtin      boolean      NOT NULL DEFAULT false,
-    use_count    int          NOT NULL DEFAULT 0,
-    created_by   varchar(40),
-    created_at   timestamptz  NOT NULL DEFAULT now(),
-    updated_by   varchar(40),
-    updated_at   timestamptz,
-    deleted      boolean      NOT NULL DEFAULT false,
-    remark       varchar(512)
-);
-CREATE INDEX IF NOT EXISTS idx_wb_prompt_owner ON wb_prompt (user_id, created_at DESC) WHERE deleted = false;
-
 -- 长期记忆：用户显式沉淀的事实与偏好，跨会话注入系统提示，按用户隔离
 CREATE TABLE IF NOT EXISTS wb_memory (
     memory_id    varchar(40)  PRIMARY KEY,
@@ -339,25 +334,6 @@ CREATE TABLE IF NOT EXISTS wb_memory (
 CREATE UNIQUE INDEX IF NOT EXISTS uk_wb_memory_user_key ON wb_memory (user_id, memory_key) WHERE deleted = false;
 CREATE INDEX IF NOT EXISTS idx_wb_memory_owner ON wb_memory (user_id, weight DESC, updated_at DESC) WHERE deleted = false;
 
--- ============================== 内置工具种子 ==============================
-
--- 工具种子用固定 ID 而非 ULID：upsert 幂等重放，重启不产生重复行，标签与风险等级变更随版本回写
-INSERT INTO wb_tool (tool_id, tool_name, tool_label, category, risk_level, enabled)
-VALUES
-    ('TOOL_00000000000000000000000001', 'python_exec', 'Python 执行', 'runtime', 'confirm', true),
-    ('TOOL_00000000000000000000000002', 'file_read', '读取文件', 'file', 'safe', true),
-    ('TOOL_00000000000000000000000003', 'file_write', '写入文件', 'file', 'confirm', true),
-    ('TOOL_00000000000000000000000004', 'http_get', 'HTTP 请求', 'network', 'safe', true),
-    ('TOOL_00000000000000000000000005', 'kb_search', '知识库检索', 'knowledge', 'safe', true),
-    ('TOOL_00000000000000000000000006', 'task_plan', '任务规划', 'agent', 'safe', true),
-    ('TOOL_00000000000000000000000007', 'memory_search', '记忆检索', 'agent', 'safe', true),
-    ('TOOL_00000000000000000000000008', 'memory_write', '记忆写入', 'agent', 'confirm', true),
-    ('TOOL_00000000000000000000000009', 'task_delegate', '子任务委派', 'agent', 'confirm', false)
-ON CONFLICT (tool_id) DO UPDATE SET
-    tool_label = EXCLUDED.tool_label,
-    category = EXCLUDED.category,
-    risk_level = EXCLUDED.risk_level;
-
 -- ============================== 旧库升级兜底（幂等） ==============================
 -- 只针对仍然存在的表；已下线表的语句不得保留，否则建表脚本会整段失败
 
@@ -365,6 +341,7 @@ ALTER TABLE wb_run ADD COLUMN IF NOT EXISTS state varchar(16) NOT NULL DEFAULT '
 ALTER TABLE wb_event ADD COLUMN IF NOT EXISTS user_id varchar(40) NOT NULL DEFAULT '';
 
 -- ============================== 已下线表清理 ==============================
--- 已下线表：wb_flow（可视化编排画布）与 wb_task（异步任务预留），DROP 幂等
+-- 已下线表：wb_flow（可视化编排画布）、wb_task（异步任务预留）、wb_prompt（提示词模板，能力并入技能），DROP 幂等
 DROP TABLE IF EXISTS wb_flow;
 DROP TABLE IF EXISTS wb_task;
+DROP TABLE IF EXISTS wb_prompt;

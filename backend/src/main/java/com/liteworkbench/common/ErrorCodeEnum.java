@@ -100,11 +100,7 @@ public enum ErrorCodeEnum {
     DOC_CONTENT_TOO_LONG("8703", 400, "正文超过 200000 字上限"),
     DOC_VERSION_NOT_FOUND("8704", 404, "文档版本不存在"),
 
-    // 提示词 8800
-    PROMPT_NOT_FOUND("8801", 404, "提示词不存在"),
-    PROMPT_BUILTIN_READONLY("8802", 409, "内置提示词只读，请先复制"),
-    PROMPT_TITLE_CONFLICT("8803", 409, "同名提示词已存在"),
-    PROMPT_VARIABLE_MISSING("8804", 400, "变量未填写完整"),
+    // 8800 段保留未用：提示词模块已下线，错误码段号不回收，避免历史日志与已发布文档的编码错位
 
     // 长期记忆 8900
     MEMORY_NOT_FOUND("8901", 404, "记忆不存在"),

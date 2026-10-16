@@ -4,16 +4,21 @@ import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.liteworkbench.domain.constant.PermConst;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
+import org.springframework.util.StreamUtils;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -21,10 +26,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** 权限契约：控制器注解、PermConst 常量、菜单种子三处声明必须一致，漏一处只在运行到该接口时才暴露 */
 class PermissionContractTest {
 
+    /** 权限标识形态：域:资源:动作；带引号匹配，避免把种子脚本里的 LIKE 'system:role:%' 当成权限点 */
+    private static final Pattern PERM_PATTERN =
+            Pattern.compile("'([a-z][a-z0-9]*:[a-z][a-z0-9]*:[a-z][a-z0-9]*)'");
+
     @Test
     @DisplayName("控制器注解与 PermConst 声明的权限点必须全部落进菜单种子")
     void permissionCodesAllExistInMenuSeeds() throws Exception {
-        List<String> seeds = DataInitializer.seedPermCodes();
+        List<String> seeds = seedPermCodes();
         TreeSet<String> missing = new TreeSet<>();
 
         List<Class<?>> controllers = scanControllers();
@@ -56,6 +65,19 @@ class PermissionContractTest {
         if (!seeds.contains(value)) {
             missing.add(value);
         }
+    }
+
+    /** 菜单种子落在 db/data.sql，权限点从脚本里解析，避免脚本与 Java 常量两处清单漂移 */
+    private List<String> seedPermCodes() throws IOException {
+        Resource resource = new ClassPathResource("db/data.sql");
+        String sql = StreamUtils.copyToString(resource.getInputStream(), StandardCharsets.UTF_8);
+        TreeSet<String> perms = new TreeSet<>();
+        Matcher matcher = PERM_PATTERN.matcher(sql);
+        while (matcher.find()) {
+            perms.add(matcher.group(1));
+        }
+        assertFalse(perms.isEmpty(), "未从 db/data.sql 解析到权限点，种子脚本或解析规则失效");
+        return new ArrayList<>(perms);
     }
 
     /** 走 classpath* 模式而非目录列举：打包成 JAR 后目录列举会失效 */

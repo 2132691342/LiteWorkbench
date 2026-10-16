@@ -30,6 +30,7 @@ import com.liteworkbench.domain.constant.StopReasonEnum;
 import com.liteworkbench.domain.dto.ChatStreamREQ;
 import com.liteworkbench.domain.dto.MessageDocDTO;
 import com.liteworkbench.domain.dto.RunEventDTO;
+import com.liteworkbench.domain.dto.RunRefREQ;
 import com.liteworkbench.domain.dto.SessionPageREQ;
 import com.liteworkbench.domain.entity.WbEventDO;
 import com.liteworkbench.domain.entity.WbRunDO;
@@ -75,6 +76,8 @@ public class RunService {
     private final AgentProperties agentProperties;
     private final SessionService sessionService;
     private final SkillService skillService;
+    /** 输入框 @ 引用的上下文注入，只读用户自己的资源 */
+    private final RunRefService runRefService;
     private final WbRunMapper runMapper;
     private final WbEventMapper eventMapper;
     private final MessageIndexMapper messageIndexMapper;
@@ -120,7 +123,8 @@ public class RunService {
                 sessionMapper.updateStats(session.getSessionId(), 1, 1, 0);
             });
 
-            String systemPrompt = composeSystemPrompt(userId, session.getSystemPrompt(), req.getContent());
+            String systemPrompt = composeSystemPrompt(userId, session.getSystemPrompt(), req.getContent(),
+                    req.getSkillCodes(), req.getRefs());
             RunContext context = new RunContext(userId, session.getSessionId(), runId,
                     providerCode, modelName, systemPrompt, loadHistory(session.getSessionId(), runId),
                     req.getContent());
@@ -147,18 +151,23 @@ public class RunService {
         }
     }
 
-    /** 系统提示装配：平台提示 + 会话补充 + 技能展开 + 长期记忆，记忆放末尾——最近约束最容易被模型遵守 */
-    private String composeSystemPrompt(String userId, String sessionPrompt, String userInput) {
+    /** 系统提示装配：平台提示 + 会话补充 + 技能展开 + 引用上下文 + 长期记忆，记忆放末尾——最近约束最容易被模型遵守 */
+    private String composeSystemPrompt(String userId, String sessionPrompt, String userInput,
+                                       List<String> skillCodes, List<RunRefREQ> refs) {
         String base = StrUtil.isBlank(sessionPrompt)
                 ? AgentConst.PLATFORM_SYSTEM_PROMPT
                 : AgentConst.PLATFORM_SYSTEM_PROMPT + "\n\n[会话补充指令] 以下是本会话的自定义要求，冲突时以其为准：\n" + sessionPrompt;
-        String assembled = skillService.assembleSystemPrompt(userId, base, userInput);
+        String assembled = skillService.assembleSystemPrompt(userId, base, userInput, skillCodes);
+        String refBlock = runRefService.buildBlock(userId, userInput, refs);
         String memory = memoryPort.promptBlock(userId);
-        if (StrUtil.isBlank(memory)) {
-            return assembled;
+        StringBuilder prompt = new StringBuilder(assembled);
+        if (StrUtil.isNotBlank(refBlock)) {
+            prompt.append("\n\n[本轮引用资料] 用户点名了以下上下文，回答必须优先依据这些内容：").append(refBlock);
         }
-        return assembled + "\n\n[用户长期记忆] 以下为该用户已沉淀的偏好与事实，"
-                + "与本轮任务相关时必须遵守：\n" + memory;
+        if (StrUtil.isNotBlank(memory)) {
+            prompt.append("\n\n[用户长期记忆] 以下为该用户已沉淀的偏好与事实，与本轮任务相关时必须遵守：\n").append(memory);
+        }
+        return prompt.toString();
     }
 
     /** 运行分页，按归属用户过滤 */

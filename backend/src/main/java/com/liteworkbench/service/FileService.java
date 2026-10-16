@@ -13,6 +13,7 @@ import com.liteworkbench.domain.dto.UploadFileDTO;
 import com.liteworkbench.domain.entity.WbFileDO;
 import com.liteworkbench.domain.vo.FileVO;
 import com.liteworkbench.mapper.WbFileMapper;
+import io.minio.GetObjectArgs;
 import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
@@ -22,12 +23,17 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.io.BufferedReader;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /** 文件空间：元数据进 PostgreSQL，二进制进 MinIO，对象键按用户隔离 */
@@ -39,6 +45,10 @@ public class FileService {
     private static final long MAX_SIZE = 100L * 1024 * 1024;
     private static final Duration PRESIGN_TTL = Duration.ofMinutes(15);
     private static final DateTimeFormatter DAY_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd");
+    /** 可注入提示词的文本扩展名：其余类型按二进制处理，不读正文 */
+    private static final Set<String> TEXT_EXTENSIONS = Set.of(
+            "txt", "md", "markdown", "csv", "tsv", "json", "yml", "yaml", "log", "sql", "xml", "html", "htm",
+            "java", "js", "ts", "vue", "py", "go", "rs", "sh", "properties", "ini", "toml");
 
     private final WbFileMapper fileMapper;
     private final MinioClient minioClient;
@@ -103,6 +113,45 @@ public class FileService {
         }
         log.info("[file.upload] userId={} fileId={} size={}", userId, fileId, file.fileSize());
         return toVO(entity);
+    }
+
+    /** 读取文本类文件正文，供运行期 @ 引用注入：按字符数上限边读边截，非文本类型返回 null 由调用方给出提示 */
+    public String readText(String userId, String fileId, int maxChars) {
+        WbFileDO file = fileMapper.selectByIdAndUser(userId, fileId);
+        if (Objects.isNull(file)) {
+            throw new BizException(ErrorCodeEnum.FILE_NOT_FOUND, fileId);
+        }
+        if (!isTextual(file)) {
+            return null;
+        }
+        try (InputStream in = minioClient.getObject(GetObjectArgs.builder()
+                .bucket(file.getBucketName())
+                .object(file.getObjectKey())
+                .build());
+             BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
+            StringBuilder text = new StringBuilder();
+            char[] buffer = new char[4096];
+            int read;
+            while (text.length() < maxChars && (read = reader.read(buffer)) > 0) {
+                text.append(buffer, 0, Math.min(read, maxChars - text.length()));
+            }
+            return text.toString();
+        } catch (Exception e) {
+            log.warn("[file.readText] 读取失败 userId={} fileId={} {}", userId, fileId, e.getMessage());
+            return null;
+        }
+    }
+
+    /** 文本判定：按内容类型前缀或扩展名白名单，二进制文件不进提示词 */
+    private static boolean isTextual(WbFileDO file) {
+        String contentType = StrUtil.nullToEmpty(file.getContentType()).toLowerCase(Locale.ROOT);
+        if (contentType.startsWith("text/") || contentType.contains("json") || contentType.contains("xml")
+                || contentType.contains("yaml") || contentType.contains("javascript")) {
+            return true;
+        }
+        String name = StrUtil.nullToEmpty(file.getFileName()).toLowerCase(Locale.ROOT);
+        int dot = name.lastIndexOf('.');
+        return dot > 0 && TEXT_EXTENSIONS.contains(name.substring(dot + 1));
     }
 
     /** 预签名下载地址，前端直连 MinIO */

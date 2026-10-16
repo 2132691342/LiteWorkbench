@@ -37,7 +37,8 @@ spring:
     init:
       mode: always
       schema-locations: classpath:db/schema.sql
-      # 必须显式指定：schema.sql 含中文种子数据（wb_tool 标签），不指定时按平台默认编码读取，Windows(GBK) 下整表标签变乱码
+      data-locations: classpath:db/data.sql
+      # 必须显式指定：两个脚本都含中文（菜单名、技能手册正文），不指定时按平台默认编码读取，Windows(GBK) 下中文变乱码
       encoding: UTF-8
       continue-on-error: false
   servlet:
