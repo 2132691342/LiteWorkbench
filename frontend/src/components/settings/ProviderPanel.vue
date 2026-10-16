@@ -30,6 +30,13 @@ const presetOptions = computed(() =>
     label: t(`settings.provider.preset_${preset.providerCode}`),
   })))
 
+const presetCodes = computed(() => presets.value.map((preset) => preset.providerCode))
+
+/** 非预设协议（不在白名单内）打标，引导删除重建，不再静默展示 */
+function isUnsupported(code: string): boolean {
+  return presetCodes.value.length > 0 && !presetCodes.value.includes(code)
+}
+
 function emptyForm(): ProviderREQ {
   return { providerCode: 'openai', providerName: '', baseUrl: '', apiKey: '', defaultModel: '', enabled: true }
 }
@@ -136,12 +143,15 @@ onMounted(load)
           style="border-color: var(--lw-border)"
         >
           <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-wrap">
               <span class="font-bold text-sm">{{ item.providerName }}</span>
               <LwTag :tone="item.enabled ? 'success' : 'muted'">
                 {{ item.enabled ? t('common.enabled') : t('common.disabled') }}
               </LwTag>
               <LwTag tone="secondary">{{ item.providerCode }}</LwTag>
+              <el-tooltip v-if="isUnsupported(item.providerCode)" :content="t('settings.provider.unsupportedTip')" placement="top">
+                <LwTag tone="error">{{ t('settings.provider.unsupported') }}</LwTag>
+              </el-tooltip>
             </div>
             <div class="text-xs mt-1 truncate" style="color: var(--lw-ink-muted)">
               {{ item.baseUrl }} · {{ item.defaultModel }} · {{ item.apiKeyMasked || '—' }}

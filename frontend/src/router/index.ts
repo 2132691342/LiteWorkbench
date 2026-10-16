@@ -43,6 +43,11 @@ const staticRoutes: RouteRecordRaw[] = [
   },
 ]
 
+/** 哈希入口归一：书签或手输的 /#/logs 形式重写为历史模式路径，避免被当成锚点忽略后弹回仪表盘 */
+if (location.hash.startsWith('#/')) {
+  history.replaceState(history.state, '', location.hash.slice(1) + location.search)
+}
+
 const router = createRouter({
   history: createWebHistory(),
   routes: staticRoutes,

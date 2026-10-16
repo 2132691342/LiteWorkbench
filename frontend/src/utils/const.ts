@@ -22,3 +22,11 @@ export function formatTime(value?: number): string {
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
+
+/** 时间线内的时点：只到时分，同一天的对话不需要重复年份日期 */
+export function formatClock(value?: number): string {
+  if (!value) return ''
+  const date = new Date(value)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}`
+}

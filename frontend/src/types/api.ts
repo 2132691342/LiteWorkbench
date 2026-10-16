@@ -569,9 +569,20 @@ export interface KbSearchParams {
 
 /* ===== 对话入参 ===== */
 
+/** 运行期引用：输入框 @ 选中的上下文对象 */
+export interface RunRefREQ {
+  type: 'kb' | 'file' | 'doc'
+  id: string
+  label?: string
+}
+
 export interface ChatStreamREQ {
   sessionId: string
   content: string
+  /** 输入框 / 点名的技能码，命中即强制展开 */
+  skillCodes?: string[]
+  /** 输入框 @ 引用的上下文对象 */
+  refs?: RunRefREQ[]
 }
 
 export interface InvokeToolREQ {
@@ -654,36 +665,4 @@ export interface DocSearchParams extends PageREQ {
   category?: string
 }
 
-/* ===== 提示词 ===== */
-
-export interface PromptVariable {
-  name: string
-  label: string
-  defaultValue?: string
-}
-
-export interface PromptVO {
-  promptId: string
-  userId?: string
-  promptTitle: string
-  category?: string
-  content: string
-  variables?: PromptVariable[]
-  builtin?: boolean
-  useCount?: number
-  createdAt?: number
-  updatedAt?: number
-}
-
-export interface PromptREQ {
-  promptId?: string
-  promptTitle: string
-  category?: string
-  content: string
-  variables?: string
-}
-
-export interface PromptRenderREQ {
-  promptId: string
-  variables?: Record<string, string>
-}
+/* ===== 提示词模块已下线，模板能力并入技能（见 wb_skill_seed） ===== */

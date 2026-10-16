@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { RefreshLeft, Search } from '@element-plus/icons-vue'
+import { ArrowDown, RefreshLeft, Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import LwBarChart from '@/components/charts/LwBarChart.vue'
 import LwButton from '@/components/ui/LwButton.vue'
 import LwCard from '@/components/ui/LwCard.vue'
 import LwPageState from '@/components/ui/LwPageState.vue'
@@ -13,7 +12,7 @@ import { logApi } from '@/api'
 import type { LogDocVO } from '@/types/api'
 import { formatTime } from '@/utils/const'
 
-/** 日志中心：分布概览 + 多维过滤 + 全文检索，命中行内高亮，支持 traceId 钻取 */
+/** 日志中心：一屏看分布，两行完成检索，行内两行预览 + 展开看全文 */
 const { t, te } = useI18n()
 
 const loading = ref(false)
@@ -47,6 +46,9 @@ const query = reactive({
   page: 1,
   size: 20,
 })
+
+/** 高级筛选展开态：默认收起，主行只留关键字、级别与快捷时间 */
+const advancedOpen = ref(false)
 
 /** 时间归一：空值与非法值一律 undefined，数字字符串转毫秒 */
 function toMillis(value: TimeInput): number | undefined {
@@ -84,6 +86,13 @@ const traceMode = computed(() => query.field === 'traceId' && query.keyword.trim
 /** 展示用列表：链路钻取升序，其余保持服务端的时间倒序 */
 const displayDocs = computed(() => (traceMode.value ? [...docs.value].reverse() : docs.value))
 
+/** 高级筛选已启用条数：用于折叠态上的角标提示；快捷时间预设写入的 from/to 不计入，只有用户自选时间范围才算 */
+const advancedCount = computed(
+  () =>
+    [query.logger, query.traceId, query.userId, query.runId].filter((item) => item.trim().length > 0).length +
+    (activePreset.value ? 0 : (toMillis(query.from) ? 1 : 0) + (toMillis(query.to) ? 1 : 0)),
+)
+
 const levelCount = computed(() => {
   const map = new Map<string, number>()
   levels.value.forEach((item) => map.set(item.level, item.count))
@@ -94,15 +103,13 @@ function levelTotal(level: string): string {
   return (levelCount.value.get(level) ?? 0).toLocaleString()
 }
 
-/** 直方图类目：按桶数量自适应格式，超过 48 桶只显示首末；天桶只显示日期 */
-const histogramCategories = computed(() =>
-  histogram.value.map((item, index) => {
-    if (histogram.value.length <= 48 || index === 0 || index === histogram.value.length - 1) {
-      return formatHour(item.hour)
-    }
-    return ''
-  }),
-)
+/** 迷你直方图：单行内嵌，柱子高度按占比，悬停看时间与条数，点击钻取 */
+const histogramMax = computed(() => histogram.value.reduce((max, item) => Math.max(max, item.count), 0))
+
+function barHeight(count: number): string {
+  if (histogramMax.value <= 0) return '8%'
+  return `${Math.max(8, Math.round((count / histogramMax.value) * 100))}%`
+}
 
 function formatHour(value: number): string {
   const date = new Date(value)
@@ -322,106 +329,77 @@ onBeforeUnmount(() => {
       </el-tooltip>
     </div>
 
-    <!-- 分布概览：级别计数卡 + 时间直方图，随过滤条件联动 -->
-    <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
-      <LwCard v-for="level in ['ERROR', 'WARN', 'INFO']" :key="level">
-        <div class="flex items-center justify-between">
-          <span class="text-xs font-bold" style="color: var(--lw-ink-muted)">{{ t(`logs.level_${level.toLowerCase()}`) }}</span>
-          <LwTag :tone="level === 'ERROR' ? 'error' : level === 'WARN' ? 'warning' : 'primary'">
-            {{ level }}
-          </LwTag>
+    <!-- 分布概览：级别计数与时间直方图并作一行紧凑条，随过滤条件联动 -->
+    <LwCard>
+      <div class="flex flex-col sm:flex-row sm:items-center gap-4">
+        <div class="flex items-center gap-5 shrink-0">
+          <div v-for="level in ['ERROR', 'WARN', 'INFO']" :key="level" class="flex items-center gap-2">
+            <span
+              class="w-2 h-2 rounded-full shrink-0"
+              :style="{
+                backgroundColor:
+                  level === 'ERROR'
+                    ? 'var(--lw-error)'
+                    : level === 'WARN'
+                      ? 'var(--lw-warning)'
+                      : 'var(--lw-primary)',
+              }"
+            />
+            <span class="text-xs font-bold" style="color: var(--lw-ink-muted)">{{ t(`logs.level_${level.toLowerCase()}`) }}</span>
+            <span class="text-lg font-bold tracking-tight tabular-nums" style="color: var(--lw-ink)">
+              {{ statsLoading ? '·' : levelTotal(level) }}
+            </span>
+          </div>
         </div>
-        <div class="text-2xl font-bold tracking-tight" style="color: var(--lw-ink)">
-          {{ statsLoading ? '·' : levelTotal(level) }}
-        </div>
-        <div class="text-xs -mt-2" style="color: var(--lw-ink-muted)">{{ t('logs.inRange') }}</div>
-      </LwCard>
-      <LwCard class="lg:col-span-1">
-        <div class="flex items-center justify-between">
-          <span class="text-xs font-bold" style="color: var(--lw-ink-muted)">{{ t('logs.histogram') }}</span>
-          <span class="text-xs" style="color: var(--lw-ink-muted)">{{ t('logs.histogramTip') }}</span>
-        </div>
-        <div class="flex-1 min-h-0">
-          <LwBarChart
-            v-if="histogram.length"
-            :categories="histogramCategories"
-            :values="histogram.map((item) => item.count)"
-            :height="132"
-            secondary
-            clickable
-            @bucket-click="drillHour"
-          />
-          <div v-else class="h-full flex items-center justify-center text-xs" style="color: var(--lw-ink-muted)">
+        <div class="hidden sm:block w-px self-stretch" style="background: var(--lw-border)" />
+        <div class="flex-1 min-w-0 flex flex-col gap-1">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold" style="color: var(--lw-ink-muted)">{{ t('logs.histogram') }}</span>
+            <span class="text-xs" style="color: var(--lw-ink-muted)">{{ t('logs.histogramTip') }}</span>
+          </div>
+          <div v-if="histogram.length" class="flex items-end gap-[2px] h-8">
+            <button
+              v-for="(item, index) in histogram"
+              :key="index"
+              type="button"
+              class="flex-1 min-w-[2px] rounded-t-[3px] transition-all duration-200 hover:opacity-70"
+              style="background-color: var(--lw-secondary)"
+              :style="{ height: barHeight(item.count) }"
+              :title="`${formatHour(item.hour)} · ${item.count}`"
+              :aria-label="`${formatHour(item.hour)} ${item.count}`"
+              @click="drillHour(index)"
+            />
+          </div>
+          <div v-else class="h-8 flex items-center text-xs" style="color: var(--lw-ink-muted)">
             {{ statsLoading ? t('common.loading') : t('logs.noStats') }}
           </div>
         </div>
-      </LwCard>
-    </div>
+      </div>
+    </LwCard>
 
     <LwCard>
-      <div class="flex flex-wrap items-center gap-3">
-        <el-select v-model="query.field" style="width: 130px" @change="handleSearch">
+      <!-- 主筛选行：字段 + 关键字 + 级别 + 快捷时间，够用不绕 -->
+      <div class="flex flex-wrap items-center gap-2">
+        <el-select v-model="query.field" style="width: 116px" @change="handleSearch">
           <el-option v-for="item in FIELD_OPTIONS" :key="item.value" :label="fieldLabel(item.value)" :value="item.value" />
         </el-select>
         <el-input
           v-model="query.keyword"
           :placeholder="t('logs.keywordPlaceholder')"
           clearable
-          style="width: 280px"
+          class="flex-1 min-w-[200px]"
           @keyup.enter="handleSearch"
           @clear="handleSearch"
         />
-        <el-select v-model="query.level" :placeholder="t('logs.level')" clearable style="width: 130px" @change="handleSearch">
+        <el-select v-model="query.level" :placeholder="t('logs.level')" clearable style="width: 116px" @change="handleSearch">
           <el-option v-for="item in ['ERROR', 'WARN', 'INFO']" :key="item" :label="t(`logs.level_${item.toLowerCase()}`)" :value="item" />
         </el-select>
-        <el-input
-          v-model="query.logger"
-          :placeholder="t('logs.loggerPlaceholder')"
-          clearable
-          style="width: 240px"
-          @keyup.enter="handleSearch"
-          @clear="handleSearch"
-        />
-        <el-input
-          v-model="query.traceId"
-          :placeholder="t('logs.traceIdPlaceholder')"
-          clearable
-          style="width: 220px"
-          @keyup.enter="handleSearch"
-          @clear="handleSearch"
-        />
-        <el-input
-          v-if="scope === 'global'"
-          v-model="query.userId"
-          :placeholder="t('logs.userIdPlaceholder')"
-          clearable
-          style="width: 220px"
-          @keyup.enter="handleSearch"
-          @clear="handleSearch"
-        />
-        <el-input
-          v-model="query.runId"
-          :placeholder="t('logs.runIdPlaceholder')"
-          clearable
-          style="width: 200px"
-          @keyup.enter="handleSearch"
-          @clear="handleSearch"
-        />
-        <el-date-picker
-          v-model="query.from"
-          type="datetime"
-          value-format="x"
-          :placeholder="t('logs.from')"
-          style="width: 190px"
-          @change="onTimeChange"
-        />
-        <el-date-picker
-          v-model="query.to"
-          type="datetime"
-          value-format="x"
-          :placeholder="t('logs.to')"
-          style="width: 190px"
-          @change="onTimeChange"
+        <LwSegmented
+          :model-value="activePreset"
+          :options="PRESETS.map((item) => ({ value: item.key, label: t(`logs.preset_${item.key}`) }))"
+          equal
+          size="sm"
+          @update:model-value="applyPreset"
         />
         <LwButton variant="ghost" @click="handleSearch">
           <template #icon><el-icon><Search /></el-icon></template>
@@ -432,18 +410,71 @@ onBeforeUnmount(() => {
           {{ t('common.reset') }}
         </LwButton>
       </div>
+
+      <!-- 高级筛选：按需展开，避免首屏被一排输入框淹没 -->
       <div class="flex flex-wrap items-center gap-3 mt-3">
-        <span class="text-xs" style="color: var(--lw-ink-muted)">{{ t('logs.quickRange') }}</span>
-        <LwSegmented
-          :model-value="activePreset"
-          :options="PRESETS.map((item) => ({ value: item.key, label: t(`logs.preset_${item.key}`) }))"
-          equal
-          @update:model-value="applyPreset"
-        />
+        <LwButton variant="text" size="sm" :aria-expanded="advancedOpen" @click="advancedOpen = !advancedOpen">
+          <template #icon>
+            <el-icon class="transition-transform duration-200" :class="{ 'rotate-180': advancedOpen }"><ArrowDown /></el-icon>
+          </template>
+          {{ t('logs.moreFilters') }}
+          <span v-if="advancedCount > 0 && !advancedOpen" class="lw-filter-badge">{{ advancedCount }}</span>
+        </LwButton>
+        <p class="text-xs" style="color: var(--lw-ink-muted)">{{ t('logs.tipShort') }}</p>
       </div>
-      <p class="text-xs mt-3" style="color: var(--lw-ink-muted)">
-        {{ t('logs.syntaxTip') }}
-      </p>
+      <transition name="lw-fade">
+        <div v-if="advancedOpen" class="flex flex-wrap items-center gap-2 mt-3">
+          <el-input
+            v-model="query.logger"
+            :placeholder="t('logs.loggerPlaceholder')"
+            clearable
+            style="width: 240px"
+            @keyup.enter="handleSearch"
+            @clear="handleSearch"
+          />
+          <el-input
+            v-model="query.traceId"
+            :placeholder="t('logs.traceIdPlaceholder')"
+            clearable
+            style="width: 220px"
+            @keyup.enter="handleSearch"
+            @clear="handleSearch"
+          />
+          <el-input
+            v-if="scope === 'global'"
+            v-model="query.userId"
+            :placeholder="t('logs.userIdPlaceholder')"
+            clearable
+            style="width: 220px"
+            @keyup.enter="handleSearch"
+            @clear="handleSearch"
+          />
+          <el-input
+            v-model="query.runId"
+            :placeholder="t('logs.runIdPlaceholder')"
+            clearable
+            style="width: 200px"
+            @keyup.enter="handleSearch"
+            @clear="handleSearch"
+          />
+          <el-date-picker
+            v-model="query.from"
+            type="datetime"
+            value-format="x"
+            :placeholder="t('logs.from')"
+            style="width: 190px"
+            @change="onTimeChange"
+          />
+          <el-date-picker
+            v-model="query.to"
+            type="datetime"
+            value-format="x"
+            :placeholder="t('logs.to')"
+            style="width: 190px"
+            @change="onTimeChange"
+          />
+        </div>
+      </transition>
     </LwCard>
 
     <LwCard>
@@ -466,47 +497,53 @@ onBeforeUnmount(() => {
             <div class="flex items-center gap-3">
               <LwTag :tone="levelTone(doc.level)" class="w-16 justify-center shrink-0">{{ doc.level }}</LwTag>
               <span class="text-xs font-mono opacity-70 shrink-0">{{ formatTime(doc.ts) }}</span>
-              <span class="text-sm truncate flex-1" style="color: var(--lw-ink)">
+              <span class="text-sm flex-1 min-w-0 lw-log-msg" style="color: var(--lw-ink)">
                 <template v-for="(seg, index) in highlight(doc.message, query.field === 'message' ? query.keyword : '')" :key="index">
                   <mark v-if="seg.hit" class="lw-mark">{{ seg.text }}</mark>
                   <span v-else>{{ seg.text }}</span>
                 </template>
               </span>
-              <span class="text-xs opacity-50 shrink-0 hidden md:block">{{ doc.logger }}</span>
+              <LwTag v-if="doc.exception" tone="error" class="shrink-0">{{ t('logs.hasException') }}</LwTag>
+              <span class="text-xs opacity-50 shrink-0 hidden md:block max-w-[180px] truncate">{{ doc.logger }}</span>
+              <el-icon class="shrink-0 transition-transform duration-200" :class="{ 'rotate-180': expanded === doc.logId }" style="color: var(--lw-ink-muted)">
+                <ArrowDown />
+              </el-icon>
             </div>
             <transition name="lw-fade">
               <div v-if="expanded === doc.logId" class="mt-3 text-xs flex flex-col gap-2">
-              <div class="flex flex-wrap items-center gap-3 opacity-60">
-                <span>{{ t('logs.traceId') }}: {{ doc.traceId || '-' }}</span>
-                <span>{{ t('logs.logger') }}: {{ doc.logger }}</span>
-                <span>{{ t('logs.thread') }}: {{ doc.thread || '-' }}</span>
-                <span v-if="doc.userId">{{ t('logs.userId') }}: {{ doc.userId }}</span>
-                <span v-if="doc.runId">{{ t('logs.runId') }}: {{ doc.runId }}</span>
-              </div>
-              <div class="flex flex-wrap items-center gap-2">
-                <LwButton variant="secondary" size="sm" @click.stop="copyTraceId(doc.traceId ?? '')">
-                  {{ copiedId === doc.traceId ? t('logs.copied') : t('logs.copyTraceId') }}
-                </LwButton>
-                <LwButton variant="ghost" size="sm" @click.stop="filterByTrace(doc.traceId ?? '')">
-                  {{ t('logs.filterByTrace') }}
-                </LwButton>
-                <LwButton
-                  v-if="doc.userId && scope === 'global'"
-                  variant="ghost"
-                  size="sm"
-                  @click.stop="filterByUser(doc.userId)"
-                >
-                  {{ t('logs.filterByUser') }}
-                </LwButton>
-                <LwButton v-if="doc.runId" variant="ghost" size="sm" @click.stop="filterByRun(doc.runId)">
-                  {{ t('logs.filterByRun') }}
-                </LwButton>
-              </div>
-              <pre
-                v-if="doc.exception"
-                class="whitespace-pre-wrap break-all max-h-64 overflow-auto p-3 rounded-lg"
-                style="background: var(--lw-error-tint); color: var(--lw-error-ink)"
-              >{{ doc.exception }}</pre>
+                <div class="text-xs font-bold" style="color: var(--lw-ink-muted)">{{ t('logs.fullMessage') }}</div>
+                <pre class="whitespace-pre-wrap break-all p-3 rounded-lg max-h-64 overflow-auto" style="background: var(--lw-surface); color: var(--lw-ink); border: 1px solid var(--lw-border)">{{ doc.message || t('logs.noMessage') }}</pre>
+                <div class="flex flex-wrap items-center gap-3 opacity-60">
+                  <span>{{ t('logs.traceId') }}: {{ doc.traceId || '-' }}</span>
+                  <span>{{ t('logs.logger') }}: {{ doc.logger }}</span>
+                  <span>{{ t('logs.thread') }}: {{ doc.thread || '-' }}</span>
+                  <span v-if="doc.userId">{{ t('logs.userId') }}: {{ doc.userId }}</span>
+                  <span v-if="doc.runId">{{ t('logs.runId') }}: {{ doc.runId }}</span>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <LwButton variant="secondary" size="sm" @click.stop="copyTraceId(doc.traceId ?? '')">
+                    {{ copiedId === doc.traceId ? t('logs.copied') : t('logs.copyTraceId') }}
+                  </LwButton>
+                  <LwButton variant="ghost" size="sm" @click.stop="filterByTrace(doc.traceId ?? '')">
+                    {{ t('logs.filterByTrace') }}
+                  </LwButton>
+                  <LwButton
+                    v-if="doc.userId && scope === 'global'"
+                    variant="ghost"
+                    size="sm"
+                    @click.stop="filterByUser(doc.userId)"
+                  >
+                    {{ t('logs.filterByUser') }}
+                  </LwButton>
+                  <LwButton v-if="doc.runId" variant="ghost" size="sm" @click.stop="filterByRun(doc.runId)">
+                    {{ t('logs.filterByRun') }}
+                  </LwButton>
+                </div>
+                <pre
+                  v-if="doc.exception"
+                  class="whitespace-pre-wrap break-all max-h-64 overflow-auto p-3 rounded-lg"
+                  style="background: var(--lw-error-tint); color: var(--lw-error-ink)"
+                >{{ doc.exception }}</pre>
               </div>
             </transition>
           </div>
@@ -533,5 +570,29 @@ onBeforeUnmount(() => {
   color: var(--lw-primary-ink);
   border-radius: 2px;
   padding: 0 1px;
+}
+
+/* 折叠态两行预览：短消息不截断，长消息不撑高列表，全文进展开区 */
+.lw-log-msg {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-all;
+}
+
+/* 高级筛选计数角标 */
+.lw-filter-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--lw-radius-pill);
+  background-color: var(--lw-primary);
+  color: var(--lw-on-primary);
+  font-size: 10px;
+  font-weight: 700;
 }
 </style>

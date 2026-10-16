@@ -10,6 +10,13 @@ export interface ToolStep {
   isError?: boolean
 }
 
+/** 模型用量：由 model.call 的 end 帧累计，历史消息没有事件可回放故缺省 */
+export interface UsageStat {
+  input: number
+  output: number
+  calls: number
+}
+
 /** 时间线消息：实时流与回放共用 */
 export interface ChatMessage {
   role: 'user' | 'assistant'
@@ -19,6 +26,13 @@ export interface ChatMessage {
   /** 规划器写下的计划，新帧整体覆盖旧计划 */
   plan: PlanStep[]
   streaming?: boolean
+  createdAt?: number
+  usage?: UsageStat
+}
+
+/** 时间线消息的空壳，三处构造点共用，避免漏字段导致模板判空分支扩散 */
+function blankMessage(role: 'user' | 'assistant', content: string): ChatMessage {
+  return { role, content, thinking: '', tools: [], plan: [], createdAt: Date.now() }
 }
 
 /** 运行状态：当前会话的运行列表 + 唯一时间线 reducer，实时与回放同路径 */
@@ -32,11 +46,8 @@ export const useRunStore = defineStore('run', () => {
 
   function loadTimeline(messages: MessageVO[]): void {
     timeline.value = messages.map((item) => ({
-      role: item.roleCode === 'assistant' ? 'assistant' : 'user',
-      content: item.content ?? '',
-      thinking: '',
-      tools: [],
-      plan: [],
+      ...blankMessage(item.roleCode === 'assistant' ? 'assistant' : 'user', item.content ?? ''),
+      createdAt: item.createdAt,
     }))
     replaying.value = false
     replayRunId.value = ''
@@ -44,11 +55,10 @@ export const useRunStore = defineStore('run', () => {
   }
 
   function beginStream(prompt: string): void {
-    timeline.value = [
-      ...timeline.value,
-      { role: 'user', content: prompt, thinking: '', tools: [], plan: [] },
-      { role: 'assistant', content: '', thinking: '', tools: [], plan: [], streaming: true },
-    ]
+    const assistant = blankMessage('assistant', '')
+    assistant.streaming = true
+    assistant.usage = { input: 0, output: 0, calls: 0 }
+    timeline.value = [...timeline.value, blankMessage('user', prompt), assistant]
     streaming.value = true
     replaying.value = false
     replayRunId.value = ''
@@ -93,6 +103,15 @@ export const useRunStore = defineStore('run', () => {
           }
         }
         break
+      case 'model.call': {
+        if (payload.phase !== 'end') break
+        target.usage = {
+          input: (target.usage?.input ?? 0) + Number(payload.inputTokens ?? 0),
+          output: (target.usage?.output ?? 0) + Number(payload.outputTokens ?? 0),
+          calls: (target.usage?.calls ?? 0) + 1,
+        }
+        break
+      }
       case 'tool.result': {
         const step = target.tools.filter((item) => item.name === payload.toolName).pop()
         if (step) {
@@ -144,9 +163,11 @@ export const useRunStore = defineStore('run', () => {
   /** 按 runId 回放：拉运行详情与全量事件，走同一 reducer 重建时间线 */
   async function replay(runId: string): Promise<void> {
     const [detail, events] = await Promise.all([runApi.detail(runId), runApi.events(runId)])
+    const assistant = blankMessage('assistant', '')
+    assistant.usage = { input: 0, output: 0, calls: 0 }
     const rebuilt: ChatMessage[] = [
-      { role: 'user', content: detail.prompt ?? '', thinking: '', tools: [], plan: [] },
-      { role: 'assistant', content: '', thinking: '', tools: [], plan: [], streaming: false },
+      { ...blankMessage('user', detail.prompt ?? ''), createdAt: detail.createdAt },
+      assistant,
     ]
     timeline.value = rebuilt
     replaying.value = true

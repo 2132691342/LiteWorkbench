@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Coin, DataLine, TrendCharts } from '@element-plus/icons-vue'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import LwAreaChart from '@/components/charts/LwAreaChart.vue'
@@ -10,7 +10,6 @@ import LwButton from '@/components/ui/LwButton.vue'
 import LwCard from '@/components/ui/LwCard.vue'
 import LwMetricCard from '@/components/ui/LwMetricCard.vue'
 import LwPageState from '@/components/ui/LwPageState.vue'
-import LwSegmented from '@/components/ui/LwSegmented.vue'
 import LwTag from '@/components/ui/LwTag.vue'
 import { useMonitorStore } from '@/stores/monitor'
 import { useUserStore } from '@/stores/user'
@@ -24,17 +23,6 @@ const monitorStore = useMonitorStore()
 const overview = computed(() => monitorStore.overview)
 const loading = computed(() => monitorStore.loading)
 const error = computed(() => monitorStore.error)
-
-/** 主图表视图：运行趋势 / Token 趋势 */
-const view = ref<'runs' | 'tokens'>('runs')
-const viewOptions = computed(() => [
-  { value: 'runs', label: t('dashboard.viewRuns') },
-  { value: 'tokens', label: t('dashboard.viewTokens') },
-])
-
-function setView(value: string): void {
-  view.value = value === 'tokens' ? 'tokens' : 'runs'
-}
 
 /** 成功率 = 成功运行 / 运行总数，无运行时显示占位 */
 const successRate = computed(() => {
@@ -117,10 +105,6 @@ onMounted(load)
     </div>
 
     <LwPageState :loading="loading" :error="error" :empty="!overview" :skeleton-rows="6" @retry="load">
-      <div class="flex flex-col sm:flex-row justify-end gap-3">
-        <LwSegmented :model-value="view" :options="viewOptions" equal @update:model-value="setView" />
-      </div>
-
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <LwMetricCard
           v-for="metric in metrics"
@@ -146,32 +130,16 @@ onMounted(load)
         </div>
       </LwCard>
 
-      <LwCard
-        :title="view === 'runs' ? t('dashboard.trendTitle') : t('dashboard.tokenTrendTitle')"
-        :desc="t('dashboard.trendDesc')"
-      >
+      <LwCard :title="t('dashboard.trendTitle')" :desc="t('dashboard.trendDesc')">
         <template #actions>
           <LwTag tone="primary">{{ t('dashboard.rangeRecent') }}</LwTag>
         </template>
-        <transition name="lw-fade" mode="out-in">
-          <LwAreaChart
-            v-if="view === 'runs'"
-            :key="'runs'"
-            :categories="trendCategories"
-            :values="trendValues"
-            :name="t('dashboard.metricRuns')"
-            :height="300"
-          />
-          <LwAreaChart
-            v-else
-            :key="'tokens'"
-            :categories="tokenCategories"
-            :values="tokenValues"
-            :name="t('dashboard.metricTokens')"
-            :height="300"
-            secondary
-          />
-        </transition>
+        <LwAreaChart
+          :categories="trendCategories"
+          :values="trendValues"
+          :name="t('dashboard.metricRuns')"
+          :height="300"
+        />
       </LwCard>
 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">

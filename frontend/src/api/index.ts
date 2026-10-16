@@ -11,9 +11,6 @@ import type {
   DocVO,
   DocVersionVO,
   FileVO,
-  PromptRenderREQ,
-  PromptREQ,
-  PromptVO,
   HealthRESP,
   InvokeToolREQ,
   KbChunkVO,
@@ -292,18 +289,6 @@ export const docApi = {
     get<PageResult<DocVersionVO>>('/doc/version/page', { docId, page, size }),
   versionDetail: (versionId: string) => get<DocVersionVO>(`/doc/version/detail/${versionId}`),
   restore: (versionId: string) => post<void>(`/doc/version/restore/${versionId}`),
-}
-
-/* ===== 提示词 ===== */
-
-export const promptApi = {
-  page: (params: PageREQ & { category?: string }) => get<PageResult<PromptVO>>('/prompt/page', params),
-  detail: (promptId: string) => get<PromptVO>(`/prompt/detail/${promptId}`),
-  create: (data: PromptREQ) => post<string>('/prompt/create', data),
-  update: (data: PromptREQ) => post<void>('/prompt/update', data),
-  remove: (promptId: string) => post<void>(`/prompt/delete/${promptId}`),
-  copy: (promptId: string) => post<string>(`/prompt/copy/${promptId}`),
-  render: (data: PromptRenderREQ) => post<string>('/prompt/render', data),
 }
 
 /* ===== 模型供应方 ===== */
