@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc --noEmit && node scripts/check-i18n.mjs && vite build",
+    "verify": "npm run typecheck && npm run check:i18n",
+    "build": "npm run verify && vite build",
     "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit",
     "check:i18n": "node scripts/check-i18n.mjs"

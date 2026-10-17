@@ -64,7 +64,7 @@ docker compose -f docker-compose.yaml up -d          # 或 podman-compose
 cd backend
 mvn spring-boot:run        # 直接运行，默认 8080
 mvn -DskipTests package    # 打包成 target/lite-workbench-server.jar
-mvn test                   # 跑测试
+mvn -o test                # 跑测试（离线，秒级）
 ```
 
 启动时幂等执行建表、种子数据与 Manticore 索引创建。中间件未就绪时按 `liteworkbench.degradation.allow-start` 决定是降级启动还是失败退出。
@@ -75,8 +75,8 @@ mvn test                   # 跑测试
 cd frontend
 npm install
 npm run dev         # http://localhost:5173，/api 已代理到 8080
-npm run typecheck   # vue-tsc --noEmit
-npm run build       # 产物 frontend/dist
+npm run verify      # 类型检查 + 词条成对，改前端就跑这一条
+npm run build       # = verify + 构建，产物 frontend/dist
 ```
 
 前端只有一个环境变量 `VITE_API_BASE_URL`（定义在 `.env.development`，缺省 `/api/v1`）。
@@ -99,16 +99,20 @@ npm run build       # 产物 frontend/dist
 
 ## 6. 测试
 
-只有两个文件：一条长链路（事件管线，按环节拆 3 个命名用例）与一条跨模块契约（权限点三处一致）。全量 4 个用例 3 秒左右，不依赖中间件与 Spring 容器。
+后端两个文件三个用例：一条完整运行的事件链（合帧、工具分工、用量入账、边界裁剪）、两条跨端契约（权限点四处声明自洽、菜单种子的视图文件存在）。全量 3 秒内跑完，不依赖中间件与 Spring 容器。
 
 ```bash
 cd backend
-mvn -o test                                   # 全量
-mvn -o test -Dtest=RunEventPipelineTest        # 只跑事件长链路
-mvn -o test -Dtest=PermissionContractTest      # 只跑权限契约
+mvn -o test                                    # 全量
+mvn -o test -Dtest=RunEventPipelineTest        # 改了事件管线
+mvn -o test -Dtest=PermissionContractTest      # 改了权限点 / 菜单种子 / 控制器 / 前端页面
+
+cd frontend
+npm run verify        # 类型检查 + 词条成对，改前端就跑这一条
+npm run build         # = verify + 构建，提交前跑一次
 ```
 
-用例清单、保留标准与「明确不写的测试」见 [AGENTS.md](../AGENTS.md) §14。前端没有测试运行器，`npm run typecheck`（数秒）与 `npm run build`（先类型检查再构建）就是前端 CI 的全部校验。
+保留标准与「明确不写的测试」见 [AGENTS.md](../AGENTS.md) §14。前端没有测试运行器，`npm run verify` 与 `npm run build` 就是前端的全部校验。
 
 ## 7. 常见改动入口
 
@@ -145,6 +149,7 @@ mvn -o test -Dtest=PermissionContractTest      # 只跑权限契约
 | `deploy/gen-secrets.sh` | 生成 `.env.infra`：字段清单取自 `.env.infra.example`，值随机，不打印 |
 | `deploy/.env.infra.example` | 部署机密的字段清单，新增变量只改这里 |
 | `deploy/deploy-app.sh` | 云主机侧发布：拉镜像 → 重建容器 → 清端口转发残留 → 健康自检 → 失败回滚 |
+| `frontend/scripts/check-i18n.mjs` | 校验中英词条键集合一致、模板与脚本引用的静态键都存在，被 `npm run verify` 调用 |
 | `.github/workflows/ci.yml` | 流水线：后端构建与测试 → 前端类型检查与构建 → 构建镜像推仓库 → 同步编排与脚本 → SSH 执行发布 |
 
-测试与可执行资产都收敛在这两处，**没有** `scripts/` 目录，也没有散落的 `.mjs` / `.ps1` / `.py` 联调脚本——临时联调脚本用完即删，不进仓库。
+前端只有 `frontend/scripts/check-i18n.mjs` 一个校验脚本，由 `npm run verify` 与 `npm run build` 调用；仓库里没有其他 `.mjs` / `.ps1` / `.py`——临时联调脚本用完即删，不进仓库。新增脚本前先想清楚能不能并进上面已有的一个入口。

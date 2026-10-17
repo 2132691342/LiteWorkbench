@@ -399,37 +399,42 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 
 ## 14. 测试约定
 
-只保留覆盖长链路与跨模块契约的测试；简单断言、纯算法与薄 mock 单元测试一律不写，同一行为的重复覆盖也不写。当前 2 个文件 4 个用例，随 `mvn test` 一次跑完（约 3 秒，离线 `mvn -o test` 约 1.5 秒），全部不依赖中间件与 Spring 容器。
+**只测两类东西**：跨多个模块的长链路（一旦断了，报错点离成因很远）、跨端声明的契约（错了不报错，只是功能默默不行）。简单断言、纯算法、薄 mock 单元测试一律不写；同一行为的重复覆盖不写。新增测试前先问一句：这条链是不是真的跨模块、断了是不是真的难定位，两个"是"才写。
 
-改一处只想跑相关的一条时，用 `-Dtest=` 指定类，别整目录跑：
+全量就两个命令，合计几秒，都不依赖中间件与 Spring 容器：
 
 ```bash
-cd backend
-mvn -o test                                            # 全量，默认入口
-mvn -o test -Dtest=RunEventPipelineTest                # 只跑事件长链路
-mvn -o test -Dtest=PermissionContractTest               # 只跑权限契约（新增权限点、菜单种子、控制器时跑这条）
+cd backend  && mvn -o test     # 后端全部用例
+cd frontend && npm run verify  # 类型检查 + 词条成对
 ```
 
-| 文件 | 用例 | 覆盖 | 什么时候必须跑 |
+只改了一处想快速回确时，后端用 `-Dtest=` 指到类，前端用 `npm run typecheck`：
+
+```bash
+mvn -o test -Dtest=RunEventPipelineTest      # 改了事件管线
+mvn -o test -Dtest=PermissionContractTest    # 改了权限点 / 菜单种子 / 控制器 / 前端页面
+```
+
+| 文件 | 用例 | 测的是什么 | 什么时候必须跑 |
 |---|---|---|---|
-| `service/RunEventPipelineTest` | 3 | 事件长链路：归一 → 批内合帧保序 → 工具起止与结果分工 → 用量入账 → 超长保尾裁剪 → 失败工具与异常事件边界。三个用例按环节切开，失败时直接定位到合帧、结算或裁剪 | 改 `agent/AgentEventAdapter`、`service/RunService.mergeFrames`、`domain/constant/EventTypeEnum` 后 |
-| `config/PermissionContractTest` | 1 | 跨模块契约：控制器注解 + `PermConst` + 菜单种子三处声明的权限点必须一致，漏一处即测试失败；菜单种子从 `db/data.sql` 解析 | 新增/修改权限点、改控制器注解、改 `db/data.sql` 菜单种子后 |
+| `service/RunEventPipelineTest` | 1 | 一条完整运行的事件链：归一 → 批内合帧保序 → 工具起帧与结果帧分工 → 用量入账 → 超长增量裁剪 → 异常事件不带正文。一个用例跑完整链，断言按环节分块并带注释，失败时看哪一块红了就知道哪一环倒了 | 改 `agent/AgentEventAdapter`、`service/RunService.mergeFrames`、`domain/constant/EventTypeEnum` 后 |
+| `config/PermissionContractTest` | 2 | 权限点四处声明自洽：控制器注解、`PermConst`、`db/data.sql` 菜单种子、前端 `hasPerm` / `v-perm` 字面量。正向查"声明了但没人能被授予"，反向查"种子写了控制器不认的码""前端引用了常量表里没有的码"，另加一条"菜单种子的 `component` 必须命中 `frontend/src/views/*.vue`"——缺文件时动态路由默默注册不上，点开就是 404 | 新增/修改权限点、改控制器注解、改菜单种子、新增页面或改页面权限判定时 |
 
-**明确不写的测试**：Mapper XML 的解析由应用启动即校验（错了起不来）；路由兜底的命中范围由容器验收清单里的一次 `curl` 探活覆盖——在测试里手工模拟 Spring 容器初始化只会复制框架行为，并随框架升级失效。
+**明确不写的测试**：Mapper XML 解析（应用启动即校验，错了起不来）；路由兜底命中范围（容器验收里一次 `curl` 就够，在测试里手工模拟容器初始化只会复制框架行为，并随框架升级失效）；字段映射、枚举取值、单个工具方法——这类"测了也不会坏、坏了也不是这里坏"的断言不写。
 
-用例名用中文直述业务断言；一个用例串起一条完整链路或一个契约，长链路内部按环节拆成几个命名用例（合帧保序 / 结算 / 边界），失败时不必读断言才知道哪一环倒了；契约测试集中在 `config/PermissionContractTest`，不按契约拆多个文件。资源扫描一律走 `classpath*:` 模式，禁止用目录列举（打包成 JAR 后失效）；前端不写快照测试与纯渲染测试。
+写法约束：用例名用中文直述业务断言；一条链一个用例，不在 fixture 上重复造同一段数据；契约测试集中在 `config/PermissionContractTest`，不按契约拆多个文件。资源扫描一律走 `classpath*:` 模式，禁止目录列举（打包成 JAR 后失效）；前端不写快照测试与纯渲染测试。
 
 ### 14.1 前端的校验
 
-前端没有测试运行器，校验就是类型检查与构建两步，都由 `npm run` 暴露：
+前端没有测试运行器，校验入口只有一个：
 
 ```bash
 cd frontend
-npm run typecheck    # vue-tsc --noEmit，单独快速校验
-npm run check:i18n   # 词条中英成对 + 被引用静态键存在（建、删文案后必跑）
-npm run build        # 先跑 typecheck 与 check:i18n 再构建，任一不过直接中断
+npm run verify   # typecheck + check:i18n，改前端就跑这一条
+npm run build    # = verify + vite build，提交前跑一次
 ```
-改前端只跑 `typecheck`（数秒）；改文案或菜单再加一条 `check:i18n`；提交前再跑一次 `build`。
+
+`check:i18n` 校验中英词条键集合一致、且模板 / 脚本里引用的静态键存在，实现在 `frontend/scripts/check-i18n.mjs`——这是仓库里唯一的非交付脚本。
 
 ## 15. 依赖使用约定
 
