@@ -31,7 +31,7 @@ const grantVisible = ref(false)
 const grantLoading = ref(false)
 const grantRole = ref<RoleVO | null>(null)
 const menuTree = ref<MenuVO[]>([])
-const treeRef = ref()
+const treeRef = ref<{ setCheckedKeys: (keys: string[]) => void; getCheckedKeys: () => string[]; getHalfCheckedKeys: () => string[] }>()
 
 async function load(): Promise<void> {
   loading.value = true
@@ -62,6 +62,10 @@ function openDialog(role?: RoleVO): void {
 }
 
 async function submitDialog(): Promise<void> {
+  if (!form.roleCode?.trim() || !form.roleName?.trim()) {
+    ElMessage.warning(t('system.role.requiredTip'))
+    return
+  }
   dialogLoading.value = true
   try {
     if (isEdit.value) {
@@ -86,6 +90,8 @@ async function openGrant(role: RoleVO): Promise<void> {
     menuTree.value = tree
     await nextTick()
     treeRef.value?.setCheckedKeys(granted)
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : t('common.failed'))
   } finally {
     grantLoading.value = false
   }
@@ -108,11 +114,15 @@ async function submitGrant(): Promise<void> {
 
 /** 删除角色，内置角色入口已隐藏 */
 async function removeRole(role: RoleVO): Promise<void> {
-  await ElMessageBox.confirm(t('common.confirmDelete', { name: role.roleName }), t('common.delete'), {
-    confirmButtonText: t('common.delete'),
-    cancelButtonText: t('common.cancel'),
-    type: 'error',
-  })
+  try {
+    await ElMessageBox.confirm(t('common.confirmDelete', { name: role.roleName }), t('common.delete'), {
+      confirmButtonText: t('common.delete'),
+      cancelButtonText: t('common.cancel'),
+      type: 'error',
+    })
+  } catch {
+    return
+  }
   await roleApi.remove(role.roleId)
   ElMessage.success(t('common.deleteSuccess'))
   void load()
@@ -130,7 +140,7 @@ onMounted(load)
       </div>
       <LwButton v-if="hasPerm('system:role:create')" @click="openDialog()">
         <template #icon><el-icon><Plus /></el-icon></template>
-        {{ t('common.create') }}
+        {{ t('system.role.create') }}
       </LwButton>
     </div>
 
@@ -161,7 +171,7 @@ onMounted(load)
       </template>
 
       <el-table :data="list" style="width: 100%">
-        <el-table-column :label="t('system.role.roleName')" prop="roleName" min-width="160">
+        <el-table-column :label="t('system.role.roleName')" prop="roleName" min-width="180">
           <template #default="{ row }">
             <div class="lw-cell-title">{{ row.roleName }}</div>
             <div class="lw-cell-sub">{{ row.roleCode }}</div>
@@ -184,18 +194,14 @@ onMounted(load)
                 {{ t('common.edit') }}
               </LwButton>
               <LwButton v-if="hasPerm('system:role:grant')" variant="text" size="sm" @click="openGrant(row)">
-                {{ t('menu.systemRoleGrant') }}
+                {{ t('system.role.grantTitle') }}
               </LwButton>
-              <span v-if="hasPerm('system:role:delete') && !row.builtin" class="lw-rowacts__sep" aria-hidden="true" />
-              <LwButton
-                v-if="hasPerm('system:role:delete') && !row.builtin"
-                variant="text"
-                size="sm"
-                class="lw-text-danger"
-                @click="removeRole(row)"
-              >
-                {{ t('common.delete') }}
-              </LwButton>
+              <template v-if="hasPerm('system:role:delete') && !row.builtin">
+                <span class="lw-rowacts__sep" aria-hidden="true" />
+                <LwButton variant="text" size="sm" class="lw-text-danger" @click="removeRole(row)">
+                  {{ t('system.role.remove') }}
+                </LwButton>
+              </template>
             </div>
           </template>
         </el-table-column>
@@ -214,7 +220,11 @@ onMounted(load)
       </template>
     </LwTableCard>
 
-    <el-dialog v-model="dialogVisible" :title="isEdit ? t('system.role.update') : t('system.role.create')" width="440px">
+    <el-dialog
+      v-model="dialogVisible"
+      :title="isEdit ? t('system.role.update') : t('system.role.create')"
+      width="440px"
+    >
       <form class="flex flex-col gap-4" @submit.prevent="submitDialog">
         <label class="flex flex-col gap-1.5">
           <span class="lw-label">{{ t('system.role.roleCode') }}</span>
@@ -223,6 +233,10 @@ onMounted(load)
         <label class="flex flex-col gap-1.5">
           <span class="lw-label">{{ t('system.role.roleName') }}</span>
           <input v-model="form.roleName" class="lw-input" />
+        </label>
+        <label class="flex flex-col gap-1.5">
+          <span class="lw-label">{{ t('system.role.sortNo') }}</span>
+          <el-input-number v-model="form.sortNo" :min="0" style="width: 100%" />
         </label>
       </form>
       <template #footer>

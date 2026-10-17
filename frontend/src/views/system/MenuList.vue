@@ -55,7 +55,7 @@ function openDialog(menu?: MenuVO, parent?: MenuVO): void {
   form.menuId = menu?.menuId ?? ''
   form.parentId = menu?.parentId ?? parent?.menuId ?? '0'
   form.menuName = menu?.menuName ?? ''
-  form.menuType = menu?.menuType ?? MENU_TYPE.MENU
+  form.menuType = menu?.menuType ?? (parent ? MENU_TYPE.MENU : MENU_TYPE.DIR)
   form.routePath = menu?.routePath ?? ''
   form.component = menu?.component ?? ''
   form.icon = menu?.icon ?? ''
@@ -66,6 +66,10 @@ function openDialog(menu?: MenuVO, parent?: MenuVO): void {
 }
 
 async function submitDialog(): Promise<void> {
+  if (!form.menuName?.trim()) {
+    ElMessage.warning(t('system.menu.nameRequired'))
+    return
+  }
   dialogLoading.value = true
   try {
     if (isEdit.value) {
@@ -83,11 +87,15 @@ async function submitDialog(): Promise<void> {
 
 /** 删除菜单，存在子级时后端会拒绝 */
 async function removeMenu(menu: MenuVO): Promise<void> {
-  await ElMessageBox.confirm(t('common.confirmDelete', { name: menuLabel(menu.menuName) }), t('common.delete'), {
-    confirmButtonText: t('common.delete'),
-    cancelButtonText: t('common.cancel'),
-    type: 'error',
-  })
+  try {
+    await ElMessageBox.confirm(t('common.confirmDelete', { name: menuLabel(menu.menuName) }), t('common.delete'), {
+      confirmButtonText: t('common.delete'),
+      cancelButtonText: t('common.cancel'),
+      type: 'error',
+    })
+  } catch {
+    return
+  }
   await menuApi.remove(menu.menuId)
   ElMessage.success(t('common.deleteSuccess'))
   void load()
@@ -117,7 +125,7 @@ onMounted(load)
       </div>
       <LwButton v-if="hasPerm('system:menu:create')" @click="openDialog()">
         <template #icon><el-icon><Plus /></el-icon></template>
-        {{ t('common.create') }}
+        {{ t('system.menu.create') }}
       </LwButton>
     </div>
 
@@ -128,15 +136,15 @@ onMounted(load)
       :empty-text="t('common.empty')"
       @retry="load"
     >
+
       <template #skeleton>
         <LwSkeleton :rows="8" />
       </template>
-
       <el-table :data="tree" row-key="menuId" default-expand-all style="width: 100%">
-        <el-table-column :label="t('system.menu.menuName')" min-width="220">
+        <el-table-column :label="t('system.menu.menuName')" min-width="240">
           <template #default="{ row }">
             <div class="lw-cell-title">{{ menuLabel(row.menuName) }}</div>
-            <div class="lw-cell-mono">{{ row.menuId }}</div>
+            <div class="lw-cell-mono">{{ row.menuName }}</div>
           </template>
         </el-table-column>
         <el-table-column :label="t('system.menu.menuType')" width="110">
@@ -149,7 +157,7 @@ onMounted(load)
             <span class="lw-cell-mono">{{ row.permCode || '-' }}</span>
           </template>
         </el-table-column>
-        <el-table-column :label="t('system.menu.routePath')" prop="routePath" min-width="140">
+        <el-table-column :label="t('system.menu.routePath')" min-width="140">
           <template #default="{ row }">
             <span class="lw-cell-mono">{{ row.routePath || '-' }}</span>
           </template>
@@ -157,22 +165,37 @@ onMounted(load)
         <el-table-column :label="t('system.menu.sortNo')" prop="sortNo" width="90">
           <template #default="{ row }"><span class="lw-cell-mono">{{ row.sortNo }}</span></template>
         </el-table-column>
-        <el-table-column v-if="hasPerm('system:menu:update')" :label="t('common.actions')" width="220" fixed="right">
+        <el-table-column
+          v-if="hasPerm('system:menu:update') || hasPerm('system:menu:delete')"
+          :label="t('common.actions')"
+          width="230"
+          fixed="right"
+        >
           <template #default="{ row }">
             <div class="lw-rowacts">
-              <LwButton variant="text" size="sm" @click="openDialog(undefined, row)">{{ t('system.menu.addChild') }}</LwButton>
-              <LwButton variant="text" size="sm" @click="openDialog(row)">{{ t('common.edit') }}</LwButton>
-              <span v-if="hasPerm('system:menu:delete')" class="lw-rowacts__sep" aria-hidden="true" />
-              <LwButton v-if="hasPerm('system:menu:delete')" variant="text" size="sm" class="lw-text-danger" @click="removeMenu(row)">
-                {{ t('common.delete') }}
+              <LwButton v-if="hasPerm('system:menu:create')" variant="text" size="sm" @click="openDialog(undefined, row)">
+                {{ t('system.menu.addChild') }}
               </LwButton>
+              <LwButton v-if="hasPerm('system:menu:update')" variant="text" size="sm" @click="openDialog(row)">
+                {{ t('common.edit') }}
+              </LwButton>
+              <template v-if="hasPerm('system:menu:delete')">
+                <span class="lw-rowacts__sep" aria-hidden="true" />
+                <LwButton variant="text" size="sm" class="lw-text-danger" @click="removeMenu(row)">
+                  {{ t('system.menu.remove') }}
+                </LwButton>
+              </template>
             </div>
           </template>
         </el-table-column>
       </el-table>
     </LwTableCard>
 
-    <el-dialog v-model="dialogVisible" :title="isEdit ? t('system.menu.update') : t('system.menu.create')" width="520px">
+    <el-dialog
+      v-model="dialogVisible"
+      :title="isEdit ? t('system.menu.update') : t('system.menu.create')"
+      width="520px"
+    >
       <form class="flex flex-col gap-4" @submit.prevent="submitDialog">
         <label class="flex flex-col gap-1.5">
           <span class="lw-label">{{ t('system.menu.menuName') }}</span>

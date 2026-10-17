@@ -75,6 +75,7 @@ const tokenCategories = computed(() => (overview.value?.tokenTrend ?? []).map((p
 const tokenValues = computed(() => (overview.value?.tokenTrend ?? []).map((point) => point.value))
 const toolLabels = computed(() => Object.keys(overview.value?.toolDistribution ?? {}))
 const toolValues = computed(() => Object.values(overview.value?.toolDistribution ?? {}))
+const hasTrend = computed(() => trendValues.value.some((value) => value > 0))
 
 const subtitle = computed(() => t('dashboard.subtitle', { name: userStore.nickname || '-' }))
 
@@ -99,7 +100,7 @@ onMounted(load)
         <p class="lw-subtitle mt-1">{{ subtitle }}</p>
       </div>
       <div class="flex gap-2">
-        <LwButton variant="ghost" @click="load">{{ t('common.refresh') }}</LwButton>
+        <LwButton variant="secondary" @click="load">{{ t('common.refresh') }}</LwButton>
         <LwButton @click="router.push('/console')">{{ t('dashboard.newSession') }}</LwButton>
       </div>
     </div>
@@ -135,25 +136,39 @@ onMounted(load)
           <LwTag tone="primary">{{ t('dashboard.rangeRecent') }}</LwTag>
         </template>
         <LwAreaChart
+          v-if="hasTrend"
           :categories="trendCategories"
           :values="trendValues"
           :name="t('dashboard.metricRuns')"
           :height="300"
         />
+        <p v-else class="py-16 text-center text-sm" style="color: var(--lw-ink-muted)">
+          {{ t('dashboard.trendEmpty') }}
+        </p>
       </LwCard>
 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <LwCard :title="t('dashboard.tokenTrendTitle')" :desc="t('dashboard.trendDesc')">
           <LwBarChart
+            v-if="tokenValues.some((value) => value > 0)"
             :categories="tokenCategories"
             :values="tokenValues"
             :name="t('dashboard.metricTokens')"
             :height="260"
             secondary
           />
+          <p v-else class="py-14 text-center text-sm" style="color: var(--lw-ink-muted)">
+            {{ t('dashboard.trendEmpty') }}
+          </p>
         </LwCard>
         <LwCard :title="t('dashboard.toolTitle')" :desc="t('dashboard.toolDesc')">
-          <LwDonutChart :labels="toolLabels" :values="toolValues" :height="260" />
+          <template #actions>
+            <LwTag tone="primary">{{ t('dashboard.totalRuns') }} {{ overview?.runCount ?? 0 }}</LwTag>
+          </template>
+          <LwDonutChart v-if="toolLabels.length" :labels="toolLabels" :values="toolValues" :height="260" />
+          <p v-else class="py-14 text-center text-sm" style="color: var(--lw-ink-muted)">
+            {{ t('dashboard.toolEmpty') }}
+          </p>
         </LwCard>
       </div>
     </LwPageState>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import LwTag from '@/components/ui/LwTag.vue'
 
 /** 工具调用卡：状态随 phase 在执行中 / 完成 / 失败之间过渡，输出可折叠且超长截断 */
@@ -11,9 +12,10 @@ const props = defineProps<{
   isError?: boolean
 }>()
 
-/** 输出超过该字节数即截断，避免一次工具返回把时间线顶飞 */
+/** 输出超过该字符数即截断，避免一次工具返回把时间线顶飞 */
 const MAX_OUTPUT = 4096
 
+const { t } = useI18n()
 const open = ref(false)
 
 const failed = computed(() => Boolean(props.isError))
@@ -23,7 +25,7 @@ const hasOutput = computed(() => (props.output ?? '').length > 0)
 
 const shownOutput = computed(() => {
   const raw = props.output ?? ''
-  return raw.length > MAX_OUTPUT ? `${raw.slice(0, MAX_OUTPUT)}\n… ${raw.length - MAX_OUTPUT} chars truncated` : raw
+  return raw.length > MAX_OUTPUT ? `${raw.slice(0, MAX_OUTPUT)}\n… ${t('common.truncated', { n: raw.length - MAX_OUTPUT })}` : raw
 })
 
 const tone = computed<'primary' | 'success' | 'error'>(() => {

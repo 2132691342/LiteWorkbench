@@ -140,6 +140,10 @@
 
 增删改查类页面（用户 / 角色 / 菜单 / 文件 / 技能）一律走 `components/ui/LwTableCard.vue`：一个资源页 = `.lw-page-head` 页头 + 一张表格卡；筛选条、表体、分页同属一张白卡，不拆成三张。表格语言（表头浅底、44px 行高、单元格三档字体、操作列竖线分组、右对齐分页）全部在 `styles/admin.css`，组件不就地写这些样式；视觉规范见 [DESIGN.md §5.12](../DESIGN.md)。
 
+**空态由 `empty` 布尔控制，不由 `emptyText` 是否为空控制**：`empty` 由调用方按数据源长度给出（`:empty="!list.length"`），`emptyText` 只提供文案。二者混用会让表体永远被空态占位 —— 后端返回了数据而前端依旧空白。页头是全页唯一主操作位，表格卡只承载筛选条 / 表体 / 分页，不再重复渲染标题与新建按钮。
+
+权限码必须与后端 `PermConst` 逐字一致（`system:user:create` 而非 `system:user:add`）；按钮可见性由 `hasPerm()` 判定，后端 `@SaCheckPermission` 兜底。
+
 ## 契约
 
 ```ts
@@ -251,6 +255,7 @@ defineExpose({ focus: () => void; clear: () => void })
 ## 约束
 
 - 组件内禁止硬编码色值（一律 `var(--lw-*)`）与中文（一律 i18n）；`/showcase` 设计样例页例外。
+- 文案键在 `zh-CN` 与 `en-US` 必须成对：两侧键集合一致且模板 / 脚本引用的静态键必须存在，由 `npm run check:i18n`（`scripts/check-i18n.mjs`）校验，`npm run build` 会先跑它。菜单名 `sys_menu.menu_name` 存 i18n key，渲染统一走 `menuLabel()`。
 - 大对象一律 `shallowRef`；所有请求走 `src/api/index.ts`；异步操作必须有 loading / error / empty 三态。
 - 按钮一律使用 `LwButton`；破坏性操作（删除、停用、重置密码）必须二次确认。
 - 权限控制统一走 `v-perm` 指令或 `hasPerm()`，权限码与后端 `PermConst` 保持一致。

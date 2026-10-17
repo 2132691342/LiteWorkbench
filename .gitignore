@@ -35,3 +35,7 @@ deploy/.env.app
 # 鏈湴楠岃瘉浜х墿
 .shots/
 .secrets/
+
+# 本地校验临时产物
+.lw-*.json
+.lw-token.txt

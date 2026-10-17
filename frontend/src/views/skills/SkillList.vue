@@ -68,6 +68,10 @@ function openEdit(item: SkillVO): void {
 }
 
 async function save(): Promise<void> {
+  if (!form.skillCode?.trim() || !form.skillName?.trim()) {
+    ElMessage.warning(t('skills.requiredTip'))
+    return
+  }
   saving.value = true
   try {
     if (form.skillId) {
@@ -84,19 +88,31 @@ async function save(): Promise<void> {
 }
 
 async function remove(item: SkillVO): Promise<void> {
-  await ElMessageBox.confirm(t('skills.confirmDelete', { name: item.skillName }), t('common.delete'), {
-    type: 'warning',
-  })
+  try {
+    await ElMessageBox.confirm(t('skills.confirmDelete', { name: item.skillName }), t('common.delete'), {
+      confirmButtonText: t('common.delete'),
+      cancelButtonText: t('common.cancel'),
+      type: 'error',
+    })
+  } catch {
+    return
+  }
   await skillApi.remove(item.skillId)
-  ElMessage.success(t('common.success'))
+  ElMessage.success(t('common.deleteSuccess'))
   await load()
 }
 
 /** 恢复内置技能为种子版本：保留用户自己的启用状态 */
 async function restore(item: SkillVO): Promise<void> {
-  await ElMessageBox.confirm(t('skills.confirmRestore', { name: item.skillName }), t('skills.restore'), {
-    type: 'warning',
-  })
+  try {
+    await ElMessageBox.confirm(t('skills.confirmRestore', { name: item.skillName }), t('skills.restore'), {
+      confirmButtonText: t('skills.restore'),
+      cancelButtonText: t('common.cancel'),
+      type: 'warning',
+    })
+  } catch {
+    return
+  }
   await skillApi.restore(item.skillId)
   ElMessage.success(t('common.success'))
   await load()
@@ -137,7 +153,7 @@ onMounted(load)
       :loading="loading"
       :error="error"
       :empty="!skills.length"
-      :empty-text="t('common.empty')"
+      :empty-text="t('skills.empty')"
       :total="total"
       @retry="load"
     >

@@ -333,10 +333,10 @@ UnoCSS 主题只映射令牌，组件禁止硬编码色值：颜色 `lw-<别名>
 | 单元格 | 三档文本：主文本 14px/600（`.lw-cell-title`）、次文本 12px `--lw-ink-muted`（`.lw-cell-sub`）、标识类等宽（`.lw-cell-mono`）；同一列内不混用字号 |
 | 操作列 | 固定右侧，`.lw-rowacts` 内 `gap-1`，按钮 `text sm`；常规动作与破坏性动作之间加 `.lw-rowacts__sep`（1px × 14px 竖线）；删除 / 重置类一律 `lw-text-danger` |
 | 分页 | `.lw-pager` 右对齐 + 上 1px 分隔线，`layout="total, sizes, prev, pager, next"`；不足一页时不渲染 |
-| 三态 | loading → `LwSkeleton` 骨架行（3–6 行）；error → `LwErrorBar` 内联 + 重试；empty → `LwEmpty` 居中，不留白板 |
+| 三态 | loading → `LwSkeleton` 骨架行（3–6 行）；error → `LwErrorBar` 内联 + 重试；empty → `LwEmpty` 居中，不留白板。**空态以 `empty` 布尔为准**（调用方传 `:empty="!list.length"`），`emptyText` 只给文案——用「文案非空」当判空条件会让表体永远被空态占位，表现为后端有数据而页面空白 |
 | 对话框 | 新建 / 编辑用 `el-dialog`，字段垂直 `gap-4`，标签 `.lw-label` 在控件上方；破坏性确认走 `ElMessageBox`，`type: 'error'`，确认按钮文案为具体动作 |
 
-规则：一个资源页 = 页头 + 一张 `LwTableCard`。禁止把筛选条单独包成 `LwCard`——那会把「筛选」和「它筛选的表格」分成两张卡，是最典型的模板拼凑感来源。
+规则：一个资源页 = 页头 + 一张 `LwTableCard`。禁止把筛选条单独包成 `LwCard`——那会把「筛选」和「它筛选的表格」分成两张卡，是最典型的模板拼凑感来源。页头是**全页唯一**主操作位：表格卡内不再重复标题与新建按钮，否则同一动作在一屏里出现两次。
 
 ## 6. 异步三态
 

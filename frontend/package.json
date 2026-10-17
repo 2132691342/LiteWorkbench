@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc --noEmit && vite build",
+    "build": "vue-tsc --noEmit && node scripts/check-i18n.mjs && vite build",
     "preview": "vite preview",
-    "typecheck": "vue-tsc --noEmit"
+    "typecheck": "vue-tsc --noEmit",
+    "check:i18n": "node scripts/check-i18n.mjs"
   },
   "dependencies": {
     "@element-plus/icons-vue": "2.3.1",

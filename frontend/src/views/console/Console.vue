@@ -2,8 +2,8 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { ElMessageBox } from 'element-plus'
-import { Delete, Edit, Position, RefreshLeft, VideoPlay } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Delete, DocumentCopy, Edit, Position, RefreshLeft, VideoPlay } from '@element-plus/icons-vue'
 import ConsoleQuickStart from '@/components/console/ConsoleQuickStart.vue'
 import MessageComposer from '@/components/console/MessageComposer.vue'
 import PlanChecklist from '@/components/console/PlanChecklist.vue'
@@ -224,6 +224,17 @@ async function backToLive(): Promise<void> {
 
 /* ===== 展示 ===== */
 
+/** 复制助手正文：成功后图标切对勾并 toast，剪贴板不可用时静默降级 */
+async function copyContent(text: string): Promise<void> {
+  if (!text) return
+  try {
+    await navigator.clipboard.writeText(text)
+    ElMessage.success(t('common.copied'))
+  } catch {
+    ElMessage.warning(t('common.copyFailed'))
+  }
+}
+
 function scrollToBottom(force = false): void {
   void nextTick(() => {
     if (!force && !stick.value) return
@@ -429,11 +440,23 @@ onMounted(async () => {
         </div>
         <div v-else class="max-w-3xl mx-auto flex flex-col gap-6 pb-6">
           <template v-for="(turn, index) in turns" :key="index">
-            <!-- 用户回合：右对齐气泡，时间贴右下 -->
+            <!-- 用户回合：右对齐气泡，悬停出现复制，时间贴右下 -->
             <div v-if="turn.role === 'user'" class="tl-turn">
               <div class="tl-turn__u">
+                <div class="tl-userrow">
+                  <el-tooltip :content="t('common.copy')" placement="left" :open-delay="300">
+                    <button
+                      type="button"
+                      class="tl-copy"
+                      :aria-label="t('common.copy')"
+                      @click="copyContent(turn.content)"
+                    >
+                      <el-icon :size="13"><DocumentCopy /></el-icon>
+                    </button>
+                  </el-tooltip>
+                  <div class="tl-bubble">{{ turn.content }}</div>
+                </div>
                 <time class="tl-turn__time">{{ formatClock(turn.createdAt) }}</time>
-                <div class="tl-bubble">{{ turn.content }}</div>
               </div>
             </div>
 
@@ -475,7 +498,19 @@ onMounted(async () => {
                   <span class="tl-typing__dot" />
                   <span class="tl-typing__txt">{{ t('console.typing') }}</span>
                 </div>
-                <div v-if="usageText(turn)" class="tl-usage">{{ usageText(turn) }}</div>
+                <div class="tl-turn__foot">
+                  <span v-if="usageText(turn)" class="tl-usage">{{ usageText(turn) }}</span>
+                  <el-tooltip v-if="turn.content && !turn.streaming" :content="t('common.copy')" placement="top" :open-delay="300">
+                    <button
+                      type="button"
+                      class="tl-copy tl-copy--a"
+                      :aria-label="t('common.copy')"
+                      @click="copyContent(turn.content)"
+                    >
+                      <el-icon :size="13"><DocumentCopy /></el-icon>
+                    </button>
+                  </el-tooltip>
+                </div>
               </div>
             </div>
           </template>
@@ -570,6 +605,56 @@ onMounted(async () => {
   align-items: flex-end;
   gap: 4px;
 }
+/* 气泡行：复制键在悬停/聚焦时才显形，不常驻抢视线 */
+.tl-userrow {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  max-width: 78%;
+}
+.tl-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--lw-border);
+  border-radius: var(--lw-radius-tag);
+  background: var(--lw-surface-raised);
+  color: var(--lw-ink-muted);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity var(--lw-dur-fast) var(--lw-ease), color var(--lw-dur-fast) var(--lw-ease),
+    border-color var(--lw-dur-fast) var(--lw-ease), transform var(--lw-dur-fast) var(--lw-ease);
+}
+.tl-userrow:hover .tl-copy,
+.tl-copy:focus-visible {
+  opacity: 1;
+}
+.tl-copy:hover {
+  color: var(--lw-primary-ink);
+  border-color: var(--lw-secondary);
+  background: var(--lw-primary-tint);
+  transform: scale(1.06);
+}
+.tl-copy:active {
+  transform: scale(0.94);
+}
+.tl-turn__foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+}
+.tl-copy--a {
+  opacity: 0;
+}
+.tl-turn__body:hover .tl-copy--a,
+.tl-copy--a:focus-visible {
+  opacity: 1;
+}
 .tl-turn__time {
   font-size: 11px;
   color: var(--lw-ink-disabled);
@@ -638,7 +723,7 @@ onMounted(async () => {
 }
 
 .tl-bubble {
-  max-width: 78%;
+  max-width: 100%;
   padding: 10px 14px;
   border-radius: var(--lw-radius-card);
   border-top-right-radius: 4px;

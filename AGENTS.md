@@ -426,9 +426,10 @@ mvn -o test -Dtest=PermissionContractTest               # 只跑权限契约（�
 ```bash
 cd frontend
 npm run typecheck    # vue-tsc --noEmit，单独快速校验
-npm run build        # 先跑 typecheck 再构建，类型不过直接中断
+npm run check:i18n   # 词条中英成对 + 被引用静态键存在（建、删文案后必跑）
+npm run build        # 先跑 typecheck 与 check:i18n 再构建，任一不过直接中断
 ```
-改前端只跑 `typecheck`（数秒）；提交前再跑一次 `build`。
+改前端只跑 `typecheck`（数秒）；改文案或菜单再加一条 `check:i18n`；提交前再跑一次 `build`。
 
 ## 15. 依赖使用约定
 

@@ -1,6 +1,6 @@
 import { useUserStore } from '@/stores/user'
 
-/** 权限判定：模板中用 v-if="hasPerm('system:user:add')" 控制按钮可见性 */
+/** 权限判定：模板中用 v-if="hasPerm('system:user:create')" 控制按钮可见性，权限码与后端 PermConst 一致 */
 export function usePermission() {
   const store = useUserStore()
 

@@ -32,6 +32,7 @@ const isEdit = ref(false)
 
 const resetVisible = ref(false)
 const resetLoading = ref(false)
+const resetTarget = ref<UserVO | null>(null)
 const resetForm = reactive({ userId: '', newPassword: '' })
 
 async function load(): Promise<void> {
@@ -85,6 +86,10 @@ async function submitDialog(): Promise<void> {
     ElMessage.warning(t('system.user.initPasswordTip'))
     return
   }
+  if (!form.username?.trim() || !form.nickname?.trim()) {
+    ElMessage.warning(t('system.user.requiredTip'))
+    return
+  }
   dialogLoading.value = true
   try {
     if (isEdit.value) {
@@ -110,17 +115,22 @@ async function submitDialog(): Promise<void> {
 
 async function toggleState(user: UserVO): Promise<void> {
   const action = user.state === USER_STATE.NORMAL ? t('common.disable') : t('common.enable')
-  await ElMessageBox.confirm(t('common.confirmToggle', { action, name: user.nickname }), t('common.confirm'), {
-    confirmButtonText: t('common.confirm'),
-    cancelButtonText: t('common.cancel'),
-    type: 'warning',
-  })
+  try {
+    await ElMessageBox.confirm(t('common.confirmToggle', { action, name: user.nickname }), t('common.confirm'), {
+      confirmButtonText: t('common.confirm'),
+      cancelButtonText: t('common.cancel'),
+      type: 'warning',
+    })
+  } catch {
+    return
+  }
   await userApi.toggle(user.userId)
   ElMessage.success(t('common.saveSuccess'))
   void load()
 }
 
 function openReset(user: UserVO): void {
+  resetTarget.value = user
   resetForm.userId = user.userId
   resetForm.newPassword = ''
   resetVisible.value = true
@@ -143,11 +153,15 @@ async function submitReset(): Promise<void> {
 }
 
 async function removeUser(user: UserVO): Promise<void> {
-  await ElMessageBox.confirm(t('common.confirmDelete', { name: user.nickname }), t('common.delete'), {
-    confirmButtonText: t('common.delete'),
-    cancelButtonText: t('common.cancel'),
-    type: 'error',
-  })
+  try {
+    await ElMessageBox.confirm(t('common.confirmDelete', { name: user.nickname }), t('common.delete'), {
+      confirmButtonText: t('common.delete'),
+      cancelButtonText: t('common.cancel'),
+      type: 'error',
+    })
+  } catch {
+    return
+  }
   await userApi.remove(user.userId)
   ElMessage.success(t('common.deleteSuccess'))
   void load()
@@ -155,9 +169,13 @@ async function removeUser(user: UserVO): Promise<void> {
 
 function roleNames(roleIds?: string[]): string {
   if (!roleIds?.length) return '-'
-  return roleIds
-    .map((id) => roles.value.find((item) => item.roleId === id)?.roleName ?? id)
-    .join('、')
+  return roleIds.map((id) => roles.value.find((item) => item.roleId === id)?.roleName ?? id).join('、')
+}
+
+function stateLabel(state: string): string {
+  if (state === USER_STATE.NORMAL) return t('system.user.stateNormal')
+  if (state === USER_STATE.LOCKED) return t('system.user.stateLocked')
+  return t('system.user.stateDisabled')
 }
 
 function stateTone(state: string): 'success' | 'warning' | 'error' | 'muted' {
@@ -182,7 +200,7 @@ onMounted(() => {
       </div>
       <LwButton v-if="hasPerm('system:user:create')" @click="openDialog()">
         <template #icon><el-icon><Plus /></el-icon></template>
-        {{ t('common.create') }}
+        {{ t('system.user.create') }}
       </LwButton>
     </div>
 
@@ -222,7 +240,7 @@ onMounted(() => {
       </template>
 
       <el-table :data="list" style="width: 100%">
-        <el-table-column :label="t('system.user.username')" prop="username" min-width="140">
+        <el-table-column :label="t('system.user.username')" prop="username" min-width="160">
           <template #default="{ row }">
             <div class="lw-cell-title">{{ row.username }}</div>
             <div class="lw-cell-sub">{{ row.email || '-' }}</div>
@@ -236,9 +254,7 @@ onMounted(() => {
         </el-table-column>
         <el-table-column :label="t('system.user.state')" width="100">
           <template #default="{ row }">
-            <LwTag :tone="stateTone(row.state)">
-              {{ row.state === USER_STATE.NORMAL ? t('system.user.stateNormal') : t('system.user.stateDisabled') }}
-            </LwTag>
+            <LwTag :tone="stateTone(row.state)">{{ stateLabel(row.state) }}</LwTag>
           </template>
         </el-table-column>
         <el-table-column :label="t('system.user.lastLoginAt')" width="160">
@@ -256,7 +272,11 @@ onMounted(() => {
                 {{ row.state === USER_STATE.NORMAL ? t('common.disable') : t('common.enable') }}
               </LwButton>
               <!-- 改密与删除不可逆，用分隔线隔开并取错误语义色，降低误点概率 -->
-              <span class="lw-rowacts__sep" aria-hidden="true" />
+              <span
+                v-if="hasPerm('system:user:reset') || hasPerm('system:user:delete')"
+                class="lw-rowacts__sep"
+                aria-hidden="true"
+              />
               <LwButton
                 v-if="hasPerm('system:user:reset')"
                 variant="text"
@@ -278,6 +298,9 @@ onMounted(() => {
             </div>
           </template>
         </el-table-column>
+        <template #empty>
+          <div class="py-6 text-sm" style="color: var(--lw-ink-muted)">{{ t('common.empty') }}</div>
+        </template>
       </el-table>
 
       <template #pager>
@@ -293,7 +316,11 @@ onMounted(() => {
       </template>
     </LwTableCard>
 
-    <el-dialog v-model="dialogVisible" :title="isEdit ? t('system.user.update') : t('system.user.create')" width="460px">
+    <el-dialog
+      v-model="dialogVisible"
+      :title="isEdit ? t('system.user.update') : t('system.user.create')"
+      width="460px"
+    >
       <form class="flex flex-col gap-4" @submit.prevent="submitDialog">
         <label class="flex flex-col gap-1.5">
           <span class="lw-label">{{ t('system.user.username') }}</span>
@@ -301,7 +328,12 @@ onMounted(() => {
         </label>
         <label v-if="!isEdit" class="flex flex-col gap-1.5">
           <span class="lw-label">{{ t('system.user.initPassword') }}</span>
-          <input v-model="form.password" type="password" class="lw-input" :placeholder="t('system.user.initPasswordTip')" />
+          <input
+            v-model="form.password"
+            type="password"
+            class="lw-input"
+            :placeholder="t('system.user.initPasswordTip')"
+          />
         </label>
         <label class="flex flex-col gap-1.5">
           <span class="lw-label">{{ t('system.user.nickname') }}</span>
@@ -327,6 +359,9 @@ onMounted(() => {
     </el-dialog>
 
     <el-dialog v-model="resetVisible" :title="t('system.user.resetPassword')" width="420px">
+      <p class="text-xs mb-3" style="color: var(--lw-ink-muted)">
+        {{ t('system.user.resetTip', { name: resetTarget?.nickname ?? '' }) }}
+      </p>
       <label class="flex flex-col gap-1.5">
         <span class="lw-label">{{ t('system.user.newPassword') }}</span>
         <input v-model="resetForm.newPassword" type="password" class="lw-input" />

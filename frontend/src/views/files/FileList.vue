@@ -92,6 +92,13 @@ async function renderSheet(): Promise<void> {
   }
 }
 
+function formatSize(bytes: number): string {
+  if (!bytes || bytes <= 0) return '-'
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} ${t('kb.sizeMB', { n: '' }).trim()}`
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} ${t('kb.sizeKB', { n: '' }).trim()}`
+  return t('kb.sizeB', { n: bytes })
+}
+
 async function load(): Promise<void> {
   loading.value = true
   error.value = ''
@@ -137,11 +144,17 @@ async function download(item: FileVO): Promise<void> {
 }
 
 async function remove(item: FileVO): Promise<void> {
-  await ElMessageBox.confirm(t('files.confirmDelete', { name: item.fileName }), t('common.delete'), {
-    type: 'warning',
-  })
+  try {
+    await ElMessageBox.confirm(t('files.confirmDelete', { name: item.fileName }), t('common.delete'), {
+      confirmButtonText: t('common.delete'),
+      cancelButtonText: t('common.cancel'),
+      type: 'error',
+    })
+  } catch {
+    return
+  }
   await fileApi.remove(item.fileId)
-  ElMessage.success(t('common.success'))
+  ElMessage.success(t('common.deleteSuccess'))
   await load()
 }
 
@@ -176,7 +189,7 @@ onMounted(load)
       :loading="loading"
       :error="error"
       :empty="!files.length"
-      :empty-text="t('common.empty')"
+      :empty-text="t('files.empty')"
       :total="total"
       @retry="load"
     >
@@ -188,7 +201,7 @@ onMounted(load)
           </template>
         </el-table-column>
         <el-table-column :label="t('files.size')" width="120">
-          <template #default="{ row }"><span class="lw-cell-mono">{{ (row.fileSize / 1024).toFixed(1) }} KB</span></template>
+          <template #default="{ row }"><span class="lw-cell-mono">{{ formatSize(row.fileSize) }}</span></template>
         </el-table-column>
         <el-table-column :label="t('files.category')" width="110">
           <template #default="{ row }">

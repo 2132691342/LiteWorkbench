@@ -203,10 +203,10 @@ onMounted(load)
               {{ item.baseUrl }} · {{ item.defaultModel }} · {{ item.apiKeyMasked || '—' }}
             </div>
             <div class="text-xs mt-0.5 font-mono" style="color: var(--lw-ink-disabled)">
-              ctx {{ item.contextWindow ?? t('settings.provider.fallbackGlobal') }}
-              · max {{ item.maxOutputTokens ?? t('settings.provider.unlimited') }}
-              · temp {{ item.temperature ?? t('settings.provider.fallbackGlobal') }}
-              · topP {{ item.topP ?? t('settings.provider.unset') }}
+              {{ t('settings.provider.metaContext', { v: item.contextWindow ?? t('settings.provider.fallbackGlobal') }) }}
+              · {{ t('settings.provider.metaMax', { v: item.maxOutputTokens ?? t('settings.provider.unlimited') }) }}
+              · {{ t('settings.provider.metaTemp', { v: item.temperature ?? t('settings.provider.fallbackGlobal') }) }}
+              · {{ t('settings.provider.metaTopP', { v: item.topP ?? t('settings.provider.unset') }) }}
             </div>
           </div>
           <div class="flex items-center gap-2">

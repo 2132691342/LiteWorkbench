@@ -16,6 +16,7 @@ import {
   Reading,
   Setting,
   User,
+  Box,
 } from '@element-plus/icons-vue'
 import type { Component } from 'vue'
 
@@ -41,6 +42,8 @@ export const MENU_ICONS: Record<string, Component> = {
   edit: EditPen,
   magic: MagicStick,
   connection: Connection,
+  box: Box,
+  database: Coin,
 }
 
 export function menuIcon(name?: string): Component {

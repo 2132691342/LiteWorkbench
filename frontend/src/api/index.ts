@@ -355,6 +355,16 @@ export const logApi = {
 
 /* ===== SSE 流式对话 ===== */
 
+/** 读非 2xx 响应里的 R<T> 信封，取业务 message 供页面直接展示；响应体不是 JSON 时返回空串 */
+async function readErrorBody(response: Response): Promise<string> {
+  try {
+    const body = (await response.json()) as ApiResult<unknown>
+    return typeof body?.message === 'string' ? body.message : ''
+  } catch {
+    return ''
+  }
+}
+
 export interface RunStreamHandlers {
   onEvent: (event: RunEvent) => void
   onEnd: (aborted: boolean) => void
@@ -374,7 +384,9 @@ export function openRunStream(body: ChatStreamREQ, handlers: RunStreamHandlers):
         signal: controller.signal,
       })
       if (!response.ok || !response.body) {
-        handlers.onError(t('api.connectFailed', { code: response.status }))
+        // 服务端在开流前就把错误封装成 R<T> 返回：带上 message 才看得到「未配置供应方」这类可操作提示
+        const message = await readErrorBody(response)
+        handlers.onError(message || t('api.connectFailed', { code: response.status }))
         handlers.onEnd(false)
         return
       }
@@ -470,7 +482,8 @@ export function openAssistStream(body: DocAssistREQ, handlers: AssistStreamHandl
       })
       if (!response.ok || !response.body) {
         finished = true
-        handlers.onError(t('api.connectFailed', { code: response.status }))
+        const message = await readErrorBody(response)
+        handlers.onError(message || t('api.connectFailed', { code: response.status }))
         return
       }
       const reader = response.body.getReader()
