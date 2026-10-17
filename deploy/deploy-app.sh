@@ -65,6 +65,25 @@ wait_ready() {
   return 1
 }
 
+# 前置检查：确认中间件网络存在且 postgres 在网络上可达。
+# 若中间件不在线，新容器必然因 UnknownHostException 崩溃循环，回滚同样起不来；
+# 此时应中止发布、保留现场（不动当前容器），并提示先拉起 docker-compose.yaml。
+preflight_infra() {
+  local net="${LITEWORKBENCH_NETWORK:-liteworkbench_default}"
+  if ! podman network exists "$net"; then
+    echo "[deploy] 预检失败：中间件网络 $net 不存在。请在部署目录执行：" >&2
+    echo "  podman-compose -f docker-compose.yaml up -d" >&2
+    return 1
+  fi
+  # 用 postgres 容器自身做 DNS+连通探针：既验证网络归属，也验证 pg 服务真的在应答
+  if ! podman exec pgvector pg_isready -h postgres -U postgres >/dev/null 2>&1; then
+    echo "[deploy] 预检失败：$net 上的 postgres 主机名或数据库不可达。请检查 pgvector 容器状态与 .env.infra 口令" >&2
+    return 1
+  fi
+  log "中间件预检通过：network=$net"
+  return 0
+}
+
 # podman-compose 的 up -d 只比对配置哈希不认镜像 ID，重建前必须删掉同名容器
 recreate() {
   podman rm -f "$CONTAINER" 2>/dev/null || true
@@ -81,6 +100,9 @@ recreate() {
 log "拉取镜像 $IMAGE"
 export LITEWORKBENCH_IMAGE="$IMAGE"
 podman-compose -f "$COMPOSE" pull || { echo "拉取镜像失败"; exit 1; }
+
+# 预检：中间件必须在线，否则新版本与回滚版本都起不来；不动当前容器
+preflight_infra || { echo "发布中止：中间件未就绪，当前容器未改动"; exit 1; }
 
 # 回滚锚点：记录当前在用镜像，新版本起不来就退回它，避免把站点留在宕机状态
 PREV_IMAGE=$(podman inspect "$CONTAINER" --format '{{.Image}}' 2>/dev/null || true)
@@ -104,7 +126,12 @@ fi
 echo "=== 新版本未就绪，打印现场 ==="
 podman ps --format '{{.Names}} | {{.Status}} | {{.Ports}}'
 # 滤掉 data.init.user 行：种子账号初始口令只允许出现在服务器日志，不得随 CI 日志外泄
-podman logs --tail 80 "$CONTAINER" 2>&1 | grep -av 'data.init.user' || true
+APP_LOGS=$(podman logs --tail 80 "$CONTAINER" 2>&1 | grep -av 'data.init.user' || true)
+# 常见故障模式识别：UnknownHostException 说明中间件主机名不可达，给出可操作的修复建议
+if echo "$APP_LOGS" | grep -q 'UnknownHostException'; then
+  echo ">>> 检测到主机名解析失败——先确认 docker-compose.yaml 中间件容器已启动（podman ps 里有没有 pgvector/redis 等）<<<" >&2
+fi
+echo "$APP_LOGS"
 ss -lntp 2>/dev/null | grep "$PORT" || echo "$PORT 未监听"
 
 if [ -z "$PREV_IMAGE" ]; then
@@ -120,6 +147,10 @@ if wait_ready; then
   echo "=== 已回滚到 $PREV_IMAGE，站点恢复；本次发布判定失败 ==="
 else
   echo "=== 回滚后仍未就绪，需要人工介入 ==="
-  podman logs --tail 80 "$CONTAINER" 2>&1 | grep -av 'data.init.user' || true
+  APP_LOGS2=$(podman logs --tail 80 "$CONTAINER" 2>&1 | grep -av 'data.init.user' || true)
+  if echo "$APP_LOGS2" | grep -q 'UnknownHostException'; then
+    echo ">>> 回滚同样失败且报主机名解析错误——问题在中间件或网络，与新旧镜像无关，需人工拉起 docker-compose.yaml <<<" >&2
+  fi
+  echo "$APP_LOGS2"
 fi
 exit 1
