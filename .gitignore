@@ -1,19 +1,22 @@
+# gitignore
+
 # 构建产物
 backend/target/
 frontend/dist/
 frontend/node_modules/
 *.class
 
-# 日志
+# 日志与运行时数据
 /logs/
 *.log
+backend/data/
+data/
 
 # IDE
 .idea/
 *.iml
 .vscode/
 *.swp
-.codebuddy/
 
 # 系统
 .DS_Store
@@ -23,18 +26,12 @@ Thumbs.db
 .env.local
 *.local
 
-# 部署机密（由 deploy/gen-secrets.sh 生成，禁止入库）
+# 部署机密（deploy/gen-secrets.sh 生成）
 .env.infra
 .env.app
 deploy/.env.infra
 deploy/.env.app
 
-# 运行时数据目录
-backend/data/
-data/
-
-# 线上验证产物与本地一次性凭据（不入库）
+# 本地验证产物
 .shots/
 .secrets/
-.playwright-cli/
-

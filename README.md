@@ -177,12 +177,12 @@ npm run build    # 产物在 frontend/dist
 | 文档 | 回答什么 |
 |---|---|
 | [AGENTS.md](AGENTS.md) | 工程强制规范：分层依赖、包与命名、API / ID / 字段 / 日志 / 配置约定、不变量、测试约定 |
-| [DESIGN.md](DESIGN.md) | 前端视觉与交互规范：设计令牌、按钮五态、异步三态、页面范式、案例对照与验收、禁止清单 |
+| [DESIGN.md](DESIGN.md) | 前端视觉与交互规范：设计令牌、按钮五态、异步三态、页面范式、视觉验收、禁止清单 |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 总体架构：分层与依赖方向、跨模块主链路、对外依赖边界、并发与性能 |
 | [docs/DATA-MODEL.md](docs/DATA-MODEL.md) | 数据模型：PG 表结构与索引、Manticore 检索表、Redis 键、ID 与审计字段 |
 | [docs/API-CONTRACT.md](docs/API-CONTRACT.md) | 接口契约：响应信封、各资源接口、SSE 帧结构、分页约定 |
 | [docs/ERROR-CODES.md](docs/ERROR-CODES.md) | 错误码分段、每码语义与 HTTP 状态、异常处理约定 |
-| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | 本地开发：前置条件、起服务、测试、常见改动入口 |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | 本地开发：前置条件、起服务、测试、常见改动入口、仓库内可执行资产 |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | 部署运维：拓扑、镜像、环境变量、升级回滚、备份、排障 |
 | [specs/01-agent-core.md](specs/01-agent-core.md) | Agent 内核：推理循环、事件协议、工具契约、规划器、长期记忆、子运行、Python 运行时 |
 | [specs/02-conversation.md](specs/02-conversation.md) | 会话与运行：状态机、并发控制、模型供应方与出站 |

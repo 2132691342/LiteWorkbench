@@ -399,7 +399,7 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 
 ## 14. 测试约定
 
-只保留覆盖长链路与跨模块契约的测试；简单断言、纯算法与薄 mock 单元测试一律不写，同一行为的重复覆盖也不写。当前 2 个文件 2 个用例，随 `mvn test` 一次跑完（约 3 秒，离线 `mvn -o test` 约 1.5 秒），全部不依赖中间件与 Spring 容器。
+只保留覆盖长链路与跨模块契约的测试；简单断言、纯算法与薄 mock 单元测试一律不写，同一行为的重复覆盖也不写。当前 2 个文件 4 个用例，随 `mvn test` 一次跑完（约 3 秒，离线 `mvn -o test` 约 1.5 秒），全部不依赖中间件与 Spring 容器。
 
 改一处只想跑相关的一条时，用 `-Dtest=` 指定类，别整目录跑：
 
@@ -412,12 +412,12 @@ mvn -o test -Dtest=PermissionContractTest               # 只跑权限契约（�
 
 | 文件 | 用例 | 覆盖 | 什么时候必须跑 |
 |---|---|---|---|
-| `service/RunEventPipelineTest` | 1 | 事件长链路一条链跑通：内核事件归一、批内合帧（增量合并、类型切换保序）、工具起止与结果、模型用量入账，以及超长裁剪、失败工具标记、异常事件不带正文 | 改 `agent/AgentEventAdapter`、`service/RunService.mergeFrames`、`domain/constant/EventTypeEnum` 后 |
+| `service/RunEventPipelineTest` | 3 | 事件长链路：归一 → 批内合帧保序 → 工具起止与结果分工 → 用量入账 → 超长保尾裁剪 → 失败工具与异常事件边界。三个用例按环节切开，失败时直接定位到合帧、结算或裁剪 | 改 `agent/AgentEventAdapter`、`service/RunService.mergeFrames`、`domain/constant/EventTypeEnum` 后 |
 | `config/PermissionContractTest` | 1 | 跨模块契约：控制器注解 + `PermConst` + 菜单种子三处声明的权限点必须一致，漏一处即测试失败；菜单种子从 `db/data.sql` 解析 | 新增/修改权限点、改控制器注解、改 `db/data.sql` 菜单种子后 |
 
 **明确不写的测试**：Mapper XML 的解析由应用启动即校验（错了起不来）；路由兜底的命中范围由容器验收清单里的一次 `curl` 探活覆盖——在测试里手工模拟 Spring 容器初始化只会复制框架行为，并随框架升级失效。
 
-用例名用中文直述业务断言；一个用例串起一条完整链路或一个契约；契约测试集中在 `config/PermissionContractTest`，不按契约拆多个文件。资源扫描一律走 `classpath*:` 模式，禁止用目录列举（打包成 JAR 后失效）；前端不写快照测试与纯渲染测试。
+用例名用中文直述业务断言；一个用例串起一条完整链路或一个契约，长链路内部按环节拆成几个命名用例（合帧保序 / 结算 / 边界），失败时不必读断言才知道哪一环倒了；契约测试集中在 `config/PermissionContractTest`，不按契约拆多个文件。资源扫描一律走 `classpath*:` 模式，禁止用目录列举（打包成 JAR 后失效）；前端不写快照测试与纯渲染测试。
 
 ### 14.1 前端的校验
 

@@ -15,7 +15,7 @@
 | `router/` | 静态路由 + 后端菜单驱动的动态注册 + 登录与权限守卫 |
 | `views/` | 路由页：`Login` / `ForcePassword` / `Dashboard`、`console/`、`runs/`、`writer/`、`files/`、`skills/`、`kb/`、`logs/`、`monitor/`、`settings/`、`system/`、`showcase/`、`error/`(403/404/500) |
 | `components/layout/` | 外壳与导航：`AppShell`、`TheSideBar`、`TheSideMenu`、`TheTopBar`、`icons.ts`（图标按需具名引入） |
-| `components/ui/` | 基础件：`LwButton`、`LwCard`、`LwEmpty`、`LwErrorBar`、`LwErrorPage`、`LwMarkdown`、`LwMetricCard`、`LwPageState`、`LwProgressBar`、`LwSegmented`、`LwSkeleton`、`LwTag` |
+| `components/ui/` | 基础件：`LwButton`、`LwCard`、`LwEmpty`、`LwErrorBar`、`LwErrorPage`、`LwFilterBar`、`LwMarkdown`、`LwMetricCard`、`LwPageState`、`LwProgressBar`、`LwSegmented`、`LwSkeleton`、`LwTableCard`、`LwTag` |
 | `components/charts/` | 图表封装：`LwAreaChart`、`LwBarChart`、`LwDonutChart`（色值经 `utils/theme.ts` 读令牌） |
 | `components/console/` | 工作台业务件：`ConsoleQuickStart`、`MessageComposer`、`PlanChecklist`、`ThinkingBlock`、`ToolStepCard` |
 | `components/runs/` | 运行记录业务件：`TraceWaterfall`、`RunTree`、`UsagePanel` |
@@ -29,7 +29,7 @@
 | `utils/` | `crypto.ts`（公钥与加密）、`theme.ts`（图表取令牌）、`menu.ts`（`menuLabel()`）、`role.ts`（角色标签唯一实现）、`markdown.ts`、`const.ts`（角色码 / 用户状态 / 菜单类型 / 时间格式化） |
 | `types/` | `api.ts` 与后端 VO 对齐的接口类型 |
 | `locales/` | 中英双语资源与 i18n 实例 |
-| `styles/` | `tokens.css` 唯一色值来源、`index.css` 全局样式 |
+| `styles/` | `tokens.css` 唯一色值来源、`index.css` 全局样式、`admin.css` 管理列表页骨架（页头 / 筛选条 / 表格卡 / 分页 / 单元格字体档） |
 
 ### 路由
 
@@ -101,6 +101,9 @@
 - 触发符必须位于行首或空白之后，查询串不含空格才认为面板处于激活态；面板打开时才拉列表，不按 `/` 与 `@` 就不产生额外请求。
 - 面板排序：`前缀命中 > 类型序（命令 → 技能 → 引用）> 字典序`，最多 8 条，保证三四个字符就能靠回车命中。
 - 输入框自增高到上限后内部滚动；容器是单一圆角框（`--lw-field-border` + 聚焦光环），不再套一层内部输入边框。
+- 顶边带 12px 拖拽持有把手：向上拉高输入区（上限跟随可视高，双击恢复自动高度），长文本不用挤在小框里滚。
+- 附件：回形针胶囊上传到当前工作区桶；**Ctrl+V 直接粘贴截图**走同一条上传链路。一次最多 5 个，满额时胶囊置灰并在输入区下方给一行警示文案。
+- 发送键是 34px 圆形描边键（`.lw-send`），流式中就地换成同尺寸错误色停止键，不产生布局跳动；右上角字数计数与发送键位于同一行尾。
 - 视觉与键盘契约（含 chip 形态、发送/中断按钮、Esc 中断、↑ 历史回填、字数计数）见 [DESIGN.md §5.11](../DESIGN.md)。
 
 输入框底部还有一条**模型 / 工作区切换条**（即点即换，改动由宿主持久化到会话），两枚 chip 是常驻控件而非悬浮出现：
@@ -128,6 +131,14 @@
 | `components/console/PlanChecklist.vue` | 规划清单（`plan.updated` 是覆盖式快照） |
 
 三者都由 `stores/run.ts` 的唯一 reducer 喂数，实时流与回放同路径。
+
+**回合分组**：`Console.vue` 的 `turns` 计算属性把相邻的 assistant 片段折成一个回合——一次「提问 → 回答」是一整块，块间才用大间距断开；用户消息永不合合（相邻的两次提问必须是两块）。合并时 `tools` / `plan` 必须显式拷贝，否则会把 store 里的数组引用带回分组结果，合并会反向改写源数据。
+
+助手回合渲染为「头像列 + 一根竖轨 + 内容体」：思考、计划、工具卡、正文、用量行全部挂在同一根 1px 竖线上，回放与实时视觉一致。正文是裸 markdown 不套气泡（气泡只用于用户消息），流式中末尾带闪烁光标，正文与过程都未到时给三颗跳动点 + 「正在组织回答」。
+
+### 管理列表页
+
+增删改查类页面（用户 / 角色 / 菜单 / 文件 / 技能）一律走 `components/ui/LwTableCard.vue`：一个资源页 = `.lw-page-head` 页头 + 一张表格卡；筛选条、表体、分页同属一张白卡，不拆成三张。表格语言（表头浅底、44px 行高、单元格三档字体、操作列竖线分组、右对齐分页）全部在 `styles/admin.css`，组件不就地写这些样式；视觉规范见 [DESIGN.md §5.12](../DESIGN.md)。
 
 ## 契约
 

@@ -99,13 +99,13 @@ npm run build       # 产物 frontend/dist
 
 ## 6. 测试
 
-只有两条：一条长链路（事件管线）、一条跨模块契约（权限点三处一致）。全量 3 秒左右，不依赖中间件与 Spring 容器。
+只有两个文件：一条长链路（事件管线，按环节拆 3 个命名用例）与一条跨模块契约（权限点三处一致）。全量 4 个用例 3 秒左右，不依赖中间件与 Spring 容器。
 
 ```bash
 cd backend
-mvn -o test                                  # 全量
-mvn -o test -Dtest=RunEventPipelineTest       # 只跑事件长链路
-mvn -o test -Dtest=PermissionContractTest     # 只跑权限契约
+mvn -o test                                   # 全量
+mvn -o test -Dtest=RunEventPipelineTest        # 只跑事件长链路
+mvn -o test -Dtest=PermissionContractTest      # 只跑权限契约
 ```
 
 用例清单、保留标准与「明确不写的测试」见 [AGENTS.md](../AGENTS.md) §14。前端没有测试运行器，`npm run typecheck`（数秒）与 `npm run build`（先类型检查再构建）就是前端 CI 的全部校验。
@@ -134,7 +134,7 @@ mvn -o test -Dtest=PermissionContractTest     # 只跑权限契约
 
 ## 8. 仓库里的可执行资产
 
-只有这些，各自单一职责，不在别处另放临时脚本。新增脚本前先想清楚能不能并进这三个中的一个。
+只有这些，各自单一职责，不在别处另放临时脚本。新增脚本前先想清楚能不能并进已有两个 `.sh` 中的一个。
 
 | 文件 | 职责 |
 |---|---|

@@ -1,9 +1,7 @@
-# 构建上下文裁剪：缺了这份文件，本机 `docker build -f deploy/Dockerfile .` 会把
-# node_modules（Windows 二进制）与 target 一起送进上下文——既拖慢传输，
-# 也会让 `COPY frontend .` 把宿主 node_modules 拷进 Linux 镜像，node 直接跑不起来。
+# 构建上下文裁剪：缺了它会把 node_modules（Windows 二进制）与 target 送进上下文，
+# 并让 `COPY frontend .` 把宿主 node_modules 拷进 Linux 镜像导致 node 跑不起来。
 .git/
 .github/
-.codebuddy/
 .shots/
 .secrets/
 
