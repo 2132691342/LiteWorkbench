@@ -20,12 +20,14 @@ public class RuntimeController {
 
     private final MonitorService monitorService;
 
+    /** 内置 Python 运行时状态 */
     @SaCheckPermission(PermConst.MONITOR_HEALTH_LIST)
     @GetMapping("/python")
     public R<PythonStatusVO> pythonStatus() {
         return R.ok(monitorService.pythonStatus());
     }
 
+    /** 重新探测 Python */
     @Idempotent(prefix = "runtime:reprobe", ttl = 5)
     @SaCheckPermission(PermConst.MONITOR_PYTHON_REPROBE)
     @PostMapping("/python/reprobe")

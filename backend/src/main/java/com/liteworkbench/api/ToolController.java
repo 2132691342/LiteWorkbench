@@ -27,6 +27,7 @@ public class ToolController {
 
     private final ToolService toolService;
 
+    /** 工具清单 */
     @SaCheckPermission(PermConst.WB_TOOL_LIST)
     @GetMapping("/list")
     public R<List<ToolVO>> list() {

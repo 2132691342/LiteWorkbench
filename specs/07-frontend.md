@@ -46,6 +46,8 @@
 | `/files` | 文件空间（含在线预览） | 登录 |
 | `/skills` | 技能 | 登录 |
 | `/kb` | 知识库 | 登录 |
+| `/workspaces` | 工作区（资产容器与桶绑定） | 登录 |
+| `/storage` | 存储桶管理（平台桶清单与增删） | `monitor:storage:list` |
 | `/logs` | 日志中心（本人视角；`monitor:log:global` 可切全局） | `monitor:log:list` |
 | `/monitor` | 健康监控 + 调用观测 | `monitor:health:list`（重置窗口另需 `monitor:observe:reset`） |
 | `/settings` | 设置（账户安全 + 平台级分区） | 登录 |
@@ -73,7 +75,7 @@
 | `useUserStore` | 令牌、用户信息、角色码、权限标识、菜单树、`pwdResetRequired`、`loaded`；`login`（本地加密后提交）、`loadCurrent`、`logout`、`reset` |
 | `useSessionStore` | 会话列表、当前会话、消息与三个加载态（`loading` / `loadingMessages` / `error`） |
 | `useRunStore` | 运行列表、唯一时间线 reducer（`timeline`）、`streaming` / `replaying` / `replayRunId` / `currentRunId` / `errorDetail`；`applyEvent`（reducer）、`loadTimeline`、`beginStream`、`replay`、`backToLive` |
-| `useMonitorStore` | 健康、仪表盘汇总、调用观测与 Python 运行时；`loadHealth` / `loadOverview` / `loadObserve` / `resetObserve` / `loadPython` / `reprobe`。观测区自带 `observeLoading` / `observeError`，不污染健康面板加载态 |
+| `useMonitorStore` | 健康、仪表盘汇总、最近运行、调用观测与 Python 运行时；`loadHealth` / `loadOverview` / `loadRecentRuns` / `loadObserve` / `resetObserve` / `loadPython` / `reprobe`。观测区与最近运行各带自己的加载态（`observeLoading` / `recentLoading` 与对应错误态），互不牵连，也不污染健康面板 |
 | `useAppStore` | 侧栏折叠（持久化 `lw-sidebar-collapsed`）、移动端抽屉、语言（持久化到 `lw-locale`） |
 
 大对象一律 `shallowRef`，标量用 `ref`。
@@ -85,7 +87,7 @@
 | 侧栏折叠 | 桌面端在 `208px` 与 `64px` 图标栏间切换，状态在 `useAppStore.sidebarCollapsed` 并持久化；折叠由顶栏左侧按钮触发，折叠态下点目录会先展开侧栏再打开该目录 |
 | 面包屑 | `useBreadcrumb` 在当前 `useUserStore.menus` 上按 `route.path` 定位，返回根→叶链条；链条长度 >1 才渲染，单级页面（如仪表盘）不渲染 |
 | 表格工具栏 | 刷新 / 密度 / 全屏由 `LwTableCard` 自带：刷新触发 `retry`，密度三档 `default` / `medium` / `compact`（持久化 `lw-table-density`），全屏是卡片级 `position: fixed` 而非浏览器全屏 API（后者会吞掉 Esc 与弹窗） |
-| 批量与筛选 | `LwBatchBar` 占筛选条下方位置（`batch` 插槽），未选中不占位；高级筛选行在 `filter` 插槽内用 `.lw-filterbar__adv` 折叠，开关按钮有生效条件时打点；行操作溢出收进 `LwRowActions` 的 `overflow` 插槽 |
+| 批量与筛选 | `LwBatchBar` 占筛选条下方位置（`batch` 插槽），未选中不占位；高级筛选行在 `filter` 插槽内用 `.lw-filterbar__adv` 折叠，开关按钮有生效条件时打点；行操作溢出收进 `LwRowActions`；破坏性动作统一 `lw-text-danger` + `.lw-rowacts__sep` 竖线 |
 
 ### 国际化
 
@@ -232,6 +234,17 @@ defineExpose({ focus: () => void; clear: () => void })
   ├─ 中断按钮 → POST /run/abort/{runId} → 收到 run.end
   └─ 刷新页面 → GET /run/events/{runId} 回放
 
+仪表盘
+  ├─ 进入并发拉 /monitor/overview 与 /run/page(size=5)，两块各自三态
+  ├─ 指标卡 / 趋势图 / 工具分布读 overview；最近运行读分页结果的前 5 条
+  └─ 最近运行行点击 → /runs?runId=xxx，运行记录页据此直接选中并加载详情
+
+管理列表页
+  ├─ 进入拉资源分页 → LwTableCard 渲染卡头（资源名 + 总数 + 工具栏）
+  ├─ 筛选条查询 / 重置 → 回到第 1 页重拉；高级筛选折叠行收起时不占位
+  ├─ 勾选行 → 批量条出现 → 批量动作走批量接口 → 按 BatchResultVO 逐条回报并刷新
+  └─ 工具栏：刷新（重拉）· 密度（三档循环，持久化）· 全屏（卡片级铺满，Esc 仍归弹窗）
+
 运行记录
   ├─ 列表：GET /run/page（状态过滤 + 分页，行显示状态 Tag、模型、耗时、Token）
   ├─ 详情：GET /run/detail/{runId} + GET /run/events/{runId}
@@ -274,3 +287,6 @@ defineExpose({ focus: () => void; clear: () => void })
 - 按钮一律使用 `LwButton`；破坏性操作（删除、停用、重置密码）必须二次确认。
 - 权限控制统一走 `v-perm` 指令或 `hasPerm()`，权限码与后端 `PermConst` 保持一致。
 - 动态路由必须在 `loadCurrent()` 成功后注册；登出与切换账号必须回收动态路由与用户状态。
+- 管理资源页一律走 `LwTableCard`：卡头、筛选条、表体、分页同属一张卡；页头是全页唯一主操作位，卡头不再重复标题与新建按钮。
+- 批量动作必须有二次确认，且必须消费 `BatchResultVO` 的失败明细——只报"操作成功"会把被守门挡下的目标伪装成已删除。
+- 权限判定以 `useUserStore.perms` 为唯一来源，模板用 `v-perm` 或 `hasPerm()`；引用的权限点必须存在于后端 `PermConst`，由契约测试校验。

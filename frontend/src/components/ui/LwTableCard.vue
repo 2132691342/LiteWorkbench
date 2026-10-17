@@ -14,19 +14,19 @@ const props = withDefaults(
     empty?: boolean
     /** 空态说明文案 */
     emptyText?: string
+    /** 加载中：表体位置换成骨架 */
     loading?: boolean
+    /** 错误文案，非空即错误态 */
     error?: string
     /** 分页总数，为 0 或不足一页时不渲染分页条 */
     total?: number
     /** 卡头资源名，缺省不渲染卡头 */
     title?: string
-    /** 刷新中点按无效并显示旋转 */
-    refreshing?: boolean
   }>(),
-  { empty: false, emptyText: '', loading: false, error: '', total: 0, title: '', refreshing: false },
+  { empty: false, emptyText: '', loading: false, error: '', total: 0, title: '' },
 )
 
-const emit = defineEmits<{ (e: 'retry'): void }>()
+defineEmits<{ (e: 'retry'): void }>()
 
 const { t } = useI18n()
 const DENSITIES: Density[] = ['default', 'medium', 'compact']

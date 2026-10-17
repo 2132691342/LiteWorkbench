@@ -27,6 +27,7 @@ public class ManticoreLogAppender extends AppenderBase<ILoggingEvent> {
     /** 告警限流间隔，毫秒 */
     private static final long WARN_INTERVAL_MS = 60_000L;
 
+    /** 注入发布器，appender 早于容器实例化 */
     public static void setPublisher(LogPublisher target) {
         publisher = target;
     }
@@ -35,6 +36,7 @@ public class ManticoreLogAppender extends AppenderBase<ILoggingEvent> {
         setName("LW_MANTICORE");
     }
 
+    /** 日志转投递，不直连数据库 */
     @Override
     protected void append(ILoggingEvent event) {
         LogPublisher target = publisher;

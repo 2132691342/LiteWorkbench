@@ -21,6 +21,7 @@ import java.io.IOException;
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class TraceFilter extends OncePerRequestFilter {
 
+    /** 出入站补齐 traceId */
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,

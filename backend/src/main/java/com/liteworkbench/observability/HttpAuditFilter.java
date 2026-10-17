@@ -42,6 +42,7 @@ public class HttpAuditFilter extends OncePerRequestFilter {
     private final ObserveProperties observeProperties;
     private final ObserveStats observeStats;
 
+    /** 关闭观测或探针请求不计 */
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         if (!observeProperties.getHttp().isEnabled()) {
@@ -60,6 +61,7 @@ public class HttpAuditFilter extends OncePerRequestFilter {
         return false;
     }
 
+    /** 记录耗时与状态码，SSE 响应不包装 */
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {

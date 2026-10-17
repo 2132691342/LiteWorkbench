@@ -22,24 +22,28 @@ public class MonitorController {
 
     private final MonitorService monitorService;
 
+    /** 组件探活汇总 */
     @SaCheckPermission(PermConst.MONITOR_HEALTH_LIST)
     @GetMapping("/health")
     public R<HealthRESP> health() {
         return R.ok(monitorService.health());
     }
 
+    /** 仪表盘汇总指标 */
     @SaCheckPermission(PermConst.MONITOR_HEALTH_LIST)
     @GetMapping("/overview")
     public R<OverviewRESP> overview() {
         return R.ok(monitorService.overview());
     }
 
+    /** SQL 与 HTTP 调用观测窗口 */
     @SaCheckPermission(PermConst.MONITOR_HEALTH_LIST)
     @GetMapping("/observe")
     public R<ObserveRESP> observe() {
         return R.ok(monitorService.observe());
     }
 
+    /** 清空观测窗口重新统计 */
     @Idempotent(prefix = "monitor:observe:reset", ttl = 5)
     @SaCheckPermission(PermConst.MONITOR_OBSERVE_RESET)
     @PostMapping("/observe/reset")

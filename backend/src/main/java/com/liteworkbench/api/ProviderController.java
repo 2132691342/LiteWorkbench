@@ -42,6 +42,7 @@ public class ProviderController {
         return R.ok(providerService.presets());
     }
 
+    /** 新建模型供应方 */
     @SaCheckPermission(PermConst.WB_PROVIDER_CREATE)
     @Idempotent(prefix = "provider:create")
     @PostMapping("/create")
@@ -49,6 +50,7 @@ public class ProviderController {
         return R.ok(providerService.create(req, LoginContext.userId()));
     }
 
+    /** 修改供应方配置与模型参数 */
     @SaCheckPermission(PermConst.WB_PROVIDER_UPDATE)
     @Idempotent(prefix = "provider:update")
     @PostMapping("/update")
@@ -57,6 +59,7 @@ public class ProviderController {
         return R.ok();
     }
 
+    /** 删除供应方 */
     @SaCheckPermission(PermConst.WB_PROVIDER_DELETE)
     @Idempotent(prefix = "provider:delete")
     @PostMapping("/delete/{providerId}")
@@ -65,6 +68,7 @@ public class ProviderController {
         return R.ok();
     }
 
+    /** 连通性探测，发一次最小请求 */
     @SaCheckPermission(PermConst.WB_PROVIDER_UPDATE)
     @Idempotent(prefix = "provider:test")
     @PostMapping("/test/{providerId}")

@@ -9,6 +9,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Configuration
 public class PersistenceConfig {
 
+    /** 编程式事务模板 */
     @Bean
     public TransactionTemplate transactionTemplate(PlatformTransactionManager transactionManager) {
         return new TransactionTemplate(transactionManager);

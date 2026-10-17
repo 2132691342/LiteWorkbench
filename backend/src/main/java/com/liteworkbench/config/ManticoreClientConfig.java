@@ -11,6 +11,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class ManticoreClientConfig {
 
+    /** 检索服务客户端 */
     @Bean
     public ApiClient manticoreApiClient(ManticoreProperties properties) {
         return new ApiClient()
@@ -19,16 +20,19 @@ public class ManticoreClientConfig {
                 .setReadTimeout(properties.getReadTimeout());
     }
 
+    /** 索引写接口 */
     @Bean
     public IndexApi manticoreIndexApi(ApiClient manticoreApiClient) {
         return new IndexApi(manticoreApiClient);
     }
 
+    /** 检索接口 */
     @Bean
     public SearchApi manticoreSearchApi(ApiClient manticoreApiClient) {
         return new SearchApi(manticoreApiClient);
     }
 
+    /** 建表与探活接口 */
     @Bean
     public UtilsApi manticoreUtilsApi(ApiClient manticoreApiClient) {
         return new UtilsApi(manticoreApiClient);

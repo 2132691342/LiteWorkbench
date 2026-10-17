@@ -51,6 +51,7 @@ public class RunController {
         return R.ok(runService.page(req));
     }
 
+    /** 运行详情 */
     @GetMapping("/run/detail/{runId}")
     public R<RunVO> detail(@PathVariable String runId) {
         return R.ok(runService.detail(runId));
@@ -63,6 +64,7 @@ public class RunController {
         return R.ok(runService.events(runId, afterSeq));
     }
 
+    /** 中断运行 */
     @Idempotent(prefix = "run:abort")
     @PostMapping("/run/abort/{runId}")
     public R<Void> abort(@PathVariable String runId) {

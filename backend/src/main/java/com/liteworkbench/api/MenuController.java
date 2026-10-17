@@ -40,12 +40,14 @@ public class MenuController {
         return R.ok(menuService.userTree(LoginContext.userId()));
     }
 
+    /** 菜单详情 */
     @SaCheckPermission(PermConst.SYSTEM_MENU_LIST)
     @GetMapping("/detail/{menuId}")
     public R<MenuVO> detail(@PathVariable String menuId) {
         return R.ok(menuService.detail(menuId));
     }
 
+    /** 新建菜单节点 */
     @SaCheckPermission(PermConst.SYSTEM_MENU_CREATE)
     @Idempotent(prefix = "menu:create")
     @PostMapping("/create")
@@ -53,6 +55,7 @@ public class MenuController {
         return R.ok(menuService.create(req, LoginContext.userId()));
     }
 
+    /** 修改菜单节点 */
     @SaCheckPermission(PermConst.SYSTEM_MENU_UPDATE)
     @Idempotent(prefix = "menu:update")
     @PostMapping("/update")
@@ -61,6 +64,7 @@ public class MenuController {
         return R.ok();
     }
 
+    /** 删除菜单节点，存在子级即拒绝 */
     @SaCheckPermission(PermConst.SYSTEM_MENU_DELETE)
     @Idempotent(prefix = "menu:delete")
     @PostMapping("/delete/{menuId}")

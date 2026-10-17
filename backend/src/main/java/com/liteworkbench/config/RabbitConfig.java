@@ -15,6 +15,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class RabbitConfig {
 
+    /** 日志投递交换机 */
     @Bean
     public TopicExchange logExchange() {
         return new TopicExchange(MqConst.LOG_EXCHANGE, true, false);
@@ -28,26 +29,31 @@ public class RabbitConfig {
                 .build();
     }
 
+    /** 日志死信交换机 */
     @Bean
     public TopicExchange logDeadLetterExchange() {
         return new TopicExchange(MqConst.LOG_DLX, true, false);
     }
 
+    /** 日志死信队列，留证不丢 */
     @Bean
     public Queue logDeadLetterQueue() {
         return new Queue(MqConst.LOG_DLQ, true);
     }
 
+    /** 死信路由绑定 */
     @Bean
     public Binding logDeadLetterBinding(Queue logDeadLetterQueue, TopicExchange logDeadLetterExchange) {
         return BindingBuilder.bind(logDeadLetterQueue).to(logDeadLetterExchange).with(MqConst.LOG_ROUTING_KEY);
     }
 
+    /** 日志路由绑定 */
     @Bean
     public Binding logIndexBinding(Queue logIndexQueue, TopicExchange logExchange) {
         return BindingBuilder.bind(logIndexQueue).to(logExchange).with(MqConst.LOG_ROUTING_KEY);
     }
 
+    /** 知识库投递交换机 */
     @Bean
     public TopicExchange kbExchange() {
         return new TopicExchange(MqConst.KB_EXCHANGE, true, false);
@@ -59,6 +65,7 @@ public class RabbitConfig {
         return new Queue(MqConst.KB_PARSE_QUEUE, true);
     }
 
+    /** 解析路由绑定 */
     @Bean
     public Binding kbParseBinding(Queue kbParseQueue, TopicExchange kbExchange) {
         return BindingBuilder.bind(kbParseQueue).to(kbExchange).with(MqConst.KB_PARSE_ROUTING_KEY);

@@ -29,6 +29,7 @@ public class RabbitTopologyGuard implements SmartLifecycle {
         return 0;
     }
 
+    /** 校验队列与死信配置，修补漂移 */
     @Override
     public void start() {
         long begin = System.currentTimeMillis();
@@ -80,11 +81,13 @@ public class RabbitTopologyGuard implements SmartLifecycle {
         }
     }
 
+    /** 置停 */
     @Override
     public void stop() {
         running = false;
     }
 
+    /** 生命周期状态 */
     @Override
     public boolean isRunning() {
         return running;

@@ -13,6 +13,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class MinioConfig {
 
+    /** 对象存储客户端 */
     @Bean
     public MinioClient minioClient(StorageProperties properties) {
         return MinioClient.builder()

@@ -30,18 +30,21 @@ public class UserController {
 
     private final UserService userService;
 
+    /** 用户分页：支持状态、角色与待改密过滤 */
     @SaCheckPermission(PermConst.SYSTEM_USER_LIST)
     @GetMapping("/page")
     public R<PageResult<UserVO>> page(UserPageREQ req) {
         return R.ok(userService.page(req));
     }
 
+    /** 用户详情 */
     @SaCheckPermission(PermConst.SYSTEM_USER_LIST)
     @GetMapping("/detail/{userId}")
     public R<UserVO> detail(@PathVariable String userId) {
         return R.ok(userService.detail(userId));
     }
 
+    /** 新建用户：初始口令密文提交，首登强制改密 */
     @SaCheckPermission(PermConst.SYSTEM_USER_CREATE)
     @Idempotent(prefix = "user:create")
     @PostMapping("/create")
@@ -58,6 +61,7 @@ public class UserController {
         return R.ok();
     }
 
+    /** 启用或停用账号 */
     @SaCheckPermission(PermConst.SYSTEM_USER_UPDATE)
     @Idempotent(prefix = "user:toggle")
     @PostMapping("/toggle/{userId}")
@@ -66,6 +70,7 @@ public class UserController {
         return R.ok();
     }
 
+    /** 管理员重置密码 */
     @SaCheckPermission(PermConst.SYSTEM_USER_RESET)
     @Idempotent(prefix = "user:reset")
     @PostMapping("/reset-password")

@@ -13,6 +13,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 public class LiteWorkbenchApplication {
 
+    /** 应用入口 */
     public static void main(String[] args) {
         try {
             SpringApplication.run(LiteWorkbenchApplication.class, args);

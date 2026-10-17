@@ -16,24 +16,28 @@ import java.util.Objects;
 @MappedTypes(LocalDateTime.class)
 public class TimestamptzTypeHandler extends BaseTypeHandler<LocalDateTime> {
 
+    /** 写入：本地时间转瞬时 */
     @Override
     public void setNonNullParameter(PreparedStatement ps, int i, LocalDateTime parameter, JdbcType jdbcType)
             throws SQLException {
         ps.setTimestamp(i, Timestamp.valueOf(parameter));
     }
 
+    /** 读回：按列名 */
     @Override
     public LocalDateTime getNullableResult(ResultSet rs, String columnName) throws SQLException {
         Timestamp value = rs.getTimestamp(columnName);
         return Objects.isNull(value) ? null : value.toLocalDateTime();
     }
 
+    /** 读回：按列序 */
     @Override
     public LocalDateTime getNullableResult(ResultSet rs, int columnIndex) throws SQLException {
         Timestamp value = rs.getTimestamp(columnIndex);
         return Objects.isNull(value) ? null : value.toLocalDateTime();
     }
 
+    /** 读回：存储过程出参 */
     @Override
     public LocalDateTime getNullableResult(CallableStatement cs, int columnIndex) throws SQLException {
         Timestamp value = cs.getTimestamp(columnIndex);

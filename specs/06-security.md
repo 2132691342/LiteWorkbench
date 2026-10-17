@@ -12,7 +12,7 @@
 
 - 不做多租户。共享库共享表 + 行级 `user_id`，不做分库，不做 MyBatis 全局拦截器——归属条件显式写进每条 SQL。
 - 用户拥有的资源（会话、运行、事件、技能、文件、知识库与文档、创作文档与版本、长期记忆）只允许归属用户读写；与之对应的 Mapper（`WbSessionMapper` / `WbRunMapper` / `WbSkillMapper` / `WbFileMapper` / `WbKbMapper` / `WbKbDocMapper` / `WbDocMapper` / `WbDocVersionMapper` / `WbMemoryMapper` / `SysUserMapper`）查询条件一律携带 `user_id = #{userId}`。
-- 平台级表（`sys_menu`、`sys_user_role`、`sys_role_menu`、`wb_tool`、`wb_provider`）不带 `user_id`，由权限点控制写入。
+- 平台级表不带归属过滤，由权限点控制写入：`sys_role`、`sys_menu`、`sys_role_menu`、`wb_tool`、`wb_provider`、`wb_skill_seed`。`sys_user_role` 以 `user_id` 为关系键，但它记录的是授权关系而非用户资产，读写同样走权限点。
 - 身份唯一起点是 `LoginContext`：请求线程内 `LoginContext.userId()` 取当前用户，先读 ThreadLocal、回退 Sa-Token 会话快照，未登录抛 `UNAUTHORIZED`；禁止从请求体采信 `userId`。请求上下文之外（异步线程、MQ 消费）把 `userId` 作为第一个业务参数显式传递。
 - 单资源访问按 `(主键, user_id)` 查询（如 `selectByIdAndUser` / `getOwned`），查不到直接 `RESOURCE_NOT_FOUND`，不泄露他人资源是否存在。
 
@@ -44,7 +44,8 @@
 - `menu_name` 存 i18n key（规则见 AGENTS.md §2.5），前端经 `menuLabel()` 渲染，翻译缺失也不裸显 key。
 - `visible = false` 的菜单不进用户菜单树（管理树仍可见可维护），用于临时下线入口而不删定义。
 - 种子 ID 为 `MENU_` + 26 位零填充序号；菜单对账在 `db/data.sql` 内完成：先软删"`route_path` 或 `perm_code` 命中种子但 ID 不在种子内"的残留行，再 upsert 全部结构字段（名称、路由、组件、权限码、图标、排序）；已下线菜单按固定 ID 显式软删并摘除授权。显隐与状态是运营字段，已存在行不覆盖。
-- 权限契约（api 包注解与 `PermConst` 声明的权限点必须都存在于菜单种子）由测试兜住，见 AGENTS.md §14。
+- 权限契约由测试兜住，见 AGENTS.md §14：控制器注解与 `PermConst` 声明的权限点必须都存在于菜单种子（否则没人能被授予）；种子里不得出现 `PermConst` 之外的权限点（控制器不认）；控制器注解不得裸写字面量；前端 `hasPerm` / `v-perm` 引用的权限点必须在 `PermConst` 里（写错就是按钮对所有人不显示）；菜单种子的 `component` 必须命中 `frontend/src/views/*.vue`（缺文件则动态路由注册不上，点开即 404）。
+- 批量接口（用户启停 / 用户删除 / 文件删除 / 技能删除）复用单条动作的权限点，不新增权限标识；语义是**逐条守门不回滚整批**：不满足规则的目标（删除或停用自己、他人资源、受保护桶）进 `failures` 并附原因，其余照常执行。批量启停的目标状态按首个合法目标推导并整批统一，避免出现半启用半停用。
 
 **权限点清单**：
 
@@ -59,7 +60,8 @@
 | 知识库 | `wb:kb:list` / `create` / `update` / `delete` / `upload` / `search` |
 | 创作文档 | `wb:doc:list` / `create` / `update` / `delete` / `search` |
 | 供应方 | `wb:provider:list` / `create` / `update` / `delete` |
-| 监控 | `monitor:health:list` / `monitor:log:list` / `monitor:log:global` / `monitor:python:reprobe` |
+| 监控 | `monitor:health:list` / `monitor:log:list` / `monitor:log:global` / `monitor:python:reprobe` / `monitor:observe:reset` |
+| 存储桶 | `monitor:storage:list` / `create` / `delete` |
 
 `monitor:log:list` 是日志中心入口（按钮级权限，内置 `user` 角色已授予），检索范围固定本人；`monitor:log:global` 是**视角开关**，命中即全局检索与全局用量归因，只授予管理角色。
 
@@ -176,7 +178,7 @@ POST /auth/password
 
 ## 约束
 
-- 用户资源 Mapper 查询必须显式带 `user_id`；平台级表（`sys_menu`、`sys_user_role`、`sys_role_menu`、`wb_tool`、`wb_provider`）除外。
+- 用户资源 Mapper 查询必须显式带 `user_id`；平台级表（`sys_role`、`sys_menu`、`sys_role_menu`、`sys_user_role`、`wb_tool`、`wb_provider`、`wb_skill_seed`）除外。
 - 明文口令只允许出现在部署编排文件（见 deploy/）；禁止出现在页面、接口响应、日志与事件 `payload` 中；唯一例外是未配置 `LITEWORKBENCH_ADMIN_PASSWORD` 时随机生成的口令，仅在启动日志 WARN 打印一次。
 - 公钥接口必须带按 IP 限流，避免轮换密钥被打爆；登录接口另有按 IP 的 `@RateLimit`。
 - 权限标识一经发布不得改名，废弃只做下线处理；内置角色码在 `RoleCodeConst` 集中定义，禁止散落字面量。

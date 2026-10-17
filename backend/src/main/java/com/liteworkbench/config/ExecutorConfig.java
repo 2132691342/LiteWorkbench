@@ -35,18 +35,21 @@ public class ExecutorConfig {
     /** 非核心线程空闲回收时间，秒 */
     private static final long KEEP_ALIVE_SECONDS = 60L;
 
+    /** 运行线程池：跑 Agent 主循环 */
     @Bean(name = RUN_EXECUTOR, destroyMethod = "destroy")
     public ExecutorService runExecutor() {
         return new GracefulExecutor("lw-run-", CORES * 2, CORES * 4, 256,
                 new ThreadPoolExecutor.CallerRunsPolicy());
     }
 
+    /** 工具线程池：跑工具与并行子任务 */
     @Bean(name = TOOL_EXECUTOR, destroyMethod = "destroy")
     public ExecutorService toolExecutor() {
         return new GracefulExecutor("lw-tool-", CORES * 2, CORES * 4, 512,
                 new ThreadPoolExecutor.AbortPolicy());
     }
 
+    /** 事件线程池：攒批落库，满则丢弃并计数 */
     @Bean(name = EVENT_EXECUTOR, destroyMethod = "destroy")
     public ExecutorService eventExecutor() {
         // 观测链路满则丢弃：拒绝时必须留下计数，否则丢弃不可见
@@ -54,12 +57,14 @@ public class ExecutorConfig {
                 (task, pool) -> log.warn("[executor.event] 事件投递队列已满，丢弃任务 pool={}", pool));
     }
 
+    /** 探活线程池：探测与审计 */
     @Bean(name = PROBE_EXECUTOR, destroyMethod = "destroy")
     public ExecutorService probeExecutor() {
         return new GracefulExecutor("lw-probe-", CORES, CORES * 2, 64,
                 new ThreadPoolExecutor.CallerRunsPolicy());
     }
 
+    /** 定时线程：日志保留与索引对账 */
     @Bean(name = SCHEDULE_EXECUTOR)
     public ThreadPoolTaskScheduler scheduleExecutor() {
         ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();

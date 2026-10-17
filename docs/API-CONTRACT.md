@@ -498,6 +498,17 @@ data: {"runId":"RUN_..","sessionId":"SESS_..","seq":42,"eventType":"text.delta",
 
 响应侧 `data` 统一为 `PageResult<T>`：`{ "list": [], "total": 0, "page": 1, "size": 20 }`。部分接口（`/log/search`）在上述四字段之外附加视角标识 `scope`。
 
+批量接口（`/user/batch-*`、`/file/batch-delete`、`/skill/batch-delete`）请求体统一为 `BatchREQ`，响应统一为 `BatchResultVO`：
+
+```jsonc
+// 请求
+{ "ids": ["USER_01H...", "USER_01H..."] }   // 至少 1 项，去重后逐条处理，上限 100
+// 响应 data
+{ "successCount": 2, "failures": [{ "id": "USER_01H...", "reason": "不能对自己执行该操作" }] }
+```
+
+**逐条守门，不做整批事务回滚**：不满足业务规则的目标进 `failures` 并附原因，其余照常执行。前端必须消费 `failures`——只报"操作成功"会把被挡下的目标伪装成已处理。
+
 ## 19. 取舍
 
 | 选择 | 换来什么 | 代价 |

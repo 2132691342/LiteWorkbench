@@ -15,6 +15,7 @@ public class AgentToolGate implements ToolGate {
 
     private final WbToolMapper toolMapper;
 
+    /** 工具是否在平台侧启用 */
     @Override
     public boolean isEnabled(String toolName) {
         WbToolDO tool = toolMapper.selectByName(toolName);

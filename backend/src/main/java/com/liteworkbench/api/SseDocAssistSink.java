@@ -23,6 +23,7 @@ public class SseDocAssistSink implements DocAssistSink {
         emitter.onCompletion(() -> gone.set(true));
     }
 
+    /** 下发一段辅助写作增量 */
     @Override
     public void send(String eventType, String payloadJson) {
         emit(SseEmitter.event()
@@ -30,11 +31,13 @@ public class SseDocAssistSink implements DocAssistSink {
                 .data(payloadJson, MediaType.APPLICATION_JSON));
     }
 
+    /** 结束本次流 */
     @Override
     public void complete() {
         emitter.complete();
     }
 
+    /** 客户端是否已断开 */
     @Override
     public boolean isClientGone() {
         return gone.get();

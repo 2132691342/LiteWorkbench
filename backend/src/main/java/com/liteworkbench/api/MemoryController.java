@@ -44,6 +44,7 @@ public class MemoryController {
         return R.ok();
     }
 
+    /** 删除一条长期记忆 */
     @Idempotent(prefix = "memory", ttl = 5)
     @PostMapping("/delete/{memoryId}")
     public R<Void> remove(@PathVariable String memoryId) {

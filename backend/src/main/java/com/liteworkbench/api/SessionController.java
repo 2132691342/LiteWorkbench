@@ -28,11 +28,13 @@ public class SessionController {
 
     private final SessionService sessionService;
 
+    /** 会话分页：最近更新在前 */
     @GetMapping("/page")
     public R<PageResult<SessionVO>> page(SessionPageREQ req) {
         return R.ok(sessionService.page(req, LoginContext.userId()));
     }
 
+    /** 会话详情：含最近运行水位，客户端据此判丢帧 */
     @GetMapping("/detail/{sessionId}")
     public R<SessionVO> detail(@PathVariable String sessionId) {
         return R.ok(sessionService.detail(sessionId, LoginContext.userId()));

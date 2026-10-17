@@ -11,6 +11,7 @@ import java.io.IOException;
 @Slf4j
 public record SseRunSink(SseEmitter emitter) implements RunSink {
 
+    /** 下发一帧运行事件 */
     @Override
     public void send(long seq, String eventType, String payloadJson) {
         emit(SseEmitter.event()
@@ -19,11 +20,13 @@ public record SseRunSink(SseEmitter emitter) implements RunSink {
                 .data(payloadJson, MediaType.APPLICATION_JSON));
     }
 
+    /** 心跳注释帧，防代理空闲断连 */
     @Override
     public void ping() {
         emit(SseEmitter.event().comment("ping"));
     }
 
+    /** 结束本次流 */
     @Override
     public void complete() {
         emitter.complete();

@@ -22,6 +22,7 @@ public class ManticoreIndexConfig {
     private final DocIndexMapper docIndexMapper;
     private final LogSearchMapper logSearchMapper;
 
+    /** 启动即建日志与知识库索引表 */
     @Bean
     public ApplicationRunner searchIndexInitializer() {
         return args -> {

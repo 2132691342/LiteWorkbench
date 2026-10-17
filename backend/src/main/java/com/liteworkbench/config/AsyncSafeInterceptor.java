@@ -16,12 +16,14 @@ public class AsyncSafeInterceptor implements AsyncHandlerInterceptor {
         this.delegate = delegate;
     }
 
+    /** 异步派发不重复跑前置逻辑 */
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
             throws Exception {
         return isAsyncDispatch(request) || delegate.preHandle(request, response, handler);
     }
 
+    /** 异步派发跳过视图收尾 */
     @Override
     public void postHandle(HttpServletRequest request, HttpServletResponse response, Object handler,
                            ModelAndView modelAndView) throws Exception {
@@ -30,6 +32,7 @@ public class AsyncSafeInterceptor implements AsyncHandlerInterceptor {
         }
     }
 
+    /** 仅同步请求回收上下文 */
     @Override
     public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex)
             throws Exception {

@@ -172,7 +172,7 @@ public class RunService {
 ### 3.1 数据归属模型
 
 - 用户拥有的业务表（会话、运行、事件、技能、文件、知识库、知识库文档、创作文档、文档版本、长期记忆）带 `user_id varchar(40)`，行级隔离；会话消息与知识库分块不落库表，分别存 Manticore 表（`lw_msg`、`lw_kbchunk`），同样带 `user_id` 过滤。
-- 平台级表不带 `user_id`，仅管理角色可写：`sys_menu`、`sys_user_role`、`sys_role_menu`、`wb_tool`、`wb_provider`、`wb_skill_seed`。
+- 平台级表不做归属过滤，仅管理角色可写：`sys_role`、`sys_menu`、`sys_role_menu`、`sys_user_role`、`wb_tool`、`wb_provider`、`wb_skill_seed`。`sys_user_role` 以 `user_id` 为关系键，记录的是授权关系而非用户资产，因此不按用户资源对待。
 - 用户身份由 `common.LoginContext` 提供，禁止从请求体采信 `userId`；Service 在请求线程内一律 `LoginContext.userId()` 取当前用户。请求上下文之外（异步线程、MQ 消费）必须把 `userId` 作为第一个业务参数显式传递。
 - 用户拥有的资源，Mapper 查询条件必须显式携带 `user_id`（平台级表除外）。
 - **工作区是用户级资产容器**：每个工作区绑定一个独立 MinIO 桶（`lwws-` 前缀，ULID 派生，全局唯一）；会话绑定工作区，上传与 `@` 引用按工作区取桶。工作区 CRUD 登录即可用（无权限点），桶的增删清单是管理员能力（`monitor:storage:*`），平台主桶与工作区桶在管理端标记保护禁删。
@@ -368,6 +368,9 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 | 路由 | 动态菜单由后端 `sys_menu` 下发，路由守卫校验登录态与权限标识，权限不足跳 `/403` |
 | 权限 | 按钮级权限用 `usePermission().hasPerm()` 或 `v-perm` 指令判断，权限码与后端 `PermConst` 严格一致 |
 | 分段切换 | 视图 / 时间 / 范围切换统一用 `components/ui/LwSegmented.vue`（五态），选中态浅靛底 + 主靛字 + 轻阴影，禁止各页自造 |
+| 管理列表页 | 一个资源页 = `.lw-page-head` 页头 + 一张 `components/ui/LwTableCard.vue`；卡头（资源名 + 总条数 + 刷新 / 密度 / 全屏工具栏）、筛选条、表体、分页同属一卡，禁止拆成多张卡；表格语言全在 `styles/admin.css` |
+| 行操作与批量 | 行操作用 `LwRowActions`，破坏性动作用 `lw-text-danger` 并以 `.lw-rowacts__sep` 竖线与常规动作分隔；批量入口用 `LwBatchBar`，未选中不占位，必须二次确认并在文案里带上数量 |
+| 外壳 | 侧栏折叠到 64px 图标栏（`lw-sidebar-collapsed`）、面包屑沿菜单树回溯且单级页面不渲染，均由 `components/layout/` 提供，禁止各页自建导航外壳 |
 | 输入控件 | 一律 `el-input` / `el-select` / `el-textarea` 或 `.lw-field` 包裹的原生字段，静止边框 `1.5px var(--lw-border-strong)`；禁止无框线裸 `<input>`，禁止用 `--lw-border` 浅灰做输入边框 |
 | 对齐 | 同行控件等高（默认档 h-10），筛选区不混排尺寸；表单标签统一左对齐同宽 |
 | 命令面板 | 输入框内的唤出面板（`/` 技能与命令、`@` 引用资料）统一用 `components/console/MessageComposer.vue` 的实现：触发符须处在行首或空白之后，↑↓ 选择、Enter/Tab 确认、Esc 关闭，选中即从正文移除标记并落成一枚可删除的 chip，结构化字段单独交给请求体；五态与键盘契约见 DESIGN.md §5.11 |
@@ -381,7 +384,7 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 
 | 位置 | 要求 |
 |---|---|
-| 文件头 | 一行说明文件职责，禁止多行设计说明与背景叙述 |
+| 文件头 | 一行说明文件职责，Java / Vue / TS 一致；禁止多行设计说明与背景叙述 |
 | 方法 | 一行签名说明，禁止多行 `@param` / `@return` 块；getter / setter / 无参构造不写 |
 | 字段 | 有歧义才有注释；`entity` / `dto` / `vo` 的业务字段必须有，同名字段（`userId`）不必 |
 | 常量 | 保留一行用途说明，**单位与阈值必须写**（秒 / 毫秒 / 字符数 / 条数） |
