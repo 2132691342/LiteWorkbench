@@ -130,6 +130,8 @@ onMounted(load)
     </div>
 
     <LwTableCard
+      :title="t('system.menu.title')"
+      :total="tree.length"
       :loading="loading"
       :error="error"
       :empty="!tree.length"

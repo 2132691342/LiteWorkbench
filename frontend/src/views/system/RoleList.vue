@@ -145,11 +145,12 @@ onMounted(load)
     </div>
 
     <LwTableCard
+      :title="t('system.role.title')"
+      :total="total"
       :loading="loading"
       :error="error"
       :empty="!list.length"
       :empty-text="t('common.empty')"
-      :total="total"
       @retry="load"
     >
       <template #filter>

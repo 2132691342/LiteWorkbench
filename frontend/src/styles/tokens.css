@@ -72,6 +72,9 @@
   /* 布局尺寸 */
   --lw-topbar-h: 64px;
   --lw-sidebar-w: 208px;
+  --lw-sidebar-w-collapsed: 64px;
+  /* 表格行高：密度三档由 LwTableCard 以 data-density 切换 */
+  --lw-row-h: 44px;
 
   /* 圆角令牌：与 UnoCSS rounded-card / rounded-control / rounded-tag 同值，供纯 CSS 场景引用 */
   --lw-radius-card: 12px;

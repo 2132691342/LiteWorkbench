@@ -150,11 +150,12 @@ onMounted(load)
       </LwButton>
     </div>
     <LwTableCard
+      :title="t('skills.title')"
+      :total="total"
       :loading="loading"
       :error="error"
       :empty="!skills.length"
       :empty-text="t('skills.empty')"
-      :total="total"
       @retry="load"
     >
       <template #filter>

@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, shallowRef } from 'vue'
-import { monitorApi } from '@/api'
-import type { HealthRESP, ObserveRESP, OverviewRESP, PythonStatusVO } from '@/types/api'
+import { monitorApi, runApi } from '@/api'
+import type { HealthRESP, ObserveRESP, OverviewRESP, PythonStatusVO, RunVO } from '@/types/api'
 
 /** 监控状态：健康、仪表盘汇总、调用观测与 Python 运行时，供 Dashboard 与监控页共享 */
 export const useMonitorStore = defineStore('monitor', () => {
@@ -14,6 +14,10 @@ export const useMonitorStore = defineStore('monitor', () => {
   // 观测区自带 loading / error：它会定时自动刷新，不能污染健康面板的加载态
   const observeLoading = ref(false)
   const observeError = ref('')
+  // 最近运行自带三态：概览失败不该让「最近运行」也跟着白屏
+  const recentRuns = shallowRef<RunVO[]>([])
+  const recentLoading = ref(false)
+  const recentError = ref('')
 
   async function loadHealth(): Promise<void> {
     loading.value = true
@@ -57,6 +61,20 @@ export const useMonitorStore = defineStore('monitor', () => {
     }
   }
 
+  /** 仪表盘最近运行：固定取 5 条，不参与分页 */
+  async function loadRecentRuns(): Promise<void> {
+    recentLoading.value = true
+    recentError.value = ''
+    try {
+      const result = await runApi.page({ page: 1, size: 5 })
+      recentRuns.value = result.list
+    } catch (err) {
+      recentError.value = err instanceof Error ? err.message : ''
+    } finally {
+      recentLoading.value = false
+    }
+  }
+
   async function loadObserve(): Promise<void> {
     observeLoading.value = true
     observeError.value = ''
@@ -88,8 +106,12 @@ export const useMonitorStore = defineStore('monitor', () => {
     error,
     observeLoading,
     observeError,
+    recentRuns,
+    recentLoading,
+    recentError,
     loadHealth,
     loadOverview,
+    loadRecentRuns,
     loadObserve,
     resetObserve,
     loadPython,

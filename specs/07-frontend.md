@@ -14,15 +14,15 @@
 |---|---|
 | `router/` | 静态路由 + 后端菜单驱动的动态注册 + 登录与权限守卫 |
 | `views/` | 路由页：`Login` / `ForcePassword` / `Dashboard`、`console/`、`runs/`、`writer/`、`files/`、`skills/`、`kb/`、`logs/`、`monitor/`、`settings/`、`system/`、`showcase/`、`error/`(403/404/500) |
-| `components/layout/` | 外壳与导航：`AppShell`、`TheSideBar`、`TheSideMenu`、`TheTopBar`、`icons.ts`（图标按需具名引入） |
-| `components/ui/` | 基础件：`LwButton`、`LwCard`、`LwEmpty`、`LwErrorBar`、`LwErrorPage`、`LwFilterBar`、`LwMarkdown`、`LwMetricCard`、`LwPageState`、`LwProgressBar`、`LwSegmented`、`LwSkeleton`、`LwTableCard`、`LwTag` |
+| `components/layout/` | 外壳与导航：`AppShell`、`TheSideBar`（桌面 208px / 64px 图标栏，移动抽屉）、`TheSideMenu`（折叠态切换）、`TheTopBar`（折叠按钮 + 面包屑 + 用户区）、`TheBreadcrumb`、`icons.ts`（图标按需具名引入） |
+| `components/ui/` | 基础件：`LwButton`、`LwCard`、`LwEmpty`、`LwErrorBar`、`LwErrorPage`、`LwMarkdown`、`LwMetricCard`、`LwPageState`、`LwProgressBar`、`LwSegmented`、`LwSkeleton`、`LwTableCard`（含卡头与工具栏）、`LwTag` |
 | `components/charts/` | 图表封装：`LwAreaChart`、`LwBarChart`、`LwDonutChart`（色值经 `utils/theme.ts` 读令牌） |
 | `components/console/` | 工作台业务件：`ConsoleQuickStart`、`MessageComposer`、`PlanChecklist`、`ThinkingBlock`、`ToolStepCard` |
 | `components/runs/` | 运行记录业务件：`TraceWaterfall`、`RunTree`、`UsagePanel` |
 | `components/settings/` | 设置业务件：`ProviderPanel`、`ToolPanel`、`MemoryPanel` |
 | `components/monitor/` | 监控业务件：`ObservePanel`（调用观测：指标卡 + 慢 SQL / 慢接口榜 + 定时刷新 + 重置窗口） |
 | `stores/` | setup 风格 store：`user`、`session`、`run`、`monitor`、`app` |
-| `composables/` | `useRunStream`（SSE 订阅）、`usePermission`（权限判断） |
+| `composables/` | `useRunStream`（SSE 订阅）、`usePermission`（权限判断）、`useRunStatus`（运行状态色调与文案唯一实现）、`useBreadcrumb`（沿菜单树回溯祖先链） |
 | `directives/` | `perm.ts`：`v-perm` 指令，无权限即从 DOM 移除元素 |
 | `api/` | `index.ts` 唯一请求出口（HTTP 封装、令牌、SSE 解析、按域分组的方法表） |
 | `plugins/` | `element-plus.ts`：组件与图标按需注册、Element Plus 语言包与应用语言联动（`useElementPlusLocale`） |
@@ -74,9 +74,17 @@
 | `useSessionStore` | 会话列表、当前会话、消息与三个加载态（`loading` / `loadingMessages` / `error`） |
 | `useRunStore` | 运行列表、唯一时间线 reducer（`timeline`）、`streaming` / `replaying` / `replayRunId` / `currentRunId` / `errorDetail`；`applyEvent`（reducer）、`loadTimeline`、`beginStream`、`replay`、`backToLive` |
 | `useMonitorStore` | 健康、仪表盘汇总、调用观测与 Python 运行时；`loadHealth` / `loadOverview` / `loadObserve` / `resetObserve` / `loadPython` / `reprobe`。观测区自带 `observeLoading` / `observeError`，不污染健康面板加载态 |
-| `useAppStore` | 侧栏折叠、移动端抽屉、语言（持久化到 `lw-locale`） |
+| `useAppStore` | 侧栏折叠（持久化 `lw-sidebar-collapsed`）、移动端抽屉、语言（持久化到 `lw-locale`） |
 
 大对象一律 `shallowRef`，标量用 `ref`。
+
+### 外壳与导航
+
+| 部位 | 实现 |
+|---|---|
+| 侧栏折叠 | 桌面端在 `208px` 与 `64px` 图标栏间切换，状态在 `useAppStore.sidebarCollapsed` 并持久化；折叠由顶栏左侧按钮触发，折叠态下点目录会先展开侧栏再打开该目录 |
+| 面包屑 | `useBreadcrumb` 在当前 `useUserStore.menus` 上按 `route.path` 定位，返回根→叶链条；链条长度 >1 才渲染，单级页面（如仪表盘）不渲染 |
+| 表格工具栏 | 刷新 / 密度 / 全屏由 `LwTableCard` 自带：刷新触发 `retry`，密度三档 `default` / `medium` / `compact`（持久化 `lw-table-density`），全屏是卡片级 `position: fixed` 而非浏览器全屏 API（后者会吞掉 Esc 与弹窗） |
 
 ### 国际化
 
@@ -138,7 +146,9 @@
 
 ### 管理列表页
 
-增删改查类页面（用户 / 角色 / 菜单 / 文件 / 技能）一律走 `components/ui/LwTableCard.vue`：一个资源页 = `.lw-page-head` 页头 + 一张表格卡；筛选条、表体、分页同属一张白卡，不拆成三张。表格语言（表头浅底、44px 行高、单元格三档字体、操作列竖线分组、右对齐分页）全部在 `styles/admin.css`，组件不就地写这些样式；视觉规范见 [DESIGN.md §5.12](../DESIGN.md)。
+增删改查类页面（用户 / 角色 / 菜单 / 文件 / 技能）一律走 `components/ui/LwTableCard.vue`：一个资源页 = `.lw-page-head` 页头 + 一张表格卡；卡头（资源名 + 总条数 + 表格工具栏）、筛选条、表体、分页同属一张白卡，不拆成多张。表格语言（表头浅底、44px 行高与密度三档、单元格三档字体、操作列竖线分组、右对齐分页）全部在 `styles/admin.css`，组件不就地写这些样式；视觉规范见 [DESIGN.md §5.12](../DESIGN.md)。
+
+**卡头只在传了 `title` 或用了默认插槽之外的 `toolbar` 插槽时渲染**：不是所有表格都需要抬头（嵌在侧栏里的表格没必要），但一旦成为独立资源页，卡头是必须的——它是工具栏的唯一落点。
 
 **空态由 `empty` 布尔控制，不由 `emptyText` 是否为空控制**：`empty` 由调用方按数据源长度给出（`:empty="!list.length"`），`emptyText` 只提供文案。二者混用会让表体永远被空态占位 —— 后端返回了数据而前端依旧空白。页头是全页唯一主操作位，表格卡只承载筛选条 / 表体 / 分页，不再重复渲染标题与新建按钮。
 
@@ -249,6 +259,8 @@ defineExpose({ focus: () => void; clear: () => void })
 | 事件流单一 reducer | 渲染逻辑集中，回放与实时同路径 | reducer 需覆盖全部事件类型 |
 | 流式用 fetch 手解 SSE 帧 | 可携带 `Authorization` 头、可中断 | 自己维护分帧、丢帧补齐与终态判定 |
 | 样式令牌集中一处 | 改色只改一个文件 | 组件不能就地写色值 |
+| 最近运行单独三态 | 概览失败不会连坐最近运行区 | 多一个独立请求（5 条，代价可忽） |
+| 全屏用卡片级 fixed | Esc 与弹窗行为可控 | 不能真占满操作系统屏幕 |
 | 请求单一出口 + 统一拦截 | 令牌与错误处理只写一遍 | 组件不能各自定制请求行为 |
 | i18n 全覆盖 | 可切换语言 | 文案不能直接写死 |
 

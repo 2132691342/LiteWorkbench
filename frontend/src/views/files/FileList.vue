@@ -186,11 +186,12 @@ onMounted(load)
       <input ref="uploadInput" type="file" class="hidden" @change="onFileChange" />
     </div>
     <LwTableCard
+      :title="t('files.title')"
+      :total="total"
       :loading="loading"
       :error="error"
       :empty="!files.length"
       :empty-text="t('files.empty')"
-      :total="total"
       @retry="load"
     >
       <el-table :data="files" style="width: 100%">

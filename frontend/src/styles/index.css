@@ -301,6 +301,64 @@ body {
   border-bottom: 1px solid var(--lw-border);
   flex: none;
 }
+
+/* 折叠态：侧栏收成 64px 图标栏，品牌区与菜单项居中，文字整体退场 */
+.lw-sidebar {
+  width: var(--lw-sidebar-w);
+  transition: width var(--lw-dur) var(--lw-ease);
+}
+.lw-sidebar.is-collapsed {
+  width: var(--lw-sidebar-w-collapsed);
+}
+.lw-sidebar.is-collapsed .lw-sidebar__brand {
+  padding: 0;
+  justify-content: center;
+}
+.lw-sidebar.is-collapsed .lw-menu__item {
+  justify-content: center;
+  padding: 0;
+}
+/* 折叠态的当前位置标示：左侧 3px 主靛竖条，不靠文字也能看出在哪一页 */
+.lw-sidebar.is-collapsed .lw-menu__item.is-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 18px;
+  margin-top: -9px;
+  border-radius: 0 3px 3px 0;
+  background: var(--lw-primary);
+}
+
+/* ===== 面包屑：两级以上才出现，分隔符用 / ===== */
+.lw-crumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+}
+.lw-crumb__link {
+  color: var(--lw-ink-muted);
+  text-decoration: none;
+  transition: color var(--lw-dur-fast) var(--lw-ease);
+  white-space: nowrap;
+}
+.lw-crumb__link:hover {
+  color: var(--lw-primary-ink);
+}
+.lw-crumb__sep {
+  font-size: 12px;
+  color: var(--lw-ink-disabled);
+}
+.lw-crumb__current {
+  color: var(--lw-ink);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .lw-sidebar__brand-mark {
   display: grid;
   place-items: center;
@@ -501,6 +559,90 @@ body {
 @keyframes lw-spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+/* 工具栏图标刷新旋转：与 .lw-spinner 共用同一条 keyframes */
+.lw-spin-icon {
+  animation: lw-spin 0.7s linear infinite;
+}
+
+/* ===== 仪表盘：快捷入口磁钉 + 最近运行紧凑表 ===== */
+.lw-quick__tile {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  border-radius: var(--lw-radius-control);
+  background: var(--lw-primary-tint);
+  color: var(--lw-primary-ink);
+  transition: transform var(--lw-dur) var(--lw-ease);
+}
+
+/* 悬停时图标磁砖放大，与卡片上移形成同一次反馈 */
+.lw-card:hover .lw-quick__tile {
+  transform: scale(1.06);
+}
+
+/* 最近运行：表头与数据行共用一套栅格，列宽不会随内容漂移 */
+.lw-recent {
+  display: flex;
+  flex-direction: column;
+  margin: -4px -20px -20px;
+}
+
+.lw-recent__head,
+.lw-recent__row {
+  display: grid;
+  grid-template-columns: 150px 92px minmax(0, 1fr) 84px 92px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+}
+
+.lw-recent__head {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--lw-ink-muted);
+  background: var(--lw-surface);
+  border-bottom: 1px solid var(--lw-border);
+}
+
+.lw-recent__row {
+  border: none;
+  border-bottom: 1px solid var(--lw-border);
+  background: transparent;
+  font: inherit;
+  color: var(--lw-ink);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--lw-dur-fast) var(--lw-ease);
+}
+
+.lw-recent__row:last-child {
+  border-bottom: none;
+}
+
+.lw-recent__row:hover {
+  background: var(--lw-primary-tint);
+}
+
+.lw-recent__row:focus-visible {
+  outline: 2px solid var(--lw-primary);
+  outline-offset: -2px;
+}
+
+@media (max-width: 720px) {
+  .lw-recent__head,
+  .lw-recent__row {
+    grid-template-columns: 92px 84px minmax(0, 1fr);
+  }
+  .lw-recent__head > :nth-child(4),
+  .lw-recent__head > :nth-child(5),
+  .lw-recent__row > :nth-child(4),
+  .lw-recent__row > :nth-child(5) {
+    display: none;
   }
 }
 

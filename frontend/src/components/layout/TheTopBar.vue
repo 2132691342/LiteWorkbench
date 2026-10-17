@@ -5,6 +5,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import LwButton from '@/components/ui/LwButton.vue'
+import TheBreadcrumb from './TheBreadcrumb.vue'
 import { switchLocale } from '@/locales'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
@@ -50,9 +51,22 @@ function handleCommand(command: string): void {
     class="h-16 flex items-center justify-between px-4 md:px-6 border-b shrink-0 z-20"
     style="background-color: var(--lw-surface-raised); border-color: var(--lw-border)"
   >
-    <div class="flex items-center gap-4 md:gap-8">
+    <div class="flex items-center gap-4 md:gap-8 min-w-0">
+      <!-- 桌面折叠按钮常驻在顶栏左侧：展开/收起是全局能力，不应只存在于侧栏头部 -->
+      <LwButton
+        variant="text"
+        size="sm"
+        class="hidden lg:inline-flex"
+        :aria-label="appStore.sidebarCollapsed ? t('app.expand') : t('app.collapse')"
+        @click="appStore.toggleSidebar()"
+      >
+        <template #icon>
+          <el-icon><component :is="appStore.sidebarCollapsed ? Expand : Fold" /></el-icon>
+        </template>
+      </LwButton>
+
       <!-- 移动端唤出抽屉；品牌块在侧栏内，顶栏只留当前页上下文与用户区 -->
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-3 min-w-0">
         <LwButton
           variant="text"
           size="sm"
@@ -61,10 +75,11 @@ function handleCommand(command: string): void {
           @click="appStore.openSidebar()"
         >
           <template #icon>
-            <el-icon><component :is="appStore.sidebarCollapsed ? Expand : Fold" /></el-icon>
+            <el-icon><Expand /></el-icon>
           </template>
         </LwButton>
         <span class="font-bold text-base tracking-tight lg:hidden">{{ t('app.title') }}</span>
+        <TheBreadcrumb class="hidden lg:block" />
       </div>
     </div>
 

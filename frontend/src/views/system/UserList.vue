@@ -205,11 +205,12 @@ onMounted(() => {
     </div>
 
     <LwTableCard
+      :title="t('system.user.title')"
+      :total="total"
       :loading="loading"
       :error="error"
       :empty="!list.length"
       :empty-text="t('common.empty')"
-      :total="total"
       @retry="load"
     >
       <template #filter>

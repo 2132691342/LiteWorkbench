@@ -11,6 +11,83 @@
   margin-bottom: 4px;
 }
 
+/* ===== 卡头：资源名 + 条数徽标 + 表格工具栏，与筛选条同属一张卡 ===== */
+.lw-tablecard__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--lw-border);
+}
+
+.lw-tablecard__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--lw-ink);
+}
+
+.lw-tablecard__count {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--lw-ink-muted);
+  background: var(--lw-muted-tint);
+  border-radius: var(--lw-radius-tag);
+  padding: 1px 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 表格工具栏：图标按钮三态；悬停浅饰底 + 放大，按下缩小 */
+.lw-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.lw-toolbar__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--lw-radius-tag);
+  background: transparent;
+  color: var(--lw-ink-muted);
+  cursor: pointer;
+  transition: all var(--lw-dur-fast) var(--lw-ease);
+}
+
+.lw-toolbar__btn:hover:not(:disabled) {
+  color: var(--lw-primary-ink);
+  background: var(--lw-primary-tint);
+  transform: scale(1.06);
+}
+
+.lw-toolbar__btn:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.lw-toolbar__btn.is-active {
+  color: var(--lw-primary-ink);
+  background: var(--lw-secondary-selected);
+}
+
+.lw-toolbar__btn:disabled {
+  color: var(--lw-ink-disabled);
+  cursor: not-allowed;
+}
+
+.lw-toolbar__btn:focus-visible {
+  outline: 2px solid var(--lw-primary);
+  outline-offset: 1px;
+}
+
 /* ===== 筛选条：与表格同一张卡，白底 + 1px 边框，控件一律 h-10 ===== */
 .lw-filterbar {
   display: flex;
@@ -55,9 +132,37 @@
 .lw-tablecard .el-table {
   --el-table-header-bg-color: var(--lw-surface);
   --el-table-header-text-color: var(--lw-ink-muted);
-  --el-table-row-height: 44px;
+  --el-table-row-height: var(--lw-row-h);
   --el-table-border-color: var(--lw-border);
   --el-table-row-hover-bg-color: var(--lw-primary-tint);
+}
+
+/* 密度三档：只改行高与单元格上下内边距，不动字号（缩小字体会让紧凑档读不清） */
+.lw-tablecard[data-density='default'] {
+  --lw-row-h: 44px;
+}
+.lw-tablecard[data-density='medium'] {
+  --lw-row-h: 36px;
+}
+.lw-tablecard[data-density='compact'] {
+  --lw-row-h: 28px;
+}
+.lw-tablecard[data-density='medium'] .el-table .el-table__cell {
+  padding: 3px 0;
+}
+.lw-tablecard[data-density='compact'] .el-table .el-table__cell {
+  padding: 1px 0;
+}
+
+/* 全屏：卡片自身铺满视口，表体内部滚动，不依赖浏览器全屏 API（后者会吞掉 Esc 与弹窗） */
+.lw-tablecard.is-fullscreen {
+  position: fixed;
+  inset: 16px;
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  box-shadow: var(--lw-shadow-md);
 }
 
 .lw-tablecard .el-table th.el-table__cell {

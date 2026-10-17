@@ -1,9 +1,14 @@
-/** 管理列表卡：筛选条 + 表体 + 分页同属一张白卡，是增删改查页的统一骨架 */
+/** 管理列表卡：卡头（资源名 + 条数 + 工具栏）+ 筛选条 + 表体 + 分页同属一张白卡 */
 <script setup lang="ts">
+import { FullScreen, Refresh, Sort } from '@element-plus/icons-vue'
+import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import LwEmpty from './LwEmpty.vue'
 import LwErrorBar from './LwErrorBar.vue'
 
-withDefaults(
+type Density = 'default' | 'medium' | 'compact'
+
+const props = withDefaults(
   defineProps<{
     /** 数据为空：由调用方按数据源长度给出，不能用 emptyText 代替判空 */
     empty?: boolean
@@ -13,15 +18,81 @@ withDefaults(
     error?: string
     /** 分页总数，为 0 或不足一页时不渲染分页条 */
     total?: number
+    /** 卡头资源名，缺省不渲染卡头 */
+    title?: string
+    /** 刷新中点按无效并显示旋转 */
+    refreshing?: boolean
   }>(),
-  { empty: false, emptyText: '', loading: false, error: '', total: 0 },
+  { empty: false, emptyText: '', loading: false, error: '', total: 0, title: '', refreshing: false },
 )
 
-defineEmits<{ (e: 'retry'): void }>()
+const emit = defineEmits<{ (e: 'retry'): void }>()
+
+const { t } = useI18n()
+const DENSITIES: Density[] = ['default', 'medium', 'compact']
+
+/** 密度是跨页面的操作习惯，持久化到 localStorage 而非各页各存一份 */
+const density = ref<Density>((localStorage.getItem('lw-table-density') as Density) ?? 'default')
+const fullscreen = ref(false)
+
+const densityLabel = computed(() => t(`table.density_${density.value}`))
+const countText = computed(() => (props.total > 0 ? t('table.count', { n: props.total }) : ''))
+
+function cycleDensity(): void {
+  density.value = DENSITIES[(DENSITIES.indexOf(density.value) + 1) % DENSITIES.length]
+  localStorage.setItem('lw-table-density', density.value)
+}
 </script>
 
 <template>
-  <section class="lw-tablecard">
+  <section class="lw-tablecard" :data-density="density" :class="{ 'is-fullscreen': fullscreen }">
+    <div v-if="title || $slots.toolbar" class="lw-tablecard__head">
+      <div class="lw-tablecard__title">
+        <span>{{ title }}</span>
+        <span v-if="countText" class="lw-tablecard__count">{{ countText }}</span>
+      </div>
+      <div class="lw-toolbar">
+        <slot name="toolbar" />
+        <el-tooltip :content="t('table.reload')" placement="top" :show-after="300">
+          <button
+            type="button"
+            class="lw-toolbar__btn"
+            :aria-label="t('table.reload')"
+            :disabled="loading"
+            @click="$emit('retry')"
+          >
+            <el-icon :size="14" :class="{ 'lw-spin-icon': loading }"><Refresh /></el-icon>
+          </button>
+        </el-tooltip>
+        <el-tooltip :content="densityLabel" placement="top" :show-after="300">
+          <button
+            type="button"
+            class="lw-toolbar__btn"
+            :class="{ 'is-active': density !== 'default' }"
+            :aria-label="densityLabel"
+            @click="cycleDensity"
+          >
+            <el-icon :size="14"><Sort /></el-icon>
+          </button>
+        </el-tooltip>
+        <el-tooltip
+          :content="fullscreen ? t('table.exitFull') : t('table.fullscreen')"
+          placement="top"
+          :show-after="300"
+        >
+          <button
+            type="button"
+            class="lw-toolbar__btn"
+            :class="{ 'is-active': fullscreen }"
+            :aria-label="t('table.fullscreen')"
+            @click="fullscreen = !fullscreen"
+          >
+            <el-icon :size="14"><FullScreen /></el-icon>
+          </button>
+        </el-tooltip>
+      </div>
+    </div>
+
     <div v-if="$slots.filter" class="lw-filterbar">
       <slot name="filter" />
     </div>

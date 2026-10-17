@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { watch } from 'vue'
+import { ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import TheSideMenu from './TheSideMenu.vue'
 
-/** 侧栏容器：桌面固定可折叠，断点以下为抽屉（遮罩 + 滑入），两态共用菜单主体 */
+/** 侧栏容器：桌面固定在 208px 与 64px 图标栏之间切换，断点以下为抽屉（遮罩 + 滑入） */
 const route = useRoute()
 const appStore = useAppStore()
+const expandedDirs = ref<string[]>([])
 
 watch(
   () => route.path,
@@ -16,11 +17,11 @@ watch(
 
 <template>
   <aside
-    v-show="!appStore.sidebarCollapsed"
-    class="border-r hidden lg:flex flex-col shrink-0 overflow-hidden"
-    style="width: var(--lw-sidebar-w); background-color: var(--lw-surface-raised); border-color: var(--lw-border)"
+    class="border-r hidden lg:flex flex-col shrink-0 overflow-hidden lw-sidebar"
+    :class="{ 'is-collapsed': appStore.sidebarCollapsed }"
+    style="background-color: var(--lw-surface-raised); border-color: var(--lw-border)"
   >
-    <TheSideMenu />
+    <TheSideMenu v-model:expanded="expandedDirs" :collapsed="appStore.sidebarCollapsed" @expand="appStore.toggleSidebar()" />
   </aside>
 
   <!-- 移动端抽屉：Teleport 到 body，避免受主区布局裁剪 -->
@@ -39,7 +40,7 @@ watch(
         class="fixed inset-y-0 left-0 z-40 lg:hidden flex flex-col lw-shadow-md"
         style="width: var(--lw-sidebar-w); background-color: var(--lw-surface-raised)"
       >
-        <TheSideMenu />
+        <TheSideMenu v-model:expanded="expandedDirs" />
       </aside>
     </transition>
   </Teleport>

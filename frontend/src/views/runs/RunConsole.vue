@@ -17,6 +17,7 @@ import RunTree from '@/components/runs/RunTree.vue'
 import TraceWaterfall from '@/components/runs/TraceWaterfall.vue'
 import UsagePanel from '@/components/runs/UsagePanel.vue'
 import { formatTime } from '@/utils/const'
+import { useRunStatus } from '@/composables/useRunStatus'
 
 /** 运行记录：左侧运行列表（状态/时间过滤 + 分页），右侧详情（时间线 / 工具链 / 链路 / Run 树 / 用量 + 回放） */
 
@@ -38,6 +39,7 @@ interface TimelineBlock {
 }
 
 const { t } = useI18n()
+const runStatus = useRunStatus()
 const route = useRoute()
 
 const runs = shallowRef<RunVO[]>([])
@@ -184,34 +186,15 @@ function stringify(value: unknown): string {
 }
 
 function statusTone(status?: string): 'primary' | 'success' | 'error' | 'muted' | 'warning' {
-  switch (status) {
-    case 'success':
-      return 'success'
-    case 'failed':
-      return 'error'
-    case 'aborted':
-      return 'muted'
-    case 'running':
-    case 'queued':
-      return 'primary'
-    default:
-      return 'warning'
-  }
+  return runStatus.tone(status)
 }
 
 function statusLabel(status?: string): string {
-  const map: Record<string, string> = {
-    success: t('runs.statusSuccess'),
-    failed: t('runs.statusFailed'),
-    aborted: t('runs.statusAborted'),
-    running: t('runs.statusRunning'),
-    queued: t('runs.statusQueued'),
-  }
-  return map[status ?? ''] ?? (status ?? '-')
+  return runStatus.label(status)
 }
 
 function isTerminal(status?: string): boolean {
-  return status === 'success' || status === 'failed' || status === 'aborted'
+  return runStatus.isTerminal(status)
 }
 
 function formatDuration(ms?: number): string {
