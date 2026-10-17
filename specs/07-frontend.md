@@ -15,7 +15,7 @@
 | `router/` | 静态路由 + 后端菜单驱动的动态注册 + 登录与权限守卫 |
 | `views/` | 路由页：`Login` / `ForcePassword` / `Dashboard`、`console/`、`runs/`、`writer/`、`files/`、`skills/`、`kb/`、`logs/`、`monitor/`、`settings/`、`system/`、`showcase/`、`error/`(403/404/500) |
 | `components/layout/` | 外壳与导航：`AppShell`、`TheSideBar`（桌面 208px / 64px 图标栏，移动抽屉）、`TheSideMenu`（折叠态切换）、`TheTopBar`（折叠按钮 + 面包屑 + 用户区）、`TheBreadcrumb`、`icons.ts`（图标按需具名引入） |
-| `components/ui/` | 基础件：`LwButton`、`LwCard`、`LwEmpty`、`LwErrorBar`、`LwErrorPage`、`LwMarkdown`、`LwMetricCard`、`LwPageState`、`LwProgressBar`、`LwSegmented`、`LwSkeleton`、`LwTableCard`（含卡头与工具栏）、`LwTag` |
+| `components/ui/` | 基础件：`LwBatchBar`、`LwButton`、`LwCard`、`LwEmpty`、`LwErrorBar`、`LwErrorPage`、`LwMarkdown`、`LwMetricCard`、`LwPageState`、`LwProgressBar`、`LwRowActions`、`LwSegmented`、`LwSkeleton`、`LwTableCard`（含卡头与工具栏）、`LwTag` |
 | `components/charts/` | 图表封装：`LwAreaChart`、`LwBarChart`、`LwDonutChart`（色值经 `utils/theme.ts` 读令牌） |
 | `components/console/` | 工作台业务件：`ConsoleQuickStart`、`MessageComposer`、`PlanChecklist`、`ThinkingBlock`、`ToolStepCard` |
 | `components/runs/` | 运行记录业务件：`TraceWaterfall`、`RunTree`、`UsagePanel` |
@@ -85,6 +85,7 @@
 | 侧栏折叠 | 桌面端在 `208px` 与 `64px` 图标栏间切换，状态在 `useAppStore.sidebarCollapsed` 并持久化；折叠由顶栏左侧按钮触发，折叠态下点目录会先展开侧栏再打开该目录 |
 | 面包屑 | `useBreadcrumb` 在当前 `useUserStore.menus` 上按 `route.path` 定位，返回根→叶链条；链条长度 >1 才渲染，单级页面（如仪表盘）不渲染 |
 | 表格工具栏 | 刷新 / 密度 / 全屏由 `LwTableCard` 自带：刷新触发 `retry`，密度三档 `default` / `medium` / `compact`（持久化 `lw-table-density`），全屏是卡片级 `position: fixed` 而非浏览器全屏 API（后者会吞掉 Esc 与弹窗） |
+| 批量与筛选 | `LwBatchBar` 占筛选条下方位置（`batch` 插槽），未选中不占位；高级筛选行在 `filter` 插槽内用 `.lw-filterbar__adv` 折叠，开关按钮有生效条件时打点；行操作溢出收进 `LwRowActions` 的 `overflow` 插槽 |
 
 ### 国际化
 
@@ -259,6 +260,7 @@ defineExpose({ focus: () => void; clear: () => void })
 | 事件流单一 reducer | 渲染逻辑集中，回放与实时同路径 | reducer 需覆盖全部事件类型 |
 | 流式用 fetch 手解 SSE 帧 | 可携带 `Authorization` 头、可中断 | 自己维护分帧、丢帧补齐与终态判定 |
 | 样式令牌集中一处 | 改色只改一个文件 | 组件不能就地写色值 |
+| 批量走逐条守门不回滚整批 | 一个账号越权不会让整批失败 | 调用方必须消费 `BatchResultVO` 并提示失败原因 |
 | 最近运行单独三态 | 概览失败不会连坐最近运行区 | 多一个独立请求（5 条，代价可忽） |
 | 全屏用卡片级 fixed | Esc 与弹窗行为可控 | 不能真占满操作系统屏幕 |
 | 请求单一出口 + 统一拦截 | 令牌与错误处理只写一遍 | 组件不能各自定制请求行为 |

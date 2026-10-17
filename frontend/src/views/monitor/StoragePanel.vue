@@ -4,8 +4,9 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LwButton from '@/components/ui/LwButton.vue'
-import LwCard from '@/components/ui/LwCard.vue'
-import LwPageState from '@/components/ui/LwPageState.vue'
+import LwRowActions from '@/components/ui/LwRowActions.vue'
+import LwSkeleton from '@/components/ui/LwSkeleton.vue'
+import LwTableCard from '@/components/ui/LwTableCard.vue'
 import LwTag from '@/components/ui/LwTag.vue'
 import { storageApi } from '@/api'
 import type { BucketAdminVO } from '@/types/api'
@@ -75,7 +76,7 @@ onMounted(load)
 </script>
 
 <template>
-  <div class="lw-page flex flex-col gap-4">
+  <div class="lw-page">
     <div class="lw-page-head">
       <div>
         <h2 class="lw-title">{{ t('storage.title') }}</h2>
@@ -87,37 +88,60 @@ onMounted(load)
       </LwButton>
     </div>
 
-    <LwCard>
-      <LwPageState :loading="loading" :error="error" :empty="!buckets.length" :skeleton-rows="4" @retry="load">
-        <div class="flex flex-col gap-2">
-          <div
-            v-for="item in buckets"
-            :key="item.bucketName"
-            class="px-4 py-3 rounded-lg border flex flex-wrap items-center gap-3 transition-all duration-200 hover:lw-shadow-sm"
-            style="border-color: var(--lw-border)"
-          >
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2 flex-wrap">
-                <span class="font-bold text-sm font-mono">{{ item.bucketName }}</span>
-                <LwTag v-if="item.protectedBucket" tone="warning">{{ t('storage.protected') }}</LwTag>
-              </div>
-              <p class="text-xs mt-1" style="color: var(--lw-ink-muted)">
-                {{ item.objectCount ?? 0 }} {{ t('workspace.objects') }} · {{ formatSize(item.totalSize) }}
-              </p>
-            </div>
-            <LwButton
-              variant="text"
-              size="sm"
-              :disabled="item.protectedBucket"
-              @click="remove(item)"
-            >
-              <template #icon><el-icon><Delete /></el-icon></template>
-              {{ t('common.delete') }}
-            </LwButton>
-          </div>
-        </div>
-      </LwPageState>
-    </LwCard>
+    <LwTableCard
+      :title="t('storage.title')"
+      :total="buckets.length"
+      :loading="loading"
+      :error="error"
+      :empty="!buckets.length"
+      :empty-text="t('common.empty')"
+      @retry="load"
+    >
+      <template #skeleton>
+        <LwSkeleton :rows="4" />
+      </template>
+
+      <el-table :data="buckets" style="width: 100%">
+        <el-table-column :label="t('storage.name')" min-width="240">
+          <template #default="{ row }">
+            <div class="lw-cell-title font-mono">{{ row.bucketName }}</div>
+            <div class="lw-cell-sub">{{ t('storage.scope') }}</div>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('workspace.objects')" width="120">
+          <template #default="{ row }">
+            <span class="lw-cell-mono">{{ row.objectCount ?? 0 }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('files.size')" width="140">
+          <template #default="{ row }">
+            <span class="lw-cell-mono">{{ formatSize(row.totalSize) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('storage.protected')" width="130">
+          <template #default="{ row }">
+            <LwTag v-if="row.protectedBucket" tone="warning">{{ t('storage.protected') }}</LwTag>
+            <span v-else class="lw-cell-sub">-</span>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('common.actions')" width="130" fixed="right">
+          <template #default="{ row }">
+            <LwRowActions>
+              <LwButton
+                variant="text"
+                size="sm"
+                class="lw-text-danger"
+                :disabled="row.protectedBucket"
+                @click="remove(row)"
+              >
+                <template #icon><el-icon><Delete /></el-icon></template>
+                {{ t('common.delete') }}
+              </LwButton>
+            </LwRowActions>
+          </template>
+        </el-table-column>
+      </el-table>
+    </LwTableCard>
 
     <el-dialog v-model="createVisible" :title="t('storage.create')" width="440px">
       <el-form label-position="top" @submit.prevent>

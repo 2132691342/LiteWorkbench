@@ -20,6 +20,8 @@ import com.liteworkbench.domain.entity.SysUserDO;
 import com.liteworkbench.domain.dto.ResetPasswordREQ;
 import com.liteworkbench.domain.dto.UserPageREQ;
 import com.liteworkbench.domain.dto.UserREQ;
+import com.liteworkbench.domain.vo.BatchResultVO;
+import com.liteworkbench.domain.vo.BatchResultVO;
 import com.liteworkbench.domain.vo.UserVO;
 import com.liteworkbench.mapper.SysMenuMapper;
 import com.liteworkbench.mapper.SysRoleMapper;
@@ -31,7 +33,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Objects;
-
 /** 用户：CRUD、角色分配、状态与口令管理 */
 @Slf4j
 @Service
@@ -134,12 +135,17 @@ public class UserService {
         }
         String next = UserStateEnum.NORMAL.getCode().equals(user.getState())
                 ? UserStateEnum.DISABLED.getCode() : UserStateEnum.NORMAL.getCode();
-        sysUserMapper.updateState(userId, next, operatorId);
+        applyState(userId, next, operatorId);
+    }
+
+    /** 落状态并联动会话：停用即踢下线，启用只刷快照 */
+    private void applyState(String userId, String state, String operatorId) {
+        sysUserMapper.updateState(userId, state, operatorId);
         loginUserAssembler.refreshSession(userId);
-        if (UserStateEnum.DISABLED.getCode().equals(next)) {
+        if (UserStateEnum.DISABLED.getCode().equals(state)) {
             kickout(userId);
         }
-        log.info("[user.toggle] userId={} state={}", userId, next);
+        log.info("[user.state] userId={} state={} operatorId={}", userId, state, operatorId);
     }
 
     /** 重置密码：管理员重设后该用户首登仍需改密；在线用户刷新快照立即进入强制改密态 */
@@ -160,6 +166,54 @@ public class UserService {
         if (Objects.equals(userId, operatorId)) {
             throw new BizException(ErrorCodeEnum.SELF_OPERATION_FORBIDDEN, "删除自己");
         }
+        doDelete(userId, operatorId);
+    }
+
+    /** 批量删除：逐条守门，不允许的进 failures，其余照常删 */
+    @Transactional(rollbackFor = Exception.class)
+    public BatchResultVO batchDelete(List<String> userIds, String operatorId) {
+        BatchResultVO result = new BatchResultVO();
+        for (String userId : CollUtil.distinct(CollUtil.emptyIfNull(userIds))) {
+            try {
+                delete(userId, operatorId);
+                result.ok();
+            } catch (BizException e) {
+                result.fail(userId, e.getMessage());
+            }
+        }
+        log.info("[user.batchDelete] operatorId={} success={} failed={}",
+                operatorId, result.getSuccessCount(), result.getFailures().size());
+        return result;
+    }
+
+    /** 批量启停：目标状态按首条当前状态推导并整批统一，避免半启用半停用 */
+    @Transactional(rollbackFor = Exception.class)
+    public BatchResultVO batchToggle(List<String> userIds, String operatorId) {
+        BatchResultVO result = new BatchResultVO();
+        String target = null;
+        for (String userId : CollUtil.distinct(CollUtil.emptyIfNull(userIds))) {
+            try {
+                SysUserDO user = require(userId);
+                if (Objects.equals(userId, operatorId)) {
+                    throw new BizException(ErrorCodeEnum.SELF_OPERATION_FORBIDDEN, "停用自己");
+                }
+                if (Objects.isNull(target)) {
+                    target = UserStateEnum.NORMAL.getCode().equals(user.getState())
+                            ? UserStateEnum.DISABLED.getCode() : UserStateEnum.NORMAL.getCode();
+                }
+                applyState(userId, target, operatorId);
+                result.ok();
+            } catch (BizException e) {
+                result.fail(userId, e.getMessage());
+            }
+        }
+        log.info("[user.batchToggle] operatorId={} state={} success={} failed={}",
+                operatorId, target, result.getSuccessCount(), result.getFailures().size());
+        return result;
+    }
+
+    /** 删除实体与其角色关系，并回收权限与菜单缓存 */
+    private void doDelete(String userId, String operatorId) {
         sysUserMapper.deleteById(userId, operatorId);
         sysUserMapper.deleteUserRoles(userId);
         kickout(userId);

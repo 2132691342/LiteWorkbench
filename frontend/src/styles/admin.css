@@ -107,6 +107,59 @@
   margin-right: -4px;
 }
 
+/* 高级筛选开关：文字按钮形态，有生效条件时打点提示，收起后仍能看出筛选在生效 */
+.lw-filterbar__toggle {
+  height: 28px;
+  padding: 0 8px;
+  border: none;
+  border-radius: var(--lw-radius-tag);
+  background: transparent;
+  color: var(--lw-ink-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--lw-dur-fast) var(--lw-ease);
+  position: relative;
+}
+
+.lw-filterbar__toggle:hover {
+  color: var(--lw-primary-ink);
+  background: var(--lw-primary-tint);
+}
+
+.lw-filterbar__toggle.is-active {
+  color: var(--lw-primary-ink);
+  background: var(--lw-primary-tint);
+}
+
+/* 生效打点：有筛选条件但行处于收起时可见 */
+.lw-filterbar__toggle.is-active::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  right: 3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--lw-primary);
+}
+
+/* 高级筛选行：grid 行高过渡，收起时高度归零且不可交互 */
+.lw-filterbar__adv {
+  display: grid;
+  flex-basis: 100%;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--lw-dur) var(--lw-ease-out);
+}
+
+.lw-filterbar__adv.is-open {
+  grid-template-rows: 1fr;
+}
+
+.lw-filterbar__adv > div {
+  overflow: hidden;
+}
+
 .lw-filterbar__grow {
   flex: 1 1 auto;
   min-width: 0;
@@ -200,6 +253,78 @@
   margin: 0 4px;
   flex: none;
   background: var(--lw-border);
+}
+
+/* 「更多」：与文字按钮同档，悬停浅靛底 */
+.lw-rowacts__more {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 24px;
+  padding: 0 6px;
+  border: none;
+  border-radius: var(--lw-radius-tag);
+  background: transparent;
+  color: var(--lw-primary-ink);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--lw-dur-fast) var(--lw-ease);
+}
+
+.lw-rowacts__more:hover {
+  background: var(--lw-primary-tint);
+}
+
+.lw-rowacts__more:active {
+  transform: scale(0.94);
+}
+
+/* ===== 批量条：占用筛选条位置，选中为空时不占位 ===== */
+.lw-batchbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--lw-border);
+  background: var(--lw-secondary-tint);
+}
+
+.lw-batchbar__count {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--lw-primary-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.lw-batchbar__sp {
+  flex: 1 1 auto;
+}
+
+.lw-batchbar__clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 8px;
+  border: none;
+  border-radius: var(--lw-radius-tag);
+  background: transparent;
+  color: var(--lw-ink-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--lw-dur-fast) var(--lw-ease);
+}
+
+.lw-batchbar__clear:hover {
+  color: var(--lw-ink);
+  background: var(--lw-muted-tint);
+}
+
+.lw-batchbar__clear:active {
+  transform: scale(0.94);
 }
 
 /* ===== 表格内主文本 / 次文本两档，避免一列里字号与颜色打架 ===== */

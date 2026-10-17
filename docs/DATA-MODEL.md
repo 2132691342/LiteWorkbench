@@ -53,6 +53,8 @@
 
 索引：`uk_sys_user_username` 唯一 `(username) WHERE deleted = false`。
 
+分页筛选支持 `state` / `roleId`（走 `sys_user_role` 的 `EXISTS` 子查询）/ `pwdResetRequired` / `keyword`（匹配 `username` / `nickname` / `email`）；筛选条件在 `SysUserMapper.xml` 的 `Page_Where` 片段里只定义一次，分页与计数共用，避免两处口径漂移。
+
 ### 4.2 sys_role
 
 | 字段 | 类型 | 说明 |

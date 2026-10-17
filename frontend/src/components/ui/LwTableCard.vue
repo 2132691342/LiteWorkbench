@@ -97,6 +97,9 @@ function cycleDensity(): void {
       <slot name="filter" />
     </div>
 
+    <!-- 批量条占筛选条位置：选中时换行，未选中不占位 -->
+    <slot name="batch" />
+
     <div v-if="loading" class="lw-tablecard__body">
       <slot name="skeleton" />
     </div>

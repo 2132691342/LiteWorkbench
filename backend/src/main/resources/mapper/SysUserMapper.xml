@@ -8,6 +8,28 @@
         last_login_at, state, created_by, created_at, updated_by, updated_at, deleted, remark
     </sql>
 
+    <!-- 筛选条件只定义一次，分页与计数共用，避免两处口径漂移 -->
+    <sql id="Page_Where">
+        WHERE deleted = false
+        <if test="req.state != null and req.state != ''">
+            AND state = #{req.state}
+        </if>
+        <if test="req.pwdResetRequired != null">
+            AND pwd_reset_required = #{req.pwdResetRequired}
+        </if>
+        <if test="req.roleId != null and req.roleId != ''">
+            AND EXISTS (
+                SELECT 1 FROM sys_user_role ur
+                WHERE ur.user_id = sys_user.user_id AND ur.role_id = #{req.roleId}
+            )
+        </if>
+        <if test="req.keyword != null and req.keyword != ''">
+            AND (username ILIKE CONCAT('%', #{req.keyword}, '%')
+                 OR nickname ILIKE CONCAT('%', #{req.keyword}, '%')
+                 OR email ILIKE CONCAT('%', #{req.keyword}, '%'))
+        </if>
+    </sql>
+
     <update id="update">
         UPDATE sys_user
         <set>
@@ -25,14 +47,7 @@
     <select id="selectPage" resultType="com.liteworkbench.domain.entity.SysUserDO">
         SELECT <include refid="Base_Column_List"/>
         FROM sys_user
-        WHERE deleted = false
-        <if test="req.state != null and req.state != ''">
-            AND state = #{req.state}
-        </if>
-        <if test="req.keyword != null and req.keyword != ''">
-            AND (username ILIKE CONCAT('%', #{req.keyword}, '%')
-                 OR nickname ILIKE CONCAT('%', #{req.keyword}, '%'))
-        </if>
+        <include refid="Page_Where"/>
         ORDER BY created_at DESC
         LIMIT #{size} OFFSET #{offset}
     </select>
@@ -40,14 +55,7 @@
     <select id="countPage" resultType="long">
         SELECT COUNT(1)
         FROM sys_user
-        WHERE deleted = false
-        <if test="req.state != null and req.state != ''">
-            AND state = #{req.state}
-        </if>
-        <if test="req.keyword != null and req.keyword != ''">
-            AND (username ILIKE CONCAT('%', #{req.keyword}, '%')
-                 OR nickname ILIKE CONCAT('%', #{req.keyword}, '%'))
-        </if>
+        <include refid="Page_Where"/>
     </select>
 
     <insert id="insertUserRoles">

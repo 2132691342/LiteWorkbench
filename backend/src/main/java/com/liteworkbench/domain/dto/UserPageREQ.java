@@ -15,4 +15,8 @@ public class UserPageREQ extends PageREQ {
 
     /** 用户状态过滤 */
     private String state;
+    /** 角色 ID 过滤：命中该角色的用户 */
+    private String roleId;
+    /** 仅看待首次改密的账号 */
+    private Boolean pwdResetRequired;
 }

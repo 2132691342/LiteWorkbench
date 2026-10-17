@@ -1,19 +1,21 @@
 <script setup lang="ts">
 import { Plus, Refresh, Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { roleApi, userApi } from '@/api'
+import LwBatchBar from '@/components/ui/LwBatchBar.vue'
 import LwButton from '@/components/ui/LwButton.vue'
+import LwRowActions from '@/components/ui/LwRowActions.vue'
 import LwSkeleton from '@/components/ui/LwSkeleton.vue'
 import LwTableCard from '@/components/ui/LwTableCard.vue'
 import LwTag from '@/components/ui/LwTag.vue'
 import { usePermission } from '@/composables/usePermission'
-import type { RoleVO, UserREQ, UserVO } from '@/types/api'
+import type { BatchResultVO, RoleVO, UserREQ, UserVO } from '@/types/api'
 import { formatTime, USER_STATE } from '@/utils/const'
 import { encryptSecret } from '@/utils/crypto'
 
-/** 用户管理：检索、分页、增删改、启停、重置密码，按钮按权限点显隐 */
+/** 用户管理：多字段检索、分页、增删改、启停、重置密码、批量删除与启停，按钮按权限点显隐 */
 const { t } = useI18n()
 const { hasPerm } = usePermission()
 
@@ -23,7 +25,14 @@ const list = ref<UserVO[]>([])
 const total = ref(0)
 const roles = ref<RoleVO[]>([])
 
-const query = reactive({ keyword: '', state: '', page: 1, size: 10 })
+const query = reactive({ keyword: '', state: '', roleId: '', pwdResetRequired: undefined as boolean | undefined, page: 1, size: 10 })
+const advanced = ref(false)
+const selection = ref<UserVO[]>([])
+const batchRunning = ref(false)
+
+const selectedIds = computed(() => selection.value.map((item) => item.userId))
+const canBatchToggle = computed(() => hasPerm('system:user:update'))
+const canBatchDelete = computed(() => hasPerm('system:user:delete'))
 
 const dialogVisible = ref(false)
 const dialogLoading = ref(false)
@@ -42,6 +51,7 @@ async function load(): Promise<void> {
     const result = await userApi.page({ ...query })
     list.value = result.list
     total.value = result.total
+    selection.value = []
   } catch (err) {
     error.value = err instanceof Error ? err.message : t('common.failed')
   } finally {
@@ -66,7 +76,60 @@ function handleSearch(): void {
 function handleReset(): void {
   query.keyword = ''
   query.state = ''
+  query.roleId = ''
+  query.pwdResetRequired = undefined
   handleSearch()
+}
+
+/** 高级筛选是否有生效条件：有则按钮打点，否则收起后用户看不出筛选还在生效 */
+const advancedActive = computed(() => Boolean(query.roleId) || query.pwdResetRequired !== undefined)
+
+function onSelectionChange(rows: UserVO[]): void {
+  selection.value = rows
+}
+
+function clearSelection(): void {
+  selection.value = []
+}
+
+/** 批量结果对账：全成功只报成功数，有失败逐条列出原因并刷新列表 */
+function reportBatch(result: BatchResultVO, successKey: string): void {
+  if (!result.failures.length) {
+    ElMessage.success(t(successKey, { n: result.successCount }))
+  } else {
+    const detail = result.failures.map((item) => `${item.id}: ${item.reason}`).join('；')
+    ElMessage.warning(t('common.batchPartial', { ok: result.successCount, fail: result.failures.length, detail }))
+  }
+  void load()
+}
+
+async function batchToggle(): Promise<void> {
+  if (!selectedIds.value.length) return
+  batchRunning.value = true
+  try {
+    reportBatch(await userApi.batchToggle(selectedIds.value), 'system.user.batchToggleOk')
+  } finally {
+    batchRunning.value = false
+  }
+}
+
+async function batchDelete(): Promise<void> {
+  if (!selectedIds.value.length) return
+  try {
+    await ElMessageBox.confirm(
+      t('system.user.batchDeleteConfirm', { n: selectedIds.value.length }),
+      t('common.delete'),
+      { confirmButtonText: t('common.delete'), cancelButtonText: t('common.cancel'), type: 'error' },
+    )
+  } catch {
+    return
+  }
+  batchRunning.value = true
+  try {
+    reportBatch(await userApi.batchDelete(selectedIds.value), 'system.user.batchDeleteOk')
+  } finally {
+    batchRunning.value = false
+  }
 }
 
 function openDialog(user?: UserVO): void {
@@ -185,6 +248,7 @@ function stateTone(state: string): 'success' | 'warning' | 'error' | 'muted' {
   return 'error'
 }
 
+/** 行操作四项全部直出：含两项破坏性动作，收进下拉反而增加误点风险 */
 onMounted(() => {
   void load()
   void loadRoles()
@@ -234,13 +298,60 @@ onMounted(() => {
           <template #icon><el-icon><Refresh /></el-icon></template>
           {{ t('common.reset') }}
         </LwButton>
+        <button
+          type="button"
+          class="lw-filterbar__toggle"
+          :class="{ 'is-active': advanced || advancedActive }"
+          @click="advanced = !advanced"
+        >
+          {{ t('common.advancedFilter') }}
+        </button>
+        <!-- 高级筛选：折叠行与主行在同一个筛选条内，收起时高度归零不占位 -->
+        <div class="lw-filterbar__adv" :class="{ 'is-open': advanced }">
+          <div class="flex flex-wrap items-center gap-2 pt-2 w-full">
+            <el-select
+              v-model="query.roleId"
+              :placeholder="t('system.user.filterRole')"
+              clearable
+              style="width: 180px"
+              @change="handleSearch"
+            >
+              <el-option v-for="role in roles" :key="role.roleId" :label="role.roleName" :value="role.roleId" />
+            </el-select>
+            <el-checkbox
+              :model-value="query.pwdResetRequired === true"
+              @update:model-value="(v: boolean) => { query.pwdResetRequired = v ? true : undefined; handleSearch() }"
+            >
+              {{ t('system.user.filterPwdReset') }}
+            </el-checkbox>
+          </div>
+        </div>
+      </template>
+
+      <!-- 批量条占筛选条位置：选中为空时不渲染，不留空白 -->
+      <template #batch>
+        <LwBatchBar v-if="selection.length" :count="selection.length" @clear="clearSelection">
+          <LwButton v-if="canBatchToggle" variant="ghost" size="sm" :loading="batchRunning" @click="batchToggle">
+            {{ t('common.batchToggle') }}
+          </LwButton>
+          <LwButton
+            v-if="canBatchDelete"
+            variant="danger"
+            size="sm"
+            :loading="batchRunning"
+            @click="batchDelete"
+          >
+            {{ t('common.batchDelete') }}
+          </LwButton>
+        </LwBatchBar>
       </template>
 
       <template #skeleton>
         <LwSkeleton :rows="6" />
       </template>
 
-      <el-table :data="list" style="width: 100%">
+      <el-table :data="list" style="width: 100%" @selection-change="onSelectionChange">
+        <el-table-column v-if="canBatchToggle || canBatchDelete" type="selection" width="44" />
         <el-table-column :label="t('system.user.username')" prop="username" min-width="160">
           <template #default="{ row }">
             <div class="lw-cell-title">{{ row.username }}</div>
@@ -263,28 +374,21 @@ onMounted(() => {
             <span class="lw-cell-mono">{{ formatTime(row.lastLoginAt) }}</span>
           </template>
         </el-table-column>
-        <el-table-column :label="t('common.actions')" width="300" fixed="right">
+        <el-table-column :label="t('common.actions')" width="260" fixed="right">
           <template #default="{ row }">
-            <div class="lw-rowacts">
+            <LwRowActions :more="false">
               <LwButton v-if="hasPerm('system:user:update')" variant="text" size="sm" @click="openDialog(row)">
                 {{ t('common.edit') }}
               </LwButton>
               <LwButton v-if="hasPerm('system:user:update')" variant="text" size="sm" @click="toggleState(row)">
                 {{ row.state === USER_STATE.NORMAL ? t('common.disable') : t('common.enable') }}
               </LwButton>
-              <!-- 改密与删除不可逆，用分隔线隔开并取错误语义色，降低误点概率 -->
               <span
                 v-if="hasPerm('system:user:reset') || hasPerm('system:user:delete')"
                 class="lw-rowacts__sep"
                 aria-hidden="true"
               />
-              <LwButton
-                v-if="hasPerm('system:user:reset')"
-                variant="text"
-                size="sm"
-                class="lw-text-danger"
-                @click="openReset(row)"
-              >
+              <LwButton v-if="hasPerm('system:user:reset')" variant="text" size="sm" @click="openReset(row)">
                 {{ t('system.user.resetPassword') }}
               </LwButton>
               <LwButton
@@ -296,7 +400,7 @@ onMounted(() => {
               >
                 {{ t('common.delete') }}
               </LwButton>
-            </div>
+            </LwRowActions>
           </template>
         </el-table-column>
         <template #empty>

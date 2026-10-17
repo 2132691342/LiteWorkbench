@@ -2,12 +2,15 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LwAreaChart from '@/components/charts/LwAreaChart.vue'
+import LwBatchBar from '@/components/ui/LwBatchBar.vue'
 import LwButton from '@/components/ui/LwButton.vue'
 import LwCard from '@/components/ui/LwCard.vue'
+import LwRowActions from '@/components/ui/LwRowActions.vue'
 import LwSegmented from '@/components/ui/LwSegmented.vue'
 import LwEmpty from '@/components/ui/LwEmpty.vue'
 import LwErrorBar from '@/components/ui/LwErrorBar.vue'
 import LwPageState from '@/components/ui/LwPageState.vue'
+import LwTableCard from '@/components/ui/LwTableCard.vue'
 import LwTag from '@/components/ui/LwTag.vue'
 
 /** 组件库：设计规范的可视化样例，五态与三态可直接比对 */
@@ -56,6 +59,13 @@ const demoText = ref('')
 
 const chartCategories = ['1', '2', '3', '4', '5', '6', '7', '8']
 const chartValues = [8, 16, 12, 24, 20, 32, 28, 40]
+
+/** 表格卡样例数据：三行足够看出表头、悬停、密度与操作列 */
+const demoRows = [
+  { id: 'DEMO_01', name: '样例资源一', enabled: true },
+  { id: 'DEMO_02', name: '样例资源二', enabled: false },
+  { id: 'DEMO_03', name: '样例资源三', enabled: true },
+]
 </script>
 
 <template>
@@ -190,6 +200,58 @@ const chartValues = [8, 16, 12, 24, 20, 32, 28, 40]
 
       <LwCard :title="t('showcase.charts')" :desc="t('showcase.chartsDesc')">
         <LwAreaChart :categories="chartCategories" :values="chartValues" name="demo" :height="240" />
+      </LwCard>
+
+      <!-- B 端骨架件样例：表格卡头 + 工具栏 + 操作列 + 批量条，与真实资源页同一实现 -->
+      <LwCard :title="t('showcase.b2bTitle')" :desc="t('showcase.b2bDesc')" class="lg:col-span-2">
+        <LwTableCard
+          :title="t('showcase.tableTitle')"
+          :total="24"
+          :empty="false"
+          :loading="false"
+          @retry="() => {}"
+        >
+          <template #toolbar>
+            <LwButton size="sm" variant="secondary">{{ t('common.create') }}</LwButton>
+          </template>
+          <template #filter>
+            <el-input :placeholder="t('common.keyword')" style="width: 200px" />
+            <LwButton variant="ghost" size="sm">{{ t('common.search') }}</LwButton>
+            <button type="button" class="lw-filterbar__toggle is-active">{{ t('common.advancedFilter') }}</button>
+          </template>
+          <template #batch>
+            <LwBatchBar :count="2" @clear="() => {}">
+              <LwButton variant="ghost" size="sm">{{ t('common.batchToggle') }}</LwButton>
+              <LwButton variant="danger" size="sm">{{ t('common.batchDelete') }}</LwButton>
+            </LwBatchBar>
+          </template>
+          <el-table :data="demoRows" style="width: 100%">
+            <el-table-column type="selection" width="44" />
+            <el-table-column :label="t('showcase.colName')" min-width="200">
+              <template #default="{ row }">
+                <div class="lw-cell-title">{{ row.name }}</div>
+                <div class="lw-cell-sub">{{ row.id }}</div>
+              </template>
+            </el-table-column>
+            <el-table-column :label="t('common.status')" width="110">
+              <template #default="{ row }">
+                <LwTag :tone="row.enabled ? 'success' : 'muted'">
+                  {{ row.enabled ? t('common.enabled') : t('common.disabled') }}
+                </LwTag>
+              </template>
+            </el-table-column>
+            <el-table-column :label="t('common.actions')" width="220" fixed="right">
+              <template #default>
+                <LwRowActions>
+                  <LwButton variant="text" size="sm">{{ t('common.edit') }}</LwButton>
+                  <LwButton variant="text" size="sm">{{ t('common.refresh') }}</LwButton>
+                  <span class="lw-rowacts__sep" aria-hidden="true" />
+                  <LwButton variant="text" size="sm" class="lw-text-danger">{{ t('common.delete') }}</LwButton>
+                </LwRowActions>
+              </template>
+            </el-table-column>
+          </el-table>
+        </LwTableCard>
       </LwCard>
     </div>
   </div>

@@ -7,6 +7,9 @@ import LwButton from '@/components/ui/LwButton.vue'
 import LwCard from '@/components/ui/LwCard.vue'
 import LwEmpty from '@/components/ui/LwEmpty.vue'
 import LwPageState from '@/components/ui/LwPageState.vue'
+import LwRowActions from '@/components/ui/LwRowActions.vue'
+import LwSkeleton from '@/components/ui/LwSkeleton.vue'
+import LwTableCard from '@/components/ui/LwTableCard.vue'
 import LwTag from '@/components/ui/LwTag.vue'
 import { kbApi } from '@/api'
 import { usePermission } from '@/composables/usePermission'
@@ -361,12 +364,19 @@ onBeforeUnmount(() => {
       </LwPageState>
 
       <div class="flex flex-col gap-4 min-w-0">
-        <LwCard :title="selectedKb ? `${t('kb.docs')} · ${selectedKb.kbName}` : t('kb.docs')">
-          <template #actions>
-            <span
-              v-if="hasPerm('wb:kb:upload') && selectedKbId"
-              class="inline-flex items-center gap-2 text-xs opacity-60"
-            >{{ t('kb.uploadTip') }}</span>
+        <LwTableCard
+          :title="selectedKb ? `${t('kb.docs')} · ${selectedKb.kbName}` : t('kb.docs')"
+          :total="docTotal"
+          :loading="docLoading"
+          :error="docError"
+          :empty="!docs.length"
+          :empty-text="t('kb.emptyResult')"
+          @retry="loadDocs"
+        >
+          <template #toolbar>
+            <span v-if="hasPerm('wb:kb:upload') && selectedKbId" class="text-xs mr-1" style="color: var(--lw-ink-muted)">
+              {{ t('kb.uploadTip') }}
+            </span>
             <LwButton
               v-if="hasPerm('wb:kb:upload') && selectedKbId"
               variant="secondary" size="sm" data-test="kb-upload" @click="openUpload"
@@ -380,38 +390,44 @@ onBeforeUnmount(() => {
               @change="onFileChosen"
             >
           </template>
-          <div class="flex flex-wrap items-center gap-2 mb-4">
-            <el-input v-model="docKeyword" class="flex-1 min-w-40" :placeholder="t('common.search')" clearable @keyup.enter="searchDocs" />
-            <el-select v-model="docStateFilter" clearable class="w-32 shrink-0" :placeholder="t('kb.state')" @change="searchDocs">
+
+          <template #filter>
+            <el-input v-model="docKeyword" style="width: 220px" :placeholder="t('common.search')" clearable @keyup.enter="searchDocs" />
+            <el-select v-model="docStateFilter" clearable style="width: 140px" :placeholder="t('kb.state')" @change="searchDocs">
               <el-option
                 v-for="state in DOC_STATES" :key="state" :value="state"
                 :label="t(`kb.state_${state}`)"
               />
             </el-select>
-            <LwButton variant="secondary" class="shrink-0" @click="searchDocs">{{ t('common.search') }}</LwButton>
-          </div>
-          <LwPageState :loading="docLoading" :error="docError" :empty="!docs.length" @retry="loadDocs">
-            <el-table :data="docs" class="lw-table">
-              <el-table-column :label="t('kb.docName')" prop="docName" min-width="200" show-overflow-tooltip />
-              <el-table-column :label="t('kb.size')" width="100">
-                <template #default="{ row }">{{ formatSize(row.fileSize) }}</template>
-              </el-table-column>
-              <el-table-column :label="t('kb.chunkCount')" width="80">
-                <template #default="{ row }">{{ row.chunkCount ?? 0 }}</template>
-              </el-table-column>
-              <el-table-column :label="t('kb.state')" width="110">
-                <template #default="{ row }">
-                  <LwTag :tone="DOC_STATE_TONE[row.state] ?? 'muted'">{{ t(`kb.state_${row.state}`) }}</LwTag>
-                </template>
-              </el-table-column>
-              <el-table-column :label="t('kb.errorMessage')" min-width="160" show-overflow-tooltip>
-                <template #default="{ row }">
-                  <span v-if="row.state === 'failed'" class="text-xs">{{ row.errorMessage }}</span>
-                  <span v-else>-</span>
-                </template>
-              </el-table-column>
-              <el-table-column width="150" fixed="right">
-                <template #default="{ row }">
+            <LwButton variant="ghost" size="sm" @click="searchDocs">{{ t('common.search') }}</LwButton>
+          </template>
+
+          <template #skeleton>
+            <LwSkeleton :rows="5" />
+          </template>
+
+          <el-table :data="docs" style="width: 100%">
+            <el-table-column :label="t('kb.docName')" prop="docName" min-width="200" show-overflow-tooltip />
+            <el-table-column :label="t('kb.size')" width="100">
+              <template #default="{ row }"><span class="lw-cell-mono">{{ formatSize(row.fileSize) }}</span></template>
+            </el-table-column>
+            <el-table-column :label="t('kb.chunkCount')" width="90">
+              <template #default="{ row }"><span class="lw-cell-mono">{{ row.chunkCount ?? 0 }}</span></template>
+            </el-table-column>
+            <el-table-column :label="t('kb.state')" width="110">
+              <template #default="{ row }">
+                <LwTag :tone="DOC_STATE_TONE[row.state] ?? 'muted'">{{ t(`kb.state_${row.state}`) }}</LwTag>
+              </template>
+            </el-table-column>
+            <el-table-column :label="t('kb.errorMessage')" min-width="160" show-overflow-tooltip>
+              <template #default="{ row }">
+                <span v-if="row.state === 'failed'" class="lw-cell-sub">{{ row.errorMessage }}</span>
+                <span v-else class="lw-cell-sub">-</span>
+              </template>
+            </el-table-column>
+            <el-table-column :label="t('common.actions')" width="170" fixed="right">
+              <template #default="{ row }">
+                <LwRowActions>
                   <LwButton
                     v-if="hasPerm('wb:kb:upload') && (row.state === 'failed' || row.state === 'ready')"
                     variant="text" size="sm" @click="reparseDoc(row)"
@@ -419,27 +435,29 @@ onBeforeUnmount(() => {
                     <template #icon><el-icon><RefreshRight /></el-icon></template>
                     {{ t('kb.reparse') }}
                   </LwButton>
-                  <LwButton
-                    v-if="hasPerm('wb:kb:delete')"
-                    variant="text" size="sm" @click="removeDoc(row)"
-                  >{{ t('common.delete') }}</LwButton>
-                </template>
-              </el-table-column>
-              <template #empty><span /></template>
-            </el-table>
-            <div v-if="docTotal > docSize" class="flex justify-end mt-4">
-              <el-pagination
-                layout="total, sizes, prev, pager, next"
-                :total="docTotal"
-                :page-size="docSize"
-                :page-sizes="[10, 20, 50]"
-                :current-page="docPage"
-                @current-change="changeDocPage"
-                @size-change="changeDocSize"
-              />
-            </div>
-          </LwPageState>
-        </LwCard>
+                  <template v-if="hasPerm('wb:kb:delete')">
+                    <span class="lw-rowacts__sep" aria-hidden="true" />
+                    <LwButton variant="text" size="sm" class="lw-text-danger" @click="removeDoc(row)">
+                      {{ t('common.delete') }}
+                    </LwButton>
+                  </template>
+                </LwRowActions>
+              </template>
+            </el-table-column>
+          </el-table>
+
+          <template #pager>
+            <el-pagination
+              layout="total, sizes, prev, pager, next"
+              :total="docTotal"
+              :page-size="docSize"
+              :page-sizes="[10, 20, 50]"
+              :current-page="docPage"
+              @current-change="changeDocPage"
+              @size-change="changeDocSize"
+            />
+          </template>
+        </LwTableCard>
 
         <LwCard :title="t('kb.searchTitle')">
           <div class="flex flex-wrap items-center gap-2 mb-4">

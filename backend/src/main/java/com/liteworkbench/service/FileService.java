@@ -1,5 +1,6 @@
 package com.liteworkbench.service;
 
+import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import com.liteworkbench.common.BizException;
 import com.liteworkbench.common.ErrorCodeEnum;
@@ -10,6 +11,7 @@ import com.liteworkbench.domain.constant.AppConst;
 import com.liteworkbench.domain.constant.IdPrefixConst;
 import com.liteworkbench.domain.dto.UploadFileDTO;
 import com.liteworkbench.domain.entity.WbFileDO;
+import com.liteworkbench.domain.vo.BatchResultVO;
 import com.liteworkbench.domain.vo.FileVO;
 import com.liteworkbench.mapper.WbFileMapper;
 import io.minio.GetObjectArgs;
@@ -192,6 +194,22 @@ public class FileService {
         }
         fileMapper.deleteById(userId, fileId);
         log.info("[file.delete] userId={} fileId={}", userId, fileId);
+    }
+
+    /** 批量删除：单条失败（对象删除异常）记入 failures，不影响其余 */
+    public BatchResultVO batchDelete(String userId, List<String> fileIds) {
+        BatchResultVO result = new BatchResultVO();
+        for (String fileId : CollUtil.distinct(CollUtil.emptyIfNull(fileIds))) {
+            try {
+                delete(userId, fileId);
+                result.ok();
+            } catch (BizException e) {
+                result.fail(fileId, e.getMessage());
+            }
+        }
+        log.info("[file.batchDelete] userId={} success={} failed={}",
+                userId, result.getSuccessCount(), result.getFailures().size());
+        return result;
     }
 
     private void removeObjectQuietly(String bucket, String objectKey) {

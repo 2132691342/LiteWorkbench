@@ -133,17 +133,20 @@
 
 | 方法 | 路径 | 入参 → 出参 | 权限 | 幂等 |
 |---|---|---|---|---|
-| GET | `/user/page` | `UserPageREQ`（分页字段 + `state`） → `PageResult<UserVO>` | `system:user:list` | — |
+| GET | `/user/page` | `UserPageREQ`（分页字段 + `state` + `roleId` + `pwdResetRequired`） → `PageResult<UserVO>` | `system:user:list` | — |
 | GET | `/user/detail/{userId}` | — → `UserVO` | `system:user:list` | — |
 | POST | `/user/create` | `UserREQ` → `R<String>`（新用户 ID） | `system:user:create` | `user:create` |
 | POST | `/user/update` | `UserREQ` → `R<Void>` | `system:user:update` | `user:update` |
 | POST | `/user/toggle/{userId}` | — → `R<Void>` | `system:user:update` | `user:toggle` |
 | POST | `/user/reset-password` | `ResetPasswordREQ` → `R<Void>` | `system:user:reset` | `user:reset` |
 | POST | `/user/delete/{userId}` | — → `R<Void>` | `system:user:delete` | `user:delete` |
+| POST | `/user/batch-delete` | `BatchREQ`（`ids`，≤100） → `BatchResultVO` | `system:user:delete` | `user:batch-delete` |
+| POST | `/user/batch-toggle` | `BatchREQ` → `BatchResultVO` | `system:user:update` | `user:batch-toggle` |
 
 - `UserREQ`：`userId`（修改时必填）、`username`（仅新建，`^[a-zA-Z][a-zA-Z0-9_]{2,31}$`）、`password` + `passwordKeyId`（仅新建，密文）、`nickname`（≤64）、`email`、`roleIds`、`remark`。
 - 不能修改自己的角色、不能停用或删除自己（`SELF_OPERATION_FORBIDDEN` `2204`）。
 - 停用 / 删除目标用户会失效其在线会话；重置密码后该用户首登仍要求改密。
+- 批量接口返回 `BatchResultVO`：`successCount` + `failures[{id, reason}]`。**逐条守门而非整批事务回滚**：不允许的（删自己、停自己）进 `failures`，其余照常执行；批量启停的目标状态由首条当前状态推导并整批统一，不会出现半启用半停用。
 
 ## 5. 角色
 
@@ -323,6 +326,7 @@ data: {"runId":"RUN_..","sessionId":"SESS_..","seq":42,"eventType":"text.delta",
 | POST | `/skill/create` | `SkillREQ` → `R<String>` | `wb:skill:create` | `skill:create` |
 | POST | `/skill/update` | `SkillREQ` → `R<Void>`（全量更新） | `wb:skill:update` | `skill:update` |
 | POST | `/skill/delete/{skillId}` | — → `R<Void>` | `wb:skill:delete` | `skill:delete` |
+| POST | `/skill/batch-delete` | `BatchREQ` → `BatchResultVO` | `wb:skill:delete` | `skill:batch-delete` |
 | POST | `/skill/restore/{skillId}` | — → `R<Void>`（仅内置技能，恢复为种子版本并保留启用状态） | `wb:skill:update` | `skill:restore` |
 
 ## 11. 文件
@@ -333,6 +337,7 @@ data: {"runId":"RUN_..","sessionId":"SESS_..","seq":42,"eventType":"text.delta",
 | POST | `/file/upload` | multipart `file` + `sessionId`（可空） → `FileVO` | 登录即可用 | `file:upload` |
 | GET | `/file/url/{fileId}` | — → `R<String>`（预签名下载地址） | 登录即可用 | — |
 | POST | `/file/delete/{fileId}` | — → `R<Void>` | `wb:file:delete` | `file:delete` |
+| POST | `/file/batch-delete` | `BatchREQ` → `BatchResultVO` | `wb:file:delete` | `file:batch-delete` |
 
 - 单文件 ≤ 100MB（`spring.servlet.multipart.max-file-size` 与 `FileService.MAX_SIZE` 同值），超限返回 `FILE_TOO_LARGE` `6003`；上传失败返回 `FILE_UPLOAD_FAILED` `6002`。
 - 预签名地址有效期 15 分钟。

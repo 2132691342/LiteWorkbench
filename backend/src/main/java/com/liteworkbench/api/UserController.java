@@ -6,9 +6,11 @@ import com.liteworkbench.common.LoginContext;
 import com.liteworkbench.common.PageResult;
 import com.liteworkbench.common.R;
 import com.liteworkbench.domain.constant.PermConst;
+import com.liteworkbench.domain.dto.BatchREQ;
 import com.liteworkbench.domain.dto.ResetPasswordREQ;
 import com.liteworkbench.domain.dto.UserPageREQ;
 import com.liteworkbench.domain.dto.UserREQ;
+import com.liteworkbench.domain.vo.BatchResultVO;
 import com.liteworkbench.domain.vo.UserVO;
 import com.liteworkbench.service.UserService;
 import jakarta.validation.Valid;
@@ -79,5 +81,21 @@ public class UserController {
     public R<Void> delete(@PathVariable String userId) {
         userService.delete(userId, LoginContext.userId());
         return R.ok();
+    }
+
+    /** 批量删除：返回逐条成败，已删的从列表消失，被守门挡住的留在页面上 */
+    @SaCheckPermission(PermConst.SYSTEM_USER_DELETE)
+    @Idempotent(prefix = "user:batch-delete")
+    @PostMapping("/batch-delete")
+    public R<BatchResultVO> batchDelete(@RequestBody @Valid BatchREQ req) {
+        return R.ok(userService.batchDelete(req.getIds(), LoginContext.userId()));
+    }
+
+    /** 批量启停：整批统一目标状态，不允许的进失败明细 */
+    @SaCheckPermission(PermConst.SYSTEM_USER_UPDATE)
+    @Idempotent(prefix = "user:batch-toggle")
+    @PostMapping("/batch-toggle")
+    public R<BatchResultVO> batchToggle(@RequestBody @Valid BatchREQ req) {
+        return R.ok(userService.batchToggle(req.getIds(), LoginContext.userId()));
     }
 }

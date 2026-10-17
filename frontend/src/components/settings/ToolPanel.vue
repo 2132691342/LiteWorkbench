@@ -3,8 +3,9 @@ import { ElMessage } from 'element-plus'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LwButton from '@/components/ui/LwButton.vue'
-import LwCard from '@/components/ui/LwCard.vue'
-import LwPageState from '@/components/ui/LwPageState.vue'
+import LwRowActions from '@/components/ui/LwRowActions.vue'
+import LwSkeleton from '@/components/ui/LwSkeleton.vue'
+import LwTableCard from '@/components/ui/LwTableCard.vue'
 import LwTag from '@/components/ui/LwTag.vue'
 import { toolApi } from '@/api'
 import { usePermission } from '@/composables/usePermission'
@@ -82,39 +83,53 @@ onMounted(load)
 </script>
 
 <template>
-  <LwCard :title="t('settings.tool.title')" :desc="t('settings.tool.desc')">
-    <LwPageState :loading="loading" :error="error" :empty="!list.length" @retry="load">
-      <div class="flex flex-col gap-2">
-        <div
-          v-for="item in list"
-          :key="item.toolId"
-          class="px-3 py-2.5 rounded-lg border flex flex-wrap items-center gap-3 transition-all duration-200 hover:lw-shadow-sm"
-          style="border-color: var(--lw-border)"
-        >
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2">
-              <span class="font-bold text-sm">{{ item.toolLabel }}</span>
-              <LwTag :tone="RISK_TONE[item.riskLevel]">{{ t(`settings.tool.risk_${item.riskLevel}`) }}</LwTag>
-              <LwTag tone="muted">{{ item.category }}</LwTag>
-            </div>
-            <div class="text-xs mt-1 font-mono truncate" style="color: var(--lw-ink-muted)">
-              {{ item.toolName }}
-            </div>
-          </div>
+  <LwTableCard
+    :title="t('settings.tool.title')"
+    :total="list.length"
+    :loading="loading"
+    :error="error"
+    :empty="!list.length"
+    :empty-text="t('settings.tool.emptyTip')"
+    @retry="load"
+  >
+    <template #skeleton>
+      <LwSkeleton :rows="5" />
+    </template>
+
+    <el-table :data="list" style="width: 100%">
+      <el-table-column :label="t('settings.tool.name')" min-width="240">
+        <template #default="{ row }">
           <div class="flex items-center gap-2">
-            <LwButton v-if="hasPerm('wb:tool:invoke')" variant="ghost" size="sm" @click="openInvoke(item)">
+            <span class="lw-cell-title">{{ row.toolLabel }}</span>
+            <LwTag :tone="RISK_TONE[row.riskLevel]">{{ t(`settings.tool.risk_${row.riskLevel}`) }}</LwTag>
+            <LwTag tone="muted">{{ row.category }}</LwTag>
+          </div>
+          <div class="lw-cell-mono truncate">{{ row.toolName }}</div>
+        </template>
+      </el-table-column>
+      <el-table-column :label="t('common.status')" width="120">
+        <template #default="{ row }">
+          <LwTag :tone="row.enabled ? 'success' : 'muted'">
+            {{ row.enabled ? t('common.enabled') : t('common.disabled') }}
+          </LwTag>
+        </template>
+      </el-table-column>
+      <el-table-column :label="t('common.actions')" width="160" fixed="right">
+        <template #default="{ row }">
+          <LwRowActions>
+            <LwButton v-if="hasPerm('wb:tool:invoke')" variant="text" size="sm" @click="openInvoke(row)">
               {{ t('settings.tool.invoke') }}
             </LwButton>
             <el-switch
               v-if="hasPerm('wb:tool:toggle')"
-              :model-value="item.enabled"
-              :loading="toggling === item.toolId"
-              @change="toggle(item)"
+              :model-value="row.enabled"
+              :loading="toggling === row.toolId"
+              @change="toggle(row)"
             />
-          </div>
-        </div>
-      </div>
-    </LwPageState>
+          </LwRowActions>
+        </template>
+      </el-table-column>
+    </el-table>
 
     <el-dialog v-model="invokeVisible" :title="t('settings.tool.invokeTitle')" width="520px">
       <el-form label-position="top">
@@ -142,5 +157,5 @@ onMounted(load)
         </LwButton>
       </template>
     </el-dialog>
-  </LwCard>
+  </LwTableCard>
 </template>

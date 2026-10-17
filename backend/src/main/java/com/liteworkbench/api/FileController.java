@@ -8,13 +8,17 @@ import com.liteworkbench.common.LoginContext;
 import com.liteworkbench.common.PageResult;
 import com.liteworkbench.common.R;
 import com.liteworkbench.domain.constant.PermConst;
+import com.liteworkbench.domain.dto.BatchREQ;
 import com.liteworkbench.domain.dto.UploadFileDTO;
+import com.liteworkbench.domain.vo.BatchResultVO;
 import com.liteworkbench.domain.vo.FileVO;
 import com.liteworkbench.service.FileService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -68,5 +72,13 @@ public class FileController {
     public R<Void> delete(@PathVariable String fileId) {
         fileService.delete(LoginContext.userId(), fileId);
         return R.ok();
+    }
+
+    /** 批量删除：单条对象删除失败不影响其余 */
+    @SaCheckPermission(PermConst.WB_FILE_DELETE)
+    @Idempotent(prefix = "file:batch-delete")
+    @PostMapping("/batch-delete")
+    public R<BatchResultVO> batchDelete(@RequestBody @Valid BatchREQ req) {
+        return R.ok(fileService.batchDelete(LoginContext.userId(), req.getIds()));
     }
 }

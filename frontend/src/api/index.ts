@@ -4,6 +4,7 @@ import { i18n } from '@/locales'
 import type {
   ApiResult,
   AssistEvent,
+  BatchResultVO,
   BucketAdminVO,
   ChatStreamREQ,
   DocAssistREQ,
@@ -167,6 +168,8 @@ export const userApi = {
   toggle: (userId: string) => post<void>(`/user/toggle/${userId}`),
   resetPassword: (data: ResetPasswordREQ) => post<void>('/user/reset-password', data),
   remove: (userId: string) => post<void>(`/user/delete/${userId}`),
+  batchDelete: (ids: string[]) => post<BatchResultVO>('/user/batch-delete', { ids }),
+  batchToggle: (ids: string[]) => post<BatchResultVO>('/user/batch-toggle', { ids }),
 }
 
 /* ===== 角色 ===== */
@@ -246,6 +249,7 @@ export const skillApi = {
   create: (data: SkillREQ) => post<string>('/skill/create', data),
   update: (data: SkillREQ) => post<void>('/skill/update', data),
   remove: (skillId: string) => post<void>(`/skill/delete/${skillId}`),
+  batchDelete: (ids: string[]) => post<BatchResultVO>('/skill/batch-delete', { ids }),
   restore: (skillId: string) => post<void>(`/skill/restore/${skillId}`),
 }
 
@@ -265,6 +269,7 @@ export const fileApi = {
   },
   url: (fileId: string) => get<string>(`/file/url/${fileId}`),
   remove: (fileId: string) => post<void>(`/file/delete/${fileId}`),
+  batchDelete: (ids: string[]) => post<BatchResultVO>('/file/batch-delete', { ids }),
 }
 
 /* ===== 知识库 ===== */

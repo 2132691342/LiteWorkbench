@@ -13,6 +13,7 @@ import com.liteworkbench.domain.dto.PageREQ;
 import com.liteworkbench.domain.dto.SkillREQ;
 import com.liteworkbench.domain.entity.WbSkillDO;
 import com.liteworkbench.domain.entity.WbSkillSeedDO;
+import com.liteworkbench.domain.vo.BatchResultVO;
 import com.liteworkbench.domain.vo.SkillVO;
 import com.liteworkbench.mapper.WbSkillMapper;
 import com.liteworkbench.mapper.WbSkillSeedMapper;
@@ -89,6 +90,22 @@ public class SkillService {
     public void delete(String skillId, String userId) {
         getOwned(skillId, userId);
         skillMapper.deleteById(userId, skillId, userId);
+    }
+
+    /** 批量删除：逐条校验归属，不属于自己的进 failures */
+    public BatchResultVO batchDelete(List<String> skillIds, String userId) {
+        BatchResultVO result = new BatchResultVO();
+        for (String skillId : CollUtil.distinct(CollUtil.emptyIfNull(skillIds))) {
+            try {
+                delete(skillId, userId);
+                result.ok();
+            } catch (BizException e) {
+                result.fail(skillId, e.getMessage());
+            }
+        }
+        log.info("[skill.batchDelete] userId={} success={} failed={}",
+                userId, result.getSuccessCount(), result.getFailures().size());
+        return result;
     }
 
     /** 装配系统提示词：原提示词 + 启用技能摘要；用户点名（forcedCodes）与命中触发词的技能展开正文 */

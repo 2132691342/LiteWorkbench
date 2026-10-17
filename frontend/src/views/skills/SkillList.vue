@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { Plus } from '@element-plus/icons-vue'
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import LwBatchBar from '@/components/ui/LwBatchBar.vue'
 import LwButton from '@/components/ui/LwButton.vue'
+import LwRowActions from '@/components/ui/LwRowActions.vue'
+import LwSkeleton from '@/components/ui/LwSkeleton.vue'
 import LwTableCard from '@/components/ui/LwTableCard.vue'
 import LwTag from '@/components/ui/LwTag.vue'
 import { skillApi } from '@/api'
@@ -11,7 +14,7 @@ import { usePermission } from '@/composables/usePermission'
 import type { SkillVO } from '@/types/api'
 import { formatTime } from '@/utils/const'
 
-/** 技能：摘要常驻提示词，命中触发词才展开正文 */
+/** 技能：摘要常驻提示词，命中触发词才展开正文；支持批量删除 */
 const { t } = useI18n()
 const { hasPerm } = usePermission()
 
@@ -22,6 +25,10 @@ const size = ref(20)
 const keyword = ref('')
 const loading = ref(false)
 const error = ref('')
+const selection = ref<SkillVO[]>([])
+const batchRunning = ref(false)
+
+const canBatchDelete = computed(() => hasPerm('wb:skill:delete'))
 
 const dialogVisible = ref(false)
 const saving = ref(false)
@@ -102,6 +109,38 @@ async function remove(item: SkillVO): Promise<void> {
   await load()
 }
 
+function onSelectionChange(rows: SkillVO[]): void {
+  selection.value = rows
+}
+
+/** 批量删除：归属校验不通过的进失败明细，其余照常删 */
+async function batchDelete(): Promise<void> {
+  if (!selection.value.length) return
+  try {
+    await ElMessageBox.confirm(
+      t('skills.batchDeleteConfirm', { n: selection.value.length }),
+      t('common.delete'),
+      { confirmButtonText: t('common.delete'), cancelButtonText: t('common.cancel'), type: 'error' },
+    )
+  } catch {
+    return
+  }
+  batchRunning.value = true
+  try {
+    const result = await skillApi.batchDelete(selection.value.map((item) => item.skillId))
+    if (!result.failures.length) {
+      ElMessage.success(t('skills.batchDeleteOk', { n: result.successCount }))
+    } else {
+      const detail = result.failures.map((item) => item.reason).join('；')
+      ElMessage.warning(t('common.batchPartial', { ok: result.successCount, fail: result.failures.length, detail }))
+    }
+    selection.value = []
+    await load()
+  } finally {
+    batchRunning.value = false
+  }
+}
+
 /** 恢复内置技能为种子版本：保留用户自己的启用状态 */
 async function restore(item: SkillVO): Promise<void> {
   try {
@@ -169,7 +208,26 @@ onMounted(load)
         <LwButton variant="ghost" size="sm" @click="search">{{ t('common.search') }}</LwButton>
       </template>
 
-      <el-table :data="skills" style="width: 100%">
+      <template #skeleton>
+        <LwSkeleton :rows="6" />
+      </template>
+
+      <template #batch>
+        <LwBatchBar v-if="selection.length" :count="selection.length" @clear="selection = []">
+          <LwButton
+            v-if="canBatchDelete"
+            variant="danger"
+            size="sm"
+            :loading="batchRunning"
+            @click="batchDelete"
+          >
+            {{ t('common.batchDelete') }}
+          </LwButton>
+        </LwBatchBar>
+      </template>
+
+      <el-table :data="skills" style="width: 100%" @selection-change="onSelectionChange">
+        <el-table-column v-if="canBatchDelete" type="selection" width="44" />
         <el-table-column :label="t('skills.skillCode')" min-width="200">
           <template #default="{ row }">
             <div class="flex items-center gap-2">
@@ -193,20 +251,28 @@ onMounted(load)
         <el-table-column :label="t('logs.time')" width="180">
           <template #default="{ row }"><span class="lw-cell-mono">{{ formatTime(row.updatedAt ?? row.createdAt) }}</span></template>
         </el-table-column>
-        <el-table-column width="170" fixed="right">
+        <el-table-column width="200" fixed="right">
           <template #default="{ row }">
-            <div class="lw-rowacts">
+            <!-- 四项动作：编辑、恢复、删除（恢复仅内置技能可见），超过三项时后两项进「更多」 -->
+            <LwRowActions :more="row.builtin && hasPerm('wb:skill:update')">
               <LwButton v-if="hasPerm('wb:skill:update')" variant="text" size="sm" @click="openEdit(row)">
                 {{ t('common.edit') }}
               </LwButton>
-              <LwButton v-if="row.builtin && hasPerm('wb:skill:update')" variant="text" size="sm" @click="restore(row)">
+              <LwButton
+                v-if="row.builtin && hasPerm('wb:skill:update')"
+                variant="text"
+                size="sm"
+                @click="restore(row)"
+              >
                 {{ t('skills.restore') }}
               </LwButton>
-              <span v-if="hasPerm('wb:skill:delete')" class="lw-rowacts__sep" aria-hidden="true" />
-              <LwButton v-if="hasPerm('wb:skill:delete')" variant="text" size="sm" class="lw-text-danger" @click="remove(row)">
-                {{ t('common.delete') }}
-              </LwButton>
-            </div>
+              <template v-if="hasPerm('wb:skill:delete')">
+                <span class="lw-rowacts__sep" aria-hidden="true" />
+                <LwButton variant="text" size="sm" class="lw-text-danger" @click="remove(row)">
+                  {{ t('common.delete') }}
+                </LwButton>
+              </template>
+            </LwRowActions>
           </template>
         </el-table-column>
       </el-table>

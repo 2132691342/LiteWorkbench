@@ -4,9 +4,9 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LwButton from '@/components/ui/LwButton.vue'
-import LwCard from '@/components/ui/LwCard.vue'
-import LwEmpty from '@/components/ui/LwEmpty.vue'
-import LwPageState from '@/components/ui/LwPageState.vue'
+import LwRowActions from '@/components/ui/LwRowActions.vue'
+import LwSkeleton from '@/components/ui/LwSkeleton.vue'
+import LwTableCard from '@/components/ui/LwTableCard.vue'
 import LwTag from '@/components/ui/LwTag.vue'
 import { workspaceApi } from '@/api'
 import type { WorkspaceREQ, WorkspaceVO } from '@/types/api'
@@ -82,7 +82,11 @@ async function setDefault(item: WorkspaceVO): Promise<void> {
 }
 
 async function remove(item: WorkspaceVO): Promise<void> {
-  await ElMessageBox.confirm(t('workspace.deleteConfirm', { name: item.workspaceName }), t('common.tip'), { type: 'warning' })
+  await ElMessageBox.confirm(t('workspace.deleteConfirm', { name: item.workspaceName }), t('common.tip'), {
+    confirmButtonText: t('common.delete'),
+    cancelButtonText: t('common.cancel'),
+    type: 'error',
+  })
   await workspaceApi.remove(item.workspaceId)
   ElMessage.success(t('common.deleteSuccess'))
   await load()
@@ -92,7 +96,7 @@ onMounted(load)
 </script>
 
 <template>
-  <div class="lw-page flex flex-col gap-4">
+  <div class="lw-page">
     <div class="lw-page-head">
       <div>
         <h2 class="lw-title">{{ t('workspace.title') }}</h2>
@@ -104,50 +108,82 @@ onMounted(load)
       </LwButton>
     </div>
 
-    <LwCard>
-      <LwPageState :loading="loading" :error="error" :empty="!list.length" :skeleton-rows="3" @retry="load">
-        <LwEmpty v-if="!list.length" :description="t('workspace.empty')" />
-        <div v-else class="flex flex-col gap-3">
-          <div
-            v-for="item in list"
-            :key="item.workspaceId"
-            class="rounded-xl border p-4 flex flex-wrap items-center gap-4 transition-all duration-200 hover:lw-shadow-sm"
-            style="border-color: var(--lw-border); background: var(--lw-surface-raised)"
-          >
-            <div
-              class="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
-              style="background: var(--lw-secondary-tint); color: var(--lw-primary-ink)"
-            >
-              <el-icon :size="18"><Box /></el-icon>
-            </div>
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2 flex-wrap">
-                <span class="font-bold text-sm">{{ item.workspaceName }}</span>
-                <LwTag v-if="item.isDefault" tone="secondary">{{ t('workspace.default') }}</LwTag>
+    <LwTableCard
+      :title="t('workspace.title')"
+      :total="list.length"
+      :loading="loading"
+      :error="error"
+      :empty="!list.length"
+      :empty-text="t('workspace.empty')"
+      @retry="load"
+    >
+      <template #skeleton>
+        <LwSkeleton :rows="4" />
+      </template>
+
+      <el-table :data="list" style="width: 100%">
+        <el-table-column :label="t('workspace.name')" min-width="220">
+          <template #default="{ row }">
+            <div class="flex items-center gap-2">
+              <span
+                class="w-6 h-6 rounded-md flex items-center justify-center shrink-0"
+                style="background: var(--lw-secondary-tint); color: var(--lw-primary-ink)"
+              >
+                <el-icon :size="13"><Box /></el-icon>
+              </span>
+              <div class="min-w-0">
+                <div class="lw-cell-title truncate">{{ row.workspaceName }}</div>
+                <div class="lw-cell-sub truncate">{{ row.description || t('workspace.noDesc') }}</div>
               </div>
-              <p class="text-xs mt-1 truncate" style="color: var(--lw-ink-muted)">
-                {{ item.description || t('workspace.noDesc') }}
-              </p>
-              <p class="text-xs mt-1 font-mono" style="color: var(--lw-ink-disabled)">
-                {{ item.bucketName }} · {{ item.objectCount ?? 0 }} {{ t('workspace.objects') }} · {{ formatSize(item.totalSize) }}
-              </p>
             </div>
-            <div class="flex items-center gap-2 shrink-0">
-              <LwButton v-if="!item.isDefault" variant="ghost" size="sm" @click="setDefault(item)">
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('workspace.bucket')" min-width="200">
+          <template #default="{ row }">
+            <span class="lw-cell-mono">{{ row.bucketName }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('workspace.objects')" width="110">
+          <template #default="{ row }">
+            <span class="lw-cell-mono">{{ row.objectCount ?? 0 }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('files.size')" width="130">
+          <template #default="{ row }">
+            <span class="lw-cell-mono">{{ formatSize(row.totalSize) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('workspace.default')" width="110">
+          <template #default="{ row }">
+            <LwTag v-if="row.isDefault" tone="secondary">{{ t('workspace.default') }}</LwTag>
+            <span v-else class="lw-cell-sub">-</span>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('common.actions')" width="220" fixed="right">
+          <template #default="{ row }">
+            <!-- 默认工作区不可删除：删掉会把当前会话的资产桶一起带走 -->
+            <LwRowActions>
+              <LwButton v-if="!row.isDefault" variant="text" size="sm" @click="setDefault(row)">
                 {{ t('workspace.setDefault') }}
               </LwButton>
-              <LwButton variant="text" size="sm" @click="openEdit(item)">{{ t('common.edit') }}</LwButton>
-              <LwButton v-if="!item.isDefault" variant="text" size="sm" @click="remove(item)">
-                {{ t('common.delete') }}
-              </LwButton>
-            </div>
-          </div>
-          <p class="text-xs mt-1" style="color: var(--lw-ink-muted)">
-            {{ t('workspace.total', { size: formatSize(totalSize) }) }}
-          </p>
-        </div>
-      </LwPageState>
-    </LwCard>
+              <LwButton variant="text" size="sm" @click="openEdit(row)">{{ t('common.edit') }}</LwButton>
+              <template v-if="!row.isDefault">
+                <span class="lw-rowacts__sep" aria-hidden="true" />
+                <LwButton variant="text" size="sm" class="lw-text-danger" @click="remove(row)">
+                  {{ t('common.delete') }}
+                </LwButton>
+              </template>
+            </LwRowActions>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <template #pager>
+        <span class="text-xs" style="color: var(--lw-ink-muted)">
+          {{ t('workspace.total', { size: formatSize(totalSize) }) }}
+        </span>
+      </template>
+    </LwTableCard>
 
     <el-dialog v-model="dialogVisible" :title="editing ? t('workspace.edit') : t('workspace.create')" width="440px">
       <el-form label-position="top">

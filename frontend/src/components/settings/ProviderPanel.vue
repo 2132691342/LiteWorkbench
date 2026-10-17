@@ -5,8 +5,9 @@ import { ElMessage } from 'element-plus'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LwButton from '@/components/ui/LwButton.vue'
-import LwCard from '@/components/ui/LwCard.vue'
-import LwPageState from '@/components/ui/LwPageState.vue'
+import LwRowActions from '@/components/ui/LwRowActions.vue'
+import LwSkeleton from '@/components/ui/LwSkeleton.vue'
+import LwTableCard from '@/components/ui/LwTableCard.vue'
 import LwTag from '@/components/ui/LwTag.vue'
 import { providerApi } from '@/api'
 import { usePermission } from '@/composables/usePermission'
@@ -159,84 +160,100 @@ onMounted(load)
 </script>
 
 <template>
-  <LwCard :title="t('settings.provider.title')" :desc="t('settings.provider.desc')">
-    <template #actions>
-      <LwButton v-if="hasPerm('wb:provider:create')" size="sm" @click="openCreate">
+  <div class="flex flex-col">
+    <LwTableCard
+    :title="t('settings.provider.title')"
+    :total="list.length"
+    :loading="loading"
+    :error="error"
+    :empty="!list.length"
+    :empty-text="t('settings.provider.emptyTip')"
+    @retry="load"
+  >
+    <template #toolbar>
+      <LwButton v-if="hasPerm('wb:provider:create')" size="sm" variant="secondary" @click="openCreate">
         {{ t('common.create') }}
       </LwButton>
     </template>
 
-    <LwPageState :loading="loading" :error="error" :empty="!list.length" @retry="load">
-      <p v-if="!list.length" class="text-xs leading-relaxed" style="color: var(--lw-ink-muted)">
-        {{ t('settings.provider.emptyTip') }}
-      </p>
+    <template #skeleton>
+      <LwSkeleton :rows="4" />
+    </template>
 
-      <div class="flex flex-col gap-2">
-        <div
-          v-for="item in list"
-          :key="item.providerId"
-          class="px-3 py-2.5 rounded-lg border flex flex-wrap items-center gap-3 transition-all duration-200 hover:lw-shadow-sm"
-          style="border-color: var(--lw-border)"
-        >
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2 flex-wrap">
-              <span class="font-bold text-sm">{{ item.providerName }}</span>
-              <LwTag :tone="item.enabled ? 'success' : 'muted'">
-                {{ item.enabled ? t('common.enabled') : t('common.disabled') }}
-              </LwTag>
-              <LwTag tone="secondary">{{ item.providerCode }}</LwTag>
-              <el-tooltip v-if="isUnsupported(item.providerCode)" :content="t('settings.provider.unsupportedTip')" placement="top">
-                <LwTag tone="error">{{ t('settings.provider.unsupported') }}</LwTag>
-              </el-tooltip>
-              <!-- 模型能力位：一眼看出该模型能看图片、能调工具、能出思维链 -->
-              <el-tooltip v-if="item.capVision" :content="t('settings.provider.capVision')" placement="top">
-                <LwTag tone="secondary"><el-icon><Picture /></el-icon></LwTag>
-              </el-tooltip>
-              <el-tooltip v-if="item.capTool" :content="t('settings.provider.capTool')" placement="top">
-                <LwTag tone="secondary"><el-icon><Tools /></el-icon></LwTag>
-              </el-tooltip>
-              <el-tooltip v-if="item.capReasoning" :content="t('settings.provider.capReasoning')" placement="top">
-                <LwTag tone="secondary"><el-icon><Setting /></el-icon></LwTag>
-              </el-tooltip>
-            </div>
-            <div class="text-xs mt-1 truncate" style="color: var(--lw-ink-muted)">
-              {{ item.baseUrl }} · {{ item.defaultModel }} · {{ item.apiKeyMasked || '—' }}
-            </div>
-            <div class="text-xs mt-0.5 font-mono" style="color: var(--lw-ink-disabled)">
-              {{ t('settings.provider.metaContext', { v: item.contextWindow ?? t('settings.provider.fallbackGlobal') }) }}
-              · {{ t('settings.provider.metaMax', { v: item.maxOutputTokens ?? t('settings.provider.unlimited') }) }}
-              · {{ t('settings.provider.metaTemp', { v: item.temperature ?? t('settings.provider.fallbackGlobal') }) }}
-              · {{ t('settings.provider.metaTopP', { v: item.topP ?? t('settings.provider.unset') }) }}
-            </div>
+    <el-table :data="list" style="width: 100%">
+      <el-table-column :label="t('settings.provider.name')" min-width="240">
+        <template #default="{ row }">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="lw-cell-title">{{ row.providerName }}</span>
+            <LwTag :tone="row.enabled ? 'success' : 'muted'">
+              {{ row.enabled ? t('common.enabled') : t('common.disabled') }}
+            </LwTag>
+            <LwTag tone="secondary">{{ row.providerCode }}</LwTag>
+            <el-tooltip v-if="isUnsupported(row.providerCode)" :content="t('settings.provider.unsupportedTip')" placement="top">
+              <LwTag tone="error">{{ t('settings.provider.unsupported') }}</LwTag>
+            </el-tooltip>
           </div>
-          <div class="flex items-center gap-2">
+          <div class="lw-cell-sub truncate">
+            {{ row.baseUrl }} · {{ row.defaultModel }} · {{ row.apiKeyMasked || '-' }}
+          </div>
+        </template>
+      </el-table-column>
+      <el-table-column :label="t('settings.provider.capTool')" width="110">
+        <template #default="{ row }">
+          <!-- 能力位：识图 / 工具 / 思维链各自一枚图标标签 -->
+          <span class="flex items-center gap-1">
+            <el-tooltip v-if="row.capVision" :content="t('settings.provider.capVision')" placement="top">
+              <LwTag tone="secondary"><el-icon><Picture /></el-icon></LwTag>
+            </el-tooltip>
+            <el-tooltip v-if="row.capTool" :content="t('settings.provider.capTool')" placement="top">
+              <LwTag tone="secondary"><el-icon><Tools /></el-icon></LwTag>
+            </el-tooltip>
+            <el-tooltip v-if="row.capReasoning" :content="t('settings.provider.capReasoning')" placement="top">
+              <LwTag tone="secondary"><el-icon><Setting /></el-icon></LwTag>
+            </el-tooltip>
+            <span v-if="!row.capVision && !row.capTool && !row.capReasoning" class="lw-cell-sub">-</span>
+          </span>
+        </template>
+      </el-table-column>
+      <el-table-column :label="t('settings.provider.contextWindow')" min-width="240">
+        <template #default="{ row }">
+          <span class="lw-cell-mono">
+            {{ t('settings.provider.metaContext', { v: row.contextWindow ?? t('settings.provider.fallbackGlobal') }) }}
+            · {{ t('settings.provider.metaMax', { v: row.maxOutputTokens ?? t('settings.provider.unlimited') }) }}
+            · {{ t('settings.provider.metaTemp', { v: row.temperature ?? t('settings.provider.fallbackGlobal') }) }}
+            · {{ t('settings.provider.metaTopP', { v: row.topP ?? t('settings.provider.unset') }) }}
+          </span>
+        </template>
+      </el-table-column>
+      <el-table-column :label="t('common.actions')" width="220" fixed="right">
+        <template #default="{ row }">
+          <LwRowActions>
             <LwButton
               v-if="hasPerm('wb:provider:update')"
-              variant="ghost"
+              variant="text"
               size="sm"
-              :loading="testing === item.providerId"
-              @click="test(item)"
+              :loading="testing === row.providerId"
+              @click="test(row)"
             >
               {{ t('settings.provider.test') }}
             </LwButton>
-            <LwButton v-if="hasPerm('wb:provider:update')" variant="text" size="sm" @click="openEdit(item)">
+            <LwButton v-if="hasPerm('wb:provider:update')" variant="text" size="sm" @click="openEdit(row)">
               {{ t('common.edit') }}
             </LwButton>
-            <LwButton
-              v-if="hasPerm('wb:provider:delete')"
-              variant="text"
-              size="sm"
-              @click="remove(item)"
-            >
-              {{ t('common.delete') }}
-            </LwButton>
-          </div>
-        </div>
-      </div>
-    </LwPageState>
+            <template v-if="hasPerm('wb:provider:delete')">
+              <span class="lw-rowacts__sep" aria-hidden="true" />
+              <LwButton variant="text" size="sm" class="lw-text-danger" @click="remove(row)">
+                {{ t('common.delete') }}
+              </LwButton>
+            </template>
+          </LwRowActions>
+        </template>
+      </el-table-column>
+    </el-table>
+  </LwTableCard>
 
-    <el-dialog
-      v-model="dialogVisible"
+  <el-dialog
+    v-model="dialogVisible"
       :title="form.providerId ? t('common.edit') : t('common.create')"
       width="560px"
     >
@@ -321,5 +338,5 @@ onMounted(load)
         <LwButton :loading="submitting" @click="submit">{{ t('common.save') }}</LwButton>
       </template>
     </el-dialog>
-  </LwCard>
+  </div>
 </template>

@@ -1,19 +1,23 @@
 <script setup lang="ts">
 import { Upload } from '@element-plus/icons-vue'
-import { defineAsyncComponent, onMounted, ref, shallowRef } from 'vue'
+import { defineAsyncComponent, computed, onMounted, ref, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 /** 预览依赖较重，按需异步加载避免首屏体积膨胀 */
 const VuePdfEmbed = defineAsyncComponent(() => import('vue-pdf-embed'))
+import LwBatchBar from '@/components/ui/LwBatchBar.vue'
 import LwButton from '@/components/ui/LwButton.vue'
+import LwEmpty from '@/components/ui/LwEmpty.vue'
+import LwRowActions from '@/components/ui/LwRowActions.vue'
+import LwSkeleton from '@/components/ui/LwSkeleton.vue'
 import LwTableCard from '@/components/ui/LwTableCard.vue'
 import LwTag from '@/components/ui/LwTag.vue'
 import { fileApi } from '@/api'
 import { usePermission } from '@/composables/usePermission'
-import type { FileVO } from '@/types/api'
+import type { BatchResultVO, FileVO } from '@/types/api'
 import { formatTime } from '@/utils/const'
 
-/** 文件空间：MinIO 对象按用户前缀隔离，上传直传 / 下载走预签名 */
+/** 文件空间：MinIO 对象按用户前缀隔离，上传直传 / 下载走预签名，支持批量删除 */
 const { t } = useI18n()
 const { hasPerm } = usePermission()
 
@@ -25,6 +29,11 @@ const loading = ref(false)
 const error = ref('')
 const uploading = ref(false)
 const uploadInput = ref<HTMLInputElement | null>(null)
+const selection = ref<FileVO[]>([])
+const batchRunning = ref(false)
+
+const canBatchDelete = computed(() => hasPerm('wb:file:delete'))
+const selectedIds = computed(() => selection.value.map((item) => item.fileId))
 
 /** 在线预览：图片直显，pdf / docx / 表格按类型渲染，其余只给下载 */
 const previewOpen = ref(false)
@@ -158,6 +167,38 @@ async function remove(item: FileVO): Promise<void> {
   await load()
 }
 
+function onSelectionChange(rows: FileVO[]): void {
+  selection.value = rows
+}
+
+/** 批量删除：对象层删除失败逐条回报，不因一条失败丢掉整批 */
+async function batchDelete(): Promise<void> {
+  if (!selectedIds.value.length) return
+  try {
+    await ElMessageBox.confirm(
+      t('files.batchDeleteConfirm', { n: selectedIds.value.length }),
+      t('common.delete'),
+      { confirmButtonText: t('common.delete'), cancelButtonText: t('common.cancel'), type: 'error' },
+    )
+  } catch {
+    return
+  }
+  batchRunning.value = true
+  try {
+    const result: BatchResultVO = await fileApi.batchDelete(selectedIds.value)
+    if (!result.failures.length) {
+      ElMessage.success(t('files.batchDeleteOk', { n: result.successCount }))
+    } else {
+      const detail = result.failures.map((item) => item.reason).join('；')
+      ElMessage.warning(t('common.batchPartial', { ok: result.successCount, fail: result.failures.length, detail }))
+    }
+    selection.value = []
+    await load()
+  } finally {
+    batchRunning.value = false
+  }
+}
+
 function changePage(next: number): void {
   page.value = next
   void load()
@@ -194,7 +235,26 @@ onMounted(load)
       :empty-text="t('files.empty')"
       @retry="load"
     >
-      <el-table :data="files" style="width: 100%">
+      <template #batch>
+        <LwBatchBar v-if="selection.length" :count="selection.length" @clear="selection = []">
+          <LwButton
+            v-if="canBatchDelete"
+            variant="danger"
+            size="sm"
+            :loading="batchRunning"
+            @click="batchDelete"
+          >
+            {{ t('common.batchDelete') }}
+          </LwButton>
+        </LwBatchBar>
+      </template>
+
+      <template #skeleton>
+        <LwSkeleton :rows="6" />
+      </template>
+
+      <el-table :data="files" style="width: 100%" @selection-change="onSelectionChange">
+        <el-table-column v-if="canBatchDelete" type="selection" width="44" />
         <el-table-column :label="t('files.fileName')" prop="fileName" min-width="240" show-overflow-tooltip>
           <template #default="{ row }">
             <div class="lw-cell-title">{{ row.fileName }}</div>
@@ -212,16 +272,18 @@ onMounted(load)
         <el-table-column :label="t('logs.time')" width="180">
           <template #default="{ row }"><span class="lw-cell-mono">{{ formatTime(row.createdAt) }}</span></template>
         </el-table-column>
-        <el-table-column width="180" fixed="right">
+        <el-table-column width="200" fixed="right">
           <template #default="{ row }">
-            <div class="lw-rowacts">
+            <LwRowActions>
               <LwButton variant="text" size="sm" @click="preview(row)">{{ t('files.preview') }}</LwButton>
               <LwButton variant="text" size="sm" @click="download(row)">{{ t('files.download') }}</LwButton>
-              <span v-if="hasPerm('wb:file:delete')" class="lw-rowacts__sep" aria-hidden="true" />
-              <LwButton v-if="hasPerm('wb:file:delete')" variant="text" size="sm" class="lw-text-danger" @click="remove(row)">
-                {{ t('common.delete') }}
-              </LwButton>
-            </div>
+              <template v-if="hasPerm('wb:file:delete')">
+                <span class="lw-rowacts__sep" aria-hidden="true" />
+                <LwButton variant="text" size="sm" class="lw-text-danger" @click="remove(row)">
+                  {{ t('common.delete') }}
+                </LwButton>
+              </template>
+            </LwRowActions>
           </template>
         </el-table-column>
       </el-table>

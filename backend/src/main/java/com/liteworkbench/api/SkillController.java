@@ -6,8 +6,10 @@ import com.liteworkbench.common.LoginContext;
 import com.liteworkbench.common.PageResult;
 import com.liteworkbench.common.R;
 import com.liteworkbench.domain.constant.PermConst;
+import com.liteworkbench.domain.dto.BatchREQ;
 import com.liteworkbench.domain.dto.PageREQ;
 import com.liteworkbench.domain.dto.SkillREQ;
+import com.liteworkbench.domain.vo.BatchResultVO;
 import com.liteworkbench.domain.vo.SkillVO;
 import com.liteworkbench.service.SkillService;
 import jakarta.validation.Valid;
@@ -64,5 +66,13 @@ public class SkillController {
     public R<Void> restore(@PathVariable String skillId) {
         skillService.restoreBuiltin(skillId, LoginContext.userId());
         return R.ok();
+    }
+
+    /** 批量删除：逐条校验归属，不属于自己的进失败明细 */
+    @SaCheckPermission(PermConst.WB_SKILL_DELETE)
+    @Idempotent(prefix = "skill:batch-delete")
+    @PostMapping("/batch-delete")
+    public R<BatchResultVO> batchDelete(@RequestBody @Valid BatchREQ req) {
+        return R.ok(skillService.batchDelete(req.getIds(), LoginContext.userId()));
     }
 }

@@ -90,6 +90,18 @@ export interface UserREQ {
 
 export interface UserPageREQ extends PageREQ {
   state?: string
+  /** 角色 ID 过滤：命中该角色的用户 */
+  roleId?: string
+  /** 仅看待首次改密的账号 */
+  pwdResetRequired?: boolean
+}
+
+/* ===== 批量操作 ===== */
+
+/** 批量结果：successCount 与 failures 对账，失败的留在页面上 */
+export interface BatchResultVO {
+  successCount: number
+  failures: { id: string; reason: string }[]
 }
 
 /* ===== 角色 ===== */
