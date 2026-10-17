@@ -67,6 +67,7 @@ public class AgentKernelRuntime implements AgentRuntime {
     }
 
     @Override
+    /** 在运行编排池上启动一次运行，返回可取消的句柄 */
     public RunHandle start(RunContext context, Consumer<RunEventDTO> sink) {
         RunHandle handle = new RunHandle(context.runId());
         AtomicLong seq = new AtomicLong(RunConst.EVENT_SEQ_START);

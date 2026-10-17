@@ -70,6 +70,7 @@ public class WorkbenchTools {
             description = "执行一段 Python 代码并返回标准输出。脚本无交互输入，结果只经 stdout 返回，"
                     + "需要的数据务必 print 出来；报错时返回完整 traceback，可据此修正后重试；"
                     + "单次上限 300 秒，长任务拆成多次调用")
+    /** 执行 Python 脚本：落临时文件、带超时、杀进程树、保尾截断 */
     public String pythonExec(
             @AgentToolParam(name = "code", description = "要执行的 Python 源码") String code,
             @AgentToolParam(name = "timeoutSeconds", description = "超时秒数，默认 60，上限 300",
@@ -93,6 +94,7 @@ public class WorkbenchTools {
     /** 读取工作区内文本文件 */
     @AgentTool(name = "file_read", risk = ToolRiskEnum.SAFE,
             description = "读取工作区内文本文件的全部内容")
+    /** 读取工作区文件，路径越界即结构化失败 */
     public String fileRead(
             @AgentToolParam(name = "path", description = "相对工作区根目录的路径") String path) {
         if (!toolGate.isEnabled("file_read")) {
@@ -112,6 +114,7 @@ public class WorkbenchTools {
     @AgentTool(name = "file_write", risk = ToolRiskEnum.CONFIRM, parallelSafe = false,
             description = "把文本写入工作区文件：父目录自动创建，同名文件整体覆盖（不是追加）。"
                     + "写大文件时一次写全量内容，不要分多次写同一文件")
+    /** 写入工作区文件，父目录缺失自动递归创建 */
     public String fileWrite(
             @AgentToolParam(name = "path", description = "相对工作区根目录的路径") String path,
             @AgentToolParam(name = "content", description = "要写入的文本内容") String content) {
@@ -135,6 +138,7 @@ public class WorkbenchTools {
     @AgentTool(name = "http_get", risk = ToolRiskEnum.SAFE,
             description = "对给定 URL 发起 GET 请求，返回响应文本（截断至 8000 字符）；"
                     + "只允许公网 http/https 地址，内网地址一律拒绝")
+    /** 发起 HTTP GET，只放行公网 http/https */
     public String httpGet(
             @AgentToolParam(name = "url", description = "完整 http(s) 地址") String url) {
         if (!toolGate.isEnabled("http_get")) {
@@ -186,6 +190,7 @@ public class WorkbenchTools {
             description = "检索当前用户知识库，返回与关键词最相关的原文片段（带文档名与块序号）。"
                     + "回答引用用户资料前必须先用它取证；首次检索命中率低时，换同义词或更具体的词重试，"
                     + "不要凭一次空结果断言\"资料里没有\"")
+    /** 知识库全文检索，返回分块命中 */
     public String kbSearch(
             @AgentToolParam(name = "keyword", description = "检索关键词") String keyword,
             @AgentToolParam(name = "kbId", description = "限定知识库 ID，不传则跨全部知识库", required = false)
@@ -208,6 +213,7 @@ public class WorkbenchTools {
             description = "写下或更新整份任务计划，用于长任务分步推进与向用户交代进度。"
                     + "plan 参数每行一步，已完成行以 [x] 开头、进行中 [~]、未开始 [ ]；"
                     + "每次调用必须给出完整计划（覆盖式），不要在旧计划上追加")
+    /** 写入任务计划，输出结构化步骤供 plan.updated 下发 */
     public String taskPlan(
             @AgentToolParam(name = "plan", description = "整份计划，每行一步，行首可带 [x] / [~] / [ ] 状态标记")
             String plan) {
@@ -225,6 +231,7 @@ public class WorkbenchTools {
     @AgentTool(name = MemoryConst.TOOL_WRITE, risk = ToolRiskEnum.CONFIRM, parallelSafe = false,
             description = "把值得长期记住的信息写入用户记忆（如姓名、偏好、长期约束、常用格式要求），"
                     + "同 key 会覆盖旧值。仅记录用户明确表达或可长期复用的信息，不要记录一次性任务细节")
+    /** 写入一条长期记忆 */
     public String memoryWrite(
             @AgentToolParam(name = "key", description = "记忆键，短且可辨识，如 输出语言偏好") String key,
             @AgentToolParam(name = "value", description = "记忆内容，一句话说清") String value,
@@ -247,6 +254,7 @@ public class WorkbenchTools {
     /** 记忆检索：按关键词取回已沉淀的记忆 */
     @AgentTool(name = MemoryConst.TOOL_SEARCH, risk = ToolRiskEnum.SAFE,
             description = "检索当前用户的长期记忆，回答涉及用户个人情况与偏好前先用它取证")
+    /** 检索长期记忆 */
     public String memorySearch(
             @AgentToolParam(name = "keyword", description = "检索关键词") String keyword) {
         if (!toolGate.isEnabled(MemoryConst.TOOL_SEARCH)) {
@@ -267,6 +275,7 @@ public class WorkbenchTools {
             description = "把一个自成一体的子任务交给独立的子运行执行，返回子任务的最终产出。"
                     + "适合长链路中可独立完成、只需结果不需要中间过程的部分；"
                     + "子任务描述要自带全部上下文，子运行看不到当前对话")
+    /** 派发子运行，同步等产出 */
     public String taskDelegate(
             @AgentToolParam(name = "task", description = "子任务描述，需自带完整上下文与期望产出格式") String task,
             @AgentToolParam(name = "timeoutSeconds", description = "等待上限秒数，默认 180，上限 300",

@@ -30,6 +30,7 @@ public class StartupGuardService implements ApplicationRunner {
     private final Environment environment;
 
     @Override
+    /** 启动自检：核心组件不可用且 prod 即拒绝启动 */
     public void run(ApplicationArguments args) {
         assertSecret();
         HealthRESP health = monitorService.health();

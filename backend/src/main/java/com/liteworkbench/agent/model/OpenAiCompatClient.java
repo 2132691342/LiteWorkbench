@@ -35,16 +35,19 @@ public class OpenAiCompatClient implements ModelClient {
     }
 
     @Override
+    /** 本客户端承载的协议码 */
     public String protocol() {
         return PROTOCOL;
     }
 
     @Override
+    /** 当前绑定的模型名 */
     public String modelName() {
         return config.getModel();
     }
 
     @Override
+    /** 发起一次流式补全，逐帧回调文本、思考与工具增量 */
     public StreamResult stream(Request request, ModelEventListener listener, BooleanSupplier cancelled) {
         StreamResult result = new StreamResult();
         StringBuilder text = new StringBuilder();

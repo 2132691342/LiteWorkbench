@@ -62,6 +62,7 @@ public class SessionService {
         return toVO(getOwned(sessionId, userId));
     }
 
+    /** 新建会话并绑定默认模型与工作区 */
     public String create(SessionREQ req, String userId) {
         WbSessionDO session = new WbSessionDO();
         session.setSessionId(IdGenerator.generate(IdPrefixConst.SESSION));

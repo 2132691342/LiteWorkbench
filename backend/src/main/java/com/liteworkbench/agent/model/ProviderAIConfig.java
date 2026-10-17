@@ -60,6 +60,7 @@ public class ProviderAIConfig implements AIConfig {
     }
 
     @Override
+    /** 按 key 写入动态参数，供出站请求体透传 */
     public void putAdditionalConfigByKey(String key, Object value) {
         additional.put(key, value);
     }

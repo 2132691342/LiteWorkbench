@@ -67,6 +67,7 @@ public class SubRunService implements SubRunPort {
     private final Semaphore delegateSlots = new Semaphore(MAX_CONCURRENT_SUB_RUNS, true);
 
     @Override
+    /** 派发子运行：先取配额，拿不到即返回结构化失败 */
     public String delegate(String userId, String parentRunId, String sessionId, String task, long timeoutSeconds) {
         WbRunDO parent = runMapper.selectByIdAndUser(parentRunId, userId);
         if (Objects.isNull(parent)) {

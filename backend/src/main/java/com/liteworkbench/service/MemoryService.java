@@ -33,6 +33,7 @@ public class MemoryService implements MemoryPort {
 
     private final WbMemoryMapper memoryMapper;
 
+    /** 分页列出当前用户的长期记忆 */
     public PageResult<MemoryVO> page(MemoryREQ req) {
         String userId = LoginContext.userId();
         long total = memoryMapper.countPage(userId, req, req.getCategory());
@@ -79,6 +80,7 @@ public class MemoryService implements MemoryPort {
     }
 
     @Override
+    /** 写入一条记忆：同 key 覆盖，超容量按权重淘汰 */
     public String write(String userId, String key, String value, String category, Integer weight) {
         if (StrUtil.isBlank(userId)) {
             throw new BizException(ErrorCodeEnum.MEMORY_EMPTY, "记忆归属用户缺失");
@@ -111,6 +113,7 @@ public class MemoryService implements MemoryPort {
     }
 
     @Override
+    /** 按关键字检索记忆，返回可直接注入提示词的文本块 */
     public String search(String userId, String keyword, int limit) {
         if (StrUtil.isBlank(userId)) {
             return "（无可检索的记忆）";
@@ -129,6 +132,7 @@ public class MemoryService implements MemoryPort {
     }
 
     @Override
+    /** 取权重最高的若干条记忆，拼成系统提示末尾的注入块 */
     public String promptBlock(String userId) {
         if (StrUtil.isBlank(userId)) {
             return StrUtil.EMPTY;

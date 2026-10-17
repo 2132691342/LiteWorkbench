@@ -47,6 +47,7 @@ public class UserService {
     private final LoginUserAssembler loginUserAssembler;
     private final SkillService skillService;
 
+    /** 分页列出用户 */
     public PageResult<UserVO> page(UserPageREQ req) {
         long total = sysUserMapper.countPage(req);
         if (total <= 0) {
@@ -57,11 +58,13 @@ public class UserService {
         return PageResult.of(list, total, req.pageNo(), req.pageSize());
     }
 
+    /** 按 ID 查用户详情 */
     public UserVO detail(String userId) {
         return toVO(require(userId));
     }
 
     @Transactional(rollbackFor = Exception.class)
+    /** 新建用户：初始口令为 RSA 密文，落库前解密并校验强度 */
     public String create(UserREQ req, String operatorId) {
         if (StrUtil.isBlank(req.getUsername())) {
             throw new BizException(ErrorCodeEnum.PARAM_INVALID, "登录名不能为空");

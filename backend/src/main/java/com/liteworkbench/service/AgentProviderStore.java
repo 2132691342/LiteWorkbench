@@ -17,11 +17,13 @@ public class AgentProviderStore implements ProviderStore {
     private final WbProviderMapper providerMapper;
 
     @Override
+    /** 按供应方码查已配置的供应方定义 */
     public WbProviderDO findByCode(String providerCode) {
         return providerMapper.selectByCode(providerCode);
     }
 
     @Override
+    /** 按 ID 查供应方定义 */
     public WbProviderDO findById(String providerId) {
         return providerMapper.selectById(providerId);
     }

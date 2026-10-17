@@ -35,6 +35,7 @@ public class SqlAuditInterceptor implements Interceptor {
     private final ObserveStats observeStats;
 
     @Override
+    /** 拦截语句执行，记录语句、入参、影响行数与耗时 */
     public Object intercept(Invocation invocation) throws Throwable {
         if (!observeProperties.getSql().isEnabled()) {
             return invocation.proceed();

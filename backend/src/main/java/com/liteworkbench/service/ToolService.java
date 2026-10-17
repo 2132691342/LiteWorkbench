@@ -51,6 +51,7 @@ public class ToolService {
     @Qualifier(ExecutorConfig.TOOL_EXECUTOR)
     private final ExecutorService toolExecutor;
 
+    /** 列出全部工具定义与启用状态 */
     public List<ToolVO> list() {
         return toolMapper.selectAll().stream().map(this::toVO).toList();
     }

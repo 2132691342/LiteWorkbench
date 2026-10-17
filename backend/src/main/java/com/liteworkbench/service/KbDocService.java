@@ -102,6 +102,7 @@ public class KbDocService implements KbSearchPort {
         return toVO(doc);
     }
 
+    /** 分页列出知识库文档：先校验库归属，再按关键字与状态过滤 */
     public PageResult<KbDocVO> page(String kbId, String userId, String keyword, String state,
                                     long page, long size) {
         kbService.getOwned(kbId, userId);

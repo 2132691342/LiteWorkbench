@@ -41,6 +41,7 @@ public class RoleService {
     private final MenuService menuService;
     private final LoginUserAssembler loginUserAssembler;
 
+    /** 分页列出角色 */
     public PageResult<RoleVO> page(PageREQ req) {
         long total = sysRoleMapper.countPage(req.getKeyword());
         if (total <= 0) {
@@ -52,10 +53,12 @@ public class RoleService {
         return PageResult.of(list, total, req.pageNo(), req.pageSize());
     }
 
+    /** 列出全部角色，供用户表单下拉 */
     public List<RoleVO> list() {
         return sysRoleMapper.selectList().stream().map(this::toVO).toList();
     }
 
+    /** 按 ID 查角色详情 */
     public RoleVO detail(String roleId) {
         return toVO(require(roleId));
     }
@@ -67,6 +70,7 @@ public class RoleService {
     }
 
     @Transactional(rollbackFor = Exception.class)
+    /** 新建角色：角色码唯一，且不得超出操作人已有权限 */
     public String create(RoleREQ req, String operatorId) {
         if (sysRoleMapper.countByCode(req.getRoleCode(), null) > 0) {
             throw new BizException(ErrorCodeEnum.ROLE_CODE_CONFLICT, req.getRoleCode());

@@ -184,6 +184,7 @@ public class RunService {
         return PageResult.of(list, total, req.pageNo(), req.pageSize());
     }
 
+    /** 按 ID 查运行详情，归属校验失败按不存在处理 */
     public RunVO detail(String runId) {
         return toVO(getOwned(runId));
     }

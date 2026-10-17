@@ -48,6 +48,7 @@ public class LocalPythonRuntime implements PythonRuntime {
     }
 
     @Override
+    /** 探测解释器：显式配置 → 数据目录内置 → PATH 的 python3 → python */
     public RuntimeStatus detect() {
         if (!properties.getPython().isEnabled()) {
             return new RuntimeStatus(RuntimeStatus.DISABLED, null, null, false);
@@ -66,12 +67,14 @@ public class LocalPythonRuntime implements PythonRuntime {
     }
 
     @Override
+    /** 清空探测缓存，下一次调用重新探测 */
     public void resetProbe() {
         cachedStatus = null;
         log.info("[python.reprobe] 探测缓存已清空");
     }
 
     @Override
+    /** 执行脚本文件：注入 PATH 与 UTF-8，超时杀进程树 */
     public ExecResult execute(ExecRequest request) {
         RuntimeStatus status = detect();
         if (!status.ok()) {

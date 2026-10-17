@@ -122,6 +122,7 @@ public class ProviderService {
         modelFactory.evictProvider(exists.getProviderCode());
     }
 
+    /** 删除供应方，停用中的也不允许被会话引用 */
     public void delete(String providerId, String userId) {
         WbProviderDO provider = require(providerId);
         providerMapper.deleteById(providerId, userId);

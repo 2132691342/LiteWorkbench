@@ -18,6 +18,7 @@ public class LogProducer implements LogPublisher {
     }
 
     @Override
+    /** 投递一条日志文档到索引队列 */
     public void publish(LogMessage message) {
         try {
             rabbitTemplate.convertAndSend(MqConst.LOG_EXCHANGE, MqConst.LOG_ROUTING_KEY, message);

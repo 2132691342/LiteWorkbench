@@ -244,6 +244,7 @@ public class MonitorService {
         return resp;
     }
 
+    /** Python 运行时探测状态 */
     public PythonStatusVO pythonStatus() {
         var status = pythonRuntime.detect();
         PythonStatusVO vo = new PythonStatusVO();
@@ -254,6 +255,7 @@ public class MonitorService {
         return vo;
     }
 
+    /** 强制重新探测内置 Python 运行时 */
     public void reprobePython() {
         pythonRuntime.resetProbe();
         pythonRuntime.detect();
