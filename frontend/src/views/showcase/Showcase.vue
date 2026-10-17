@@ -103,7 +103,7 @@ const chartValues = [8, 16, 12, 24, 20, 32, 28, 40]
                 {{ t('showcase.tagPrimary') }}
               </div>
               <div class="flex justify-between text-xs font-mono" style="color: var(--lw-ink-muted)">
-                <span>{{ primaryHex }}</span><span>Primary</span>
+                <span>{{ primaryHex }}</span><span>{{ t('showcase.tagPrimary') }}</span>
               </div>
             </div>
             <div class="space-y-2">
@@ -111,7 +111,7 @@ const chartValues = [8, 16, 12, 24, 20, 32, 28, 40]
                 {{ t('showcase.tagSecondary') }}
               </div>
               <div class="flex justify-between text-xs font-mono" style="color: var(--lw-ink-muted)">
-                <span>{{ secondaryHex }}</span><span>Secondary</span>
+                <span>{{ secondaryHex }}</span><span>{{ t('showcase.tagSecondary') }}</span>
               </div>
             </div>
             <div class="space-y-2">
@@ -119,7 +119,7 @@ const chartValues = [8, 16, 12, 24, 20, 32, 28, 40]
                 {{ t('showcase.tagSoft') }}
               </div>
               <div class="flex justify-between text-xs font-mono" style="color: var(--lw-ink-muted)">
-                <span>{{ accentHex }}</span><span>Tint</span>
+                <span>{{ accentHex }}</span><span>{{ t('showcase.tagSoft') }}</span>
               </div>
             </div>
             <div class="space-y-2">
@@ -127,7 +127,7 @@ const chartValues = [8, 16, 12, 24, 20, 32, 28, 40]
                 {{ t('showcase.tagInk') }}
               </div>
               <div class="flex justify-between text-xs font-mono" style="color: var(--lw-ink-muted)">
-                <span>{{ inkHex }}</span><span>Neutral</span>
+                <span>{{ inkHex }}</span><span>{{ t('showcase.tagInk') }}</span>
               </div>
             </div>
           </div>

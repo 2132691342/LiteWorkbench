@@ -375,13 +375,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_wb_memory_user_key ON wb_memory (user_id, m
 CREATE INDEX IF NOT EXISTS idx_wb_memory_owner ON wb_memory (user_id, weight DESC, updated_at DESC) WHERE deleted = false;
 
 -- ============================== 旧库升级兜底（幂等） ==============================
--- 只针对仍然存在的表；已下线表的语句不得保留，否则建表脚本会整段失败
+-- 只针对仍然存在的表补列；历史遗留表在此段统一清理，DROP 幂等
 
 ALTER TABLE wb_run ADD COLUMN IF NOT EXISTS state varchar(16) NOT NULL DEFAULT 'queued';
 ALTER TABLE wb_event ADD COLUMN IF NOT EXISTS user_id varchar(40) NOT NULL DEFAULT '';
 
--- ============================== 已下线表清理 ==============================
--- 已下线表：wb_flow（可视化编排画布）、wb_task（异步任务预留）、wb_prompt（提示词模板，能力并入技能），DROP 幂等
+-- 历史遗留表清理：DROP 幂等
 DROP TABLE IF EXISTS wb_flow;
 DROP TABLE IF EXISTS wb_task;
 DROP TABLE IF EXISTS wb_prompt;

@@ -268,7 +268,6 @@ WHERE m.deleted = false
   );
 
 -- 已下线菜单：不在种子里，冲突裁剪覆盖不到，按固定 ID 软删并摘除授权
--- seq 47 / 130-133 为提示词模块（能力并入技能），48 / 140-144 为更早下线的菜单
 UPDATE sys_menu SET deleted = true, updated_by = 'system', updated_at = now()
 WHERE deleted = false
   AND menu_id IN (

@@ -34,7 +34,7 @@
 |---|---|
 | `code` | 业务码，`"0"` 成功；`String` 类型，与 HTTP 状态码的 `int` 区分 |
 | `message` | 面向人的提示，失败时可直接展示 |
-| `data` | 业务数据；分页接口为 `PageResult`（见 §19） |
+| `data` | 业务数据；分页接口为 `PageResult`（见 §18） |
 | `requestId` | 链路标识，取自日志 `traceId`（MDC） |
 | `timestamp` | 响应毫秒时间戳 |
 
@@ -460,11 +460,7 @@ data: {"runId":"RUN_..","sessionId":"SESS_..","seq":42,"eventType":"text.delta",
 
 不发送心跳与 `retry`；`assist.end` 与 `assist.error` 必有且仅有其一。
 
-## 16. 提示词（已下线）
-
-提示词模板模块已移除，模板能力并入技能（见 §10）。接口不再提供，`8800` 错误码段保留不回收、状态码映射表中不再列出；历史数据表 `wb_prompt` 在升级时由 `db/schema.sql` 直接 `DROP`。
-
-## 17. 长期记忆
+## 16. 长期记忆
 
 记忆为用户私有资产，按归属用户隔离，登录即可用，不额外挂权限点。
 
@@ -481,11 +477,11 @@ data: {"runId":"RUN_..","sessionId":"SESS_..","seq":42,"eventType":"text.delta",
 - `update` 只改内容与维度，键不可改（改键等于换一条记忆）；`delete` 为逻辑删除；`(memoryId, user_id)` 查不到抛 `MEMORY_NOT_FOUND` `8901`。
 - **容量与淘汰**：单用户上限 200 条。写入前先腾位——按权重最低、最久未更新淘汰，最多尝试 5 次；仍无法腾出空间才抛 `MEMORY_LIMIT_REACHED` `8903`，因此正常写入不会因超限失败。
 
-## 18. 运行派生关系
+## 17. 运行派生关系
 
 `wb_run.relation` 取 `original` / `child`；`child` 由 `task_delegate` 的派生运行使用，`retry` / `fork` / `recovery` 仍为预留（见 `specs/02`）。
 
-## 19. 分页与列表响应
+## 18. 分页与列表响应
 
 分页参数命名与位置见 `AGENTS.md §4`。请求侧归一化规则（`common.PageREQ`）：
 
@@ -497,7 +493,7 @@ data: {"runId":"RUN_..","sessionId":"SESS_..","seq":42,"eventType":"text.delta",
 
 响应侧 `data` 统一为 `PageResult<T>`：`{ "list": [], "total": 0, "page": 1, "size": 20 }`。部分接口（`/log/search`）在上述四字段之外附加视角标识 `scope`。
 
-## 20. 取舍
+## 19. 取舍
 
 | 选择 | 换来什么 | 代价 |
 |---|---|---|

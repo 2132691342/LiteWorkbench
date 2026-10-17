@@ -23,7 +23,10 @@ import java.util.regex.Pattern;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** 权限契约：控制器注解、PermConst 常量、菜单种子三处声明必须一致，漏一处只在运行到该接口时才暴露 */
+/**
+ * 权限契约：控制器注解、PermConst 常量、菜单种子三处声明必须一致。
+ * 三处中漏任何一处，接口只在运行到该功能时才暴露，契约测试在编译期兜住。
+ */
 class PermissionContractTest {
 
     /** 权限标识形态：域:资源:动作；带引号匹配，避免把种子脚本里的 LIKE 'system:role:%' 当成权限点 */

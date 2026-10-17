@@ -36,76 +36,69 @@ function isActive(menu: MenuVO): boolean {
   return Boolean(menu.routePath) && route.path.startsWith(menu.routePath as string)
 }
 
-function handleClick(menu: MenuVO): void {
-  if (menu.children?.length) {
-    const index = expandedDirs.value.indexOf(menu.menuId)
-    if (index >= 0) {
-      expandedDirs.value.splice(index, 1)
-    } else {
-      expandedDirs.value.push(menu.menuId)
-    }
+function toggleDir(menu: MenuVO): void {
+  const index = expandedDirs.value.indexOf(menu.menuId)
+  if (index >= 0) {
+    expandedDirs.value.splice(index, 1)
+  } else {
+    expandedDirs.value.push(menu.menuId)
   }
 }
 </script>
 
 <template>
   <div class="flex flex-col h-full min-h-0">
-    <div class="flex-1 overflow-auto p-4 flex flex-col gap-1 min-h-0">
-      <div class="text-[10px] font-bold uppercase tracking-wider mb-2 px-3 mt-1" style="color: var(--lw-ink-muted)">
-        {{ t('menu.groupNav') }}
+    <!-- 品牌区：与顶栏同高，让侧栏在视觉上从顶栏下方正式接管导航 -->
+    <div class="lw-sidebar__brand">
+      <div class="lw-sidebar__brand-mark" aria-hidden="true">
+        <svg width="18" height="18" viewBox="0 0 32 32" fill="none">
+          <path d="M9 22V10h3v9h6v3H9z" fill="currentColor" />
+          <circle cx="22" cy="12" r="2.4" fill="currentColor" opacity="0.85" />
+        </svg>
       </div>
+      <span class="lw-sidebar__brand-name">{{ t('app.title') }}</span>
+    </div>
+
+    <div class="flex-1 overflow-auto p-3 flex flex-col gap-1 min-h-0">
+      <div class="lw-label px-2 mb-1 mt-1">{{ t('menu.groupNav') }}</div>
 
       <template v-for="menu in primaryMenus" :key="menu.menuId">
-        <div
-          v-if="menu.children?.length"
-          class="h-10 rounded-lg flex items-center px-3 gap-3 cursor-pointer transition-all duration-200 hover:bg-black/5"
-          :style="
-            isBranchActive(menu)
-              ? 'color: var(--lw-primary-ink); font-weight: 600; background: var(--lw-secondary-selected)'
-              : 'color: var(--lw-ink)'
-          "
-          role="button"
-          tabindex="0"
-          :aria-expanded="isExpanded(menu)"
-          @click="handleClick(menu)"
-          @keydown.enter="handleClick(menu)"
-          @keydown.space.prevent="handleClick(menu)"
-        >
-          <el-icon :size="16"><component :is="menuIcon(menu.icon)" /></el-icon>
-          <span class="text-sm">{{ menuLabel(menu.menuName) }}</span>
-          <el-icon :size="12" class="ml-auto transition-transform duration-200" :class="{ 'rotate-90': isExpanded(menu) }">
-            <ArrowRight />
-          </el-icon>
-        </div>
+        <template v-if="menu.children?.length">
+          <button
+            type="button"
+            class="lw-menu__item lw-menu__item--dir"
+            :class="{ 'is-active': isBranchActive(menu) }"
+            :aria-expanded="isExpanded(menu)"
+            @click="toggleDir(menu)"
+          >
+            <el-icon :size="16"><component :is="menuIcon(menu.icon)" /></el-icon>
+            <span>{{ menuLabel(menu.menuName) }}</span>
+            <el-icon :size="12" class="lw-menu__caret" :class="{ 'is-open': isExpanded(menu) }">
+              <ArrowRight />
+            </el-icon>
+          </button>
 
-        <div v-if="menu.children?.length" class="lw-collapse" :class="{ 'is-open': isExpanded(menu) }">
-          <div class="flex flex-col gap-1 pb-1">
-            <router-link
-              v-for="child in menu.children.filter((item) => item.menuType !== 'button' && item.visible)"
-              :key="child.menuId"
-              :to="child.routePath ?? '/'"
-              class="h-9 rounded-lg flex items-center pl-9 pr-3 gap-2 text-sm transition-all duration-200 hover:bg-black/5"
-              :style="
-                isActive(child)
-                  ? 'color: var(--lw-primary-ink); font-weight: 600; background: var(--lw-secondary-selected)'
-                  : 'color: var(--lw-ink)'
-              "
-            >
-              {{ menuLabel(child.menuName) }}
-            </router-link>
+          <div class="lw-collapse" :class="{ 'is-open': isExpanded(menu) }">
+            <div class="flex flex-col gap-1 pb-1">
+              <router-link
+                v-for="child in menu.children.filter((item) => item.menuType !== 'button' && item.visible)"
+                :key="child.menuId"
+                :to="child.routePath ?? '/'"
+                class="lw-menu__item lw-menu__item--leaf pl-9"
+                :class="{ 'is-active': isActive(child) }"
+              >
+                {{ menuLabel(child.menuName) }}
+              </router-link>
+            </div>
           </div>
-        </div>
+        </template>
 
         <!-- 叶子分支必须显式排除带子节点的目录：v-else-if 挂在折叠容器上，目录收起时仍占位但不可见，不会二次渲染同名条目 -->
         <router-link
-          v-else-if="!menu.children?.length && menu.routePath"
+          v-else-if="menu.routePath"
           :to="menu.routePath"
-          class="h-10 rounded-lg flex items-center px-3 gap-3 text-sm transition-all duration-200 hover:bg-black/5"
-          :style="
-            isActive(menu)
-              ? 'color: var(--lw-primary-ink); font-weight: 600; background: var(--lw-secondary-selected)'
-              : 'color: var(--lw-ink)'
-          "
+          class="lw-menu__item lw-menu__item--leaf"
+          :class="{ 'is-active': isActive(menu) }"
         >
           <el-icon :size="16"><component :is="menuIcon(menu.icon)" /></el-icon>
           <span>{{ menuLabel(menu.menuName) }}</span>
@@ -113,7 +106,7 @@ function handleClick(menu: MenuVO): void {
       </template>
     </div>
 
-    <div class="p-4 shrink-0">
+    <div class="p-3 shrink-0">
       <div
         class="rounded-card relative overflow-hidden p-4 lw-shadow-sm transition-transform duration-200 hover:scale-[1.02]"
         style="background-color: var(--lw-secondary)"

@@ -85,7 +85,7 @@ Agent **无状态**：上下文不存在 Agent 里，每次运行由工作台从
 
 两个声明式属性决定内核行为：`parallelSafe`（同批是否可并发，默认 true；写类工具 `python_exec` / `file_write` / `memory_write` / `task_delegate` 为 false）、`emitsPlan`（输出是结构化计划，内核额外产出一条 `plan.updated`，当前只有 `task_plan`）。
 
-参数绑定与执行全部在 `ToolRegistry` 收口：参数按声明名取用，缺失时基本类型给零值、包装类型给 null；未知工具、参数非法 JSON、超时、池满（`ToolPool` 拒绝）、工具抛异常一律转 `ERROR:` 文本，单个工具失败不会吞掉整批或整次运行。`invokeBatch` 的并发规则：批内**全部** `parallelSafe` 才并发提交，任一为 false 则整批串行；结果严格按下标返回，与模型声明的顺序一一对应。
+参数绑定与执行全部在 `ToolRegistry` 收口：参数按声明名取用，缺失时基本类型给零值、包装类型给 null；未知工具、参数非法 JSON、超时、池满（`RejectedExecutionException`）、工具抛异常一律转 `ERROR:` 文本，单个工具失败不会吞掉整批或整次运行。`invokeBatch` 的并发规则：批内**全部** `parallelSafe` 才并发提交，任一为 false 则整批串行；结果严格按下标返回，与模型声明的顺序一一对应。
 
 `http_get` 是唯一接触外网的 `safe` 工具，因此在执行前强制目标校验：只放行 `http` / `https`，对解析出的**全部** IP 逐个判定，命中回环 / 任意本地 / 链路本地 / 私有网段 / 组播即拒答，域名解析失败同样拒答。返回文本固定 8000 字符截断。校验失败与网络失败都转 `ERROR:` 文本（错误码 `5006`），让模型换一个公开地址而不是反复重试同一个内网地址。
 

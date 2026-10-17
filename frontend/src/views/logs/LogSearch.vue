@@ -314,6 +314,20 @@ function fieldLabel(key: string): string {
   return te(i18nKey) ? t(i18nKey) : key
 }
 
+/** 级别色调：INFO 主靛 / WARN 警示 / ERROR 错误，同状态同色不按页自选 */
+function levelTone(level: string): 'primary' | 'warning' | 'error' | 'muted' {
+  const value = (level ?? 'INFO').toUpperCase()
+  if (value === 'ERROR') return 'error'
+  if (value === 'WARN') return 'warning'
+  if (value === 'INFO') return 'primary'
+  return 'muted'
+}
+
+/** 行号：链路钻取升序时给 1 起的稳定序号，倒序页仍按展示顺序编号 */
+function rowIndex(index: number): string {
+  return String((query.page - 1) * query.size + index + 1).padStart(2, '0')
+}
+
 onMounted(() => {
   applyPreset('24h')
 })
@@ -434,12 +448,14 @@ onBeforeUnmount(() => {
           {{ t('logs.moreFilters') }}
           <span v-if="advancedCount > 0 && !advancedOpen" class="lw-filter-badge">{{ advancedCount }}</span>
         </LwButton>
-        <el-checkbox v-model="showCols.ts" size="small">{{ t('logs.colTs') }}</el-checkbox>
-        <el-checkbox v-model="showCols.level" size="small">{{ t('logs.colLevel') }}</el-checkbox>
-        <el-checkbox v-model="showCols.logger" size="small">{{ t('logs.colLogger') }}</el-checkbox>
-        <el-checkbox v-model="showCols.traceId" size="small">{{ t('logs.colTraceId') }}</el-checkbox>
-        <el-checkbox v-model="showCols.sessionId" size="small">{{ t('logs.colSessionId') }}</el-checkbox>
-        <el-checkbox v-model="showCols.exception" size="small">{{ t('logs.colException') }}</el-checkbox>
+        <span class="lw-colbar">
+          <el-checkbox v-model="showCols.ts" size="small">{{ t('logs.colTs') }}</el-checkbox>
+          <el-checkbox v-model="showCols.level" size="small">{{ t('logs.colLevel') }}</el-checkbox>
+          <el-checkbox v-model="showCols.logger" size="small">{{ t('logs.colLogger') }}</el-checkbox>
+          <el-checkbox v-model="showCols.traceId" size="small">{{ t('logs.colTraceId') }}</el-checkbox>
+          <el-checkbox v-model="showCols.sessionId" size="small">{{ t('logs.colSessionId') }}</el-checkbox>
+          <el-checkbox v-model="showCols.exception" size="small">{{ t('logs.colException') }}</el-checkbox>
+        </span>
       </div>
       <transition name="lw-fade">
         <div v-if="advancedOpen" class="flex flex-wrap items-center gap-2 mt-3">
@@ -502,19 +518,27 @@ onBeforeUnmount(() => {
           />
         </div>
       </transition>
+      <p class="lw-tip">{{ t('logs.tipShort') }}</p>
     </LwCard>
 
     <LwCard>
       <LwPageState :loading="loading" :error="error" :empty="!docs.length" :skeleton-rows="8" @retry="search">
-        <div v-if="traceMode" class="text-xs mb-3 px-3 py-2 rounded-lg" style="background: var(--lw-secondary-tint); color: var(--lw-primary-ink)">
+        <div v-if="traceMode" class="lw-trace-tip">
           {{ t('logs.traceModeTip', { total }) }}
         </div>
         <!-- 日志流：等宽整行，level 色块 + 时间戳前缀，点行展开全文与链路字段 -->
-        <div class="lw-logstream rounded-lg border overflow-hidden" style="border-color: var(--lw-border)">
+        <div class="lw-logstream">
+          <div class="lw-logstream__head">
+            <span class="lw-logstream__no">#</span>
+            <span v-if="showCols.ts" class="lw-logstream__col lw-logstream__col--ts">{{ t('logs.colTs') }}</span>
+            <span v-if="showCols.level" class="lw-logstream__col lw-logstream__col--level">{{ t('logs.colLevel') }}</span>
+            <span class="lw-logstream__col lw-logstream__col--msg">{{ t('logs.colMessage') }}</span>
+            <span v-if="showCols.exception" class="lw-logstream__col lw-logstream__col--flag">{{ t('logs.colException') }}</span>
+          </div>
           <div
-            v-for="doc in displayDocs"
+            v-for="(doc, index) in displayDocs"
             :key="doc.logId"
-            class="lw-logline group cursor-pointer transition-colors duration-150"
+            class="lw-logline"
             :class="{ 'is-open': expanded === doc.logId }"
             role="button"
             tabindex="0"
@@ -522,40 +546,55 @@ onBeforeUnmount(() => {
             @click="expanded = expanded === doc.logId ? '' : doc.logId"
             @keydown.enter="expanded = expanded === doc.logId ? '' : doc.logId"
           >
-            <div class="flex items-baseline gap-2 px-3 py-1.5 min-w-0">
-              <span v-if="showCols.ts" class="lw-logline__ts shrink-0">{{ formatTime(doc.ts) }}</span>
-              <span
-                v-if="showCols.level"
-                class="lw-logline__level shrink-0"
-                :class="`is-${(doc.level ?? 'INFO').toLowerCase()}`"
-              >{{ doc.level }}</span>
-              <span v-if="showCols.logger" class="lw-logline__logger shrink-0 hidden lg:inline max-w-[220px] truncate">{{ doc.logger }}</span>
-              <span v-if="showCols.traceId" class="lw-logline__logger shrink-0 hidden xl:inline max-w-[140px] truncate font-mono">{{ doc.traceId }}</span>
-              <span v-if="showCols.sessionId" class="lw-logline__logger shrink-0 hidden xl:inline max-w-[140px] truncate font-mono">{{ doc.sessionId }}</span>
-              <span class="flex-1 min-w-0 lw-logline__msg">
-                <template v-for="(seg, index) in highlight(doc.message, query.field === 'message' || query.field === 'exception' ? query.keyword : '')" :key="index">
-                  <mark v-if="seg.hit" class="lw-mark">{{ seg.text }}</mark>
-                  <span v-else>{{ seg.text }}</span>
-                </template>
+            <div class="lw-logline__main">
+              <span class="lw-logstream__no">{{ rowIndex(index) }}</span>
+              <span v-if="showCols.ts" class="lw-logline__col lw-logline__col--ts">{{ formatTime(doc.ts) }}</span>
+              <span v-if="showCols.level" class="lw-logline__col lw-logline__col--level">
+                <LwTag :tone="levelTone(doc.level)">{{ doc.level }}</LwTag>
               </span>
-              <span v-if="showCols.exception && doc.exception" class="lw-logline__ex shrink-0">{{ t('logs.hasException') }}</span>
-              <el-icon class="shrink-0 transition-transform duration-200" :class="{ 'rotate-180': expanded === doc.logId }" style="color: var(--lw-ink-disabled)">
+              <span class="lw-logline__col lw-logline__col--msg">
+                <span class="lw-logline__msg">
+                  <template v-for="(seg, segIndex) in highlight(doc.message, query.field === 'message' || query.field === 'exception' ? query.keyword : '')" :key="segIndex">
+                    <mark v-if="seg.hit" class="lw-mark">{{ seg.text }}</mark>
+                    <span v-else>{{ seg.text }}</span>
+                  </template>
+                </span>
+                <span v-if="showCols.logger && doc.logger" class="lw-logline__meta">{{ doc.logger }}</span>
+                <span v-if="showCols.traceId && doc.traceId" class="lw-logline__meta lw-logline__meta--mono">{{ doc.traceId }}</span>
+                <span v-if="showCols.sessionId && doc.sessionId" class="lw-logline__meta lw-logline__meta--mono">{{ doc.sessionId }}</span>
+              </span>
+              <span v-if="showCols.exception" class="lw-logline__col lw-logline__col--flag">
+                <LwTag v-if="doc.exception" tone="error">{{ t('logs.hasException') }}</LwTag>
+              </span>
+              <el-icon class="lw-logline__caret" :class="{ 'is-flip': expanded === doc.logId }">
                 <ArrowDown />
               </el-icon>
             </div>
             <transition name="lw-fade">
-              <div v-if="expanded === doc.logId" class="px-3 pb-3 flex flex-col gap-2">
-                <div class="text-xs font-bold" style="color: var(--lw-ink-muted)">{{ t('logs.fullMessage') }}</div>
-                <pre class="whitespace-pre-wrap break-all p-3 rounded-lg max-h-64 overflow-auto" style="background: var(--lw-surface); color: var(--lw-ink); border: 1px solid var(--lw-border)">{{ doc.message || t('logs.noMessage') }}</pre>
-                <div class="flex flex-wrap items-center gap-3 text-xs opacity-70 font-mono">
-                  <span>traceId: {{ doc.traceId || '-' }}</span>
-                  <span>logger: {{ doc.logger }}</span>
-                  <span>thread: {{ doc.thread || '-' }}</span>
-                  <span v-if="doc.userId">userId: {{ doc.userId }}</span>
-                  <span v-if="doc.sessionId">sessionId: {{ doc.sessionId }}</span>
-                  <span v-if="doc.runId">runId: {{ doc.runId }}</span>
-                </div>
-                <div class="flex flex-wrap items-center gap-2">
+              <div v-if="expanded === doc.logId" class="lw-logline__detail">
+                <div class="lw-detail__label">{{ t('logs.fullMessage') }}</div>
+                <pre class="lw-detail__pre">{{ doc.message || t('logs.noMessage') }}</pre>
+                <dl class="lw-detail__fields">
+                  <div class="lw-detail__field">
+                    <dt>{{ t('logs.fieldTraceId') }}</dt><dd>{{ doc.traceId || '—' }}</dd>
+                  </div>
+                  <div class="lw-detail__field">
+                    <dt>{{ t('logs.fieldLogger') }}</dt><dd>{{ doc.logger || '—' }}</dd>
+                  </div>
+                  <div class="lw-detail__field">
+                    <dt>{{ t('logs.thread') }}</dt><dd>{{ doc.thread || '—' }}</dd>
+                  </div>
+                  <div v-if="doc.userId" class="lw-detail__field">
+                    <dt>{{ t('logs.userId') }}</dt><dd>{{ doc.userId }}</dd>
+                  </div>
+                  <div v-if="doc.sessionId" class="lw-detail__field">
+                    <dt>{{ t('logs.colSessionId') }}</dt><dd>{{ doc.sessionId }}</dd>
+                  </div>
+                  <div v-if="doc.runId" class="lw-detail__field">
+                    <dt>{{ t('logs.runId') }}</dt><dd>{{ doc.runId }}</dd>
+                  </div>
+                </dl>
+                <div class="lw-detail__actions">
                   <LwButton variant="secondary" size="sm" @click.stop="copyTraceId(doc.traceId ?? '')">
                     {{ copiedId === doc.traceId ? t('logs.copied') : t('logs.copyTraceId') }}
                   </LwButton>
@@ -574,11 +613,7 @@ onBeforeUnmount(() => {
                     {{ t('logs.filterByRun') }}
                   </LwButton>
                 </div>
-                <pre
-                  v-if="doc.exception"
-                  class="whitespace-pre-wrap break-all max-h-64 overflow-auto p-3 rounded-lg"
-                  style="background: var(--lw-error-tint); color: var(--lw-error-ink)"
-                >{{ doc.exception }}</pre>
+                <pre v-if="doc.exception" class="lw-detail__pre lw-detail__pre--error">{{ doc.exception }}</pre>
               </div>
             </transition>
           </div>
@@ -600,20 +635,70 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.lw-mark {
-  background-color: var(--lw-secondary-tint);
-  color: var(--lw-primary-ink);
-  border-radius: 2px;
-  padding: 0 1px;
+.lw-tip {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--lw-ink-muted);
 }
 
-/* 日志流行式展示：等宽字体、行高压低、奇偶微差，长消息内部截断 */
+.lw-colbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.lw-trace-tip {
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border-radius: var(--lw-radius-control);
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--lw-secondary-tint);
+  color: var(--lw-primary-ink);
+}
+
+/* ===== 日志流行式展示：统一字号、统一行高、等宽数字，奇偶微差 ===== */
 .lw-logstream {
+  border-radius: var(--lw-radius-control);
+  border: 1px solid var(--lw-border);
   background: var(--lw-surface-raised);
   font-family: ui-monospace, 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.5;
+  overflow: hidden;
 }
-.lw-logline + .lw-logline {
-  border-top: 1px solid var(--lw-border);
+
+/* 表头与数据行共用同一套栅格：列宽只在这里定义一次，行不会左右错位 */
+.lw-logstream__head,
+.lw-logline__main {
+  display: grid;
+  grid-template-columns: 28px 132px 60px minmax(0, 1fr) 56px;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+}
+.lw-logstream__head {
+  height: 32px;
+  border-bottom: 1px solid var(--lw-border);
+  background: var(--lw-surface-raised);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--lw-ink-muted);
+}
+.lw-logstream__no {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--lw-ink-disabled);
+  text-align: right;
+}
+.lw-logline {
+  cursor: pointer;
+  transition: background var(--lw-dur-fast) var(--lw-ease);
+}
+.lw-logline:nth-child(even) {
+  background: var(--lw-surface);
 }
 .lw-logline:hover {
   background: var(--lw-primary-tint);
@@ -621,48 +706,139 @@ onBeforeUnmount(() => {
 .lw-logline.is-open {
   background: var(--lw-secondary-tint);
 }
-.lw-logline__ts {
-  font-size: 11px;
-  color: var(--lw-ink-disabled);
+.lw-logline__main {
+  min-height: 36px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+.lw-logline__col {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lw-logline__col--ts {
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
+  color: var(--lw-ink-muted);
 }
-.lw-logline__level {
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  padding: 1px 6px;
-  border-radius: var(--lw-radius-tag);
-  line-height: 1.5;
+.lw-logline__col--level {
+  display: flex;
+  align-items: center;
 }
-.lw-logline__level.is-info {
-  background: var(--lw-secondary-tint);
-  color: var(--lw-primary-ink);
+.lw-logline__col--msg {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
-.lw-logline__level.is-warn {
-  background: var(--lw-warning-tint);
-  color: var(--lw-warning-ink);
-}
-.lw-logline__level.is-error {
-  background: var(--lw-error-tint);
-  color: var(--lw-error-ink);
-}
-.lw-logline__logger {
-  font-size: 11px;
-  color: var(--lw-ink-disabled);
+.lw-logline__col--flag {
+  display: flex;
+  justify-content: flex-end;
 }
 .lw-logline__msg {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--lw-ink);
+}
+.lw-logline__meta {
+  flex: none;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--lw-ink-disabled);
+  padding-left: 8px;
+  border-left: 1px solid var(--lw-border);
+}
+.lw-logline__meta--mono {
+  font-variant-numeric: tabular-nums;
+}
+.lw-logline__caret {
+  flex: none;
+  color: var(--lw-ink-disabled);
+  transition: transform var(--lw-dur) var(--lw-ease), color var(--lw-dur) var(--lw-ease);
+}
+.lw-logline__caret.is-flip {
+  transform: rotate(180deg);
+  color: var(--lw-primary-ink);
+}
+
+/* ===== 展开详情：完整正文 + 链路字段 + 动作，等宽保留换行 ===== */
+.lw-logline__detail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 12px 14px;
+  border-top: 1px dashed var(--lw-border);
+}
+.lw-detail__label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--lw-ink-muted);
+}
+.lw-detail__pre {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--lw-radius-control);
+  border: 1px solid var(--lw-border);
+  background: var(--lw-surface);
+  color: var(--lw-ink);
+  font-family: inherit;
   font-size: 12.5px;
   line-height: 1.6;
-  color: var(--lw-ink);
-  word-break: break-all;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 260px;
+  overflow: auto;
 }
-.lw-logline__ex {
-  font-size: 10px;
-  font-weight: 800;
-  padding: 1px 6px;
-  border-radius: var(--lw-radius-tag);
+.lw-detail__pre--error {
   background: var(--lw-error-tint);
+  border-color: var(--lw-error);
   color: var(--lw-error-ink);
+}
+.lw-detail__fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  margin: 0;
+}
+.lw-detail__field {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11.5px;
+}
+.lw-detail__field dt {
+  color: var(--lw-ink-disabled);
+  font-weight: 700;
+}
+.lw-detail__field dd {
+  margin: 0;
+  color: var(--lw-ink-muted);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 260px;
+}
+.lw-detail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lw-mark {
+  background-color: var(--lw-secondary-tint);
+  color: var(--lw-primary-ink);
+  border-radius: 2px;
+  padding: 0 1px;
 }
 
 /* 高级筛选计数角标 */
@@ -678,5 +854,26 @@ onBeforeUnmount(() => {
   color: var(--lw-on-primary);
   font-size: 10px;
   font-weight: 700;
+}
+
+/* 窄屏收起次要列，保留级别与正文两列 */
+@media (max-width: 900px) {
+  .lw-logstream__head,
+  .lw-logline__main {
+    grid-template-columns: 28px 60px minmax(0, 1fr);
+  }
+  .lw-logline__col--ts {
+    display: none;
+  }
+}
+@media (max-width: 640px) {
+  .lw-logstream__head,
+  .lw-logline__main {
+    grid-template-columns: 24px minmax(0, 1fr);
+  }
+  .lw-logline__col--level,
+  .lw-logline__col--flag {
+    display: none;
+  }
 }
 </style>

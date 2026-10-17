@@ -99,11 +99,16 @@ npm run build       # 产物 frontend/dist
 
 ## 6. 测试
 
+只有两条：一条长链路（事件管线）、一条跨模块契约（权限点三处一致）。全量 3 秒左右，不依赖中间件与 Spring 容器。
+
 ```bash
-cd backend && mvn test
+cd backend
+mvn -o test                                  # 全量
+mvn -o test -Dtest=RunEventPipelineTest       # 只跑事件长链路
+mvn -o test -Dtest=PermissionContractTest     # 只跑权限契约
 ```
 
-用例清单、保留标准与「明确不写的测试」见 [AGENTS.md](../AGENTS.md) §14——只有长链路与跨模块契约测试，随 `mvn test` 一次跑完（约 1 秒），全部不依赖中间件与 Spring 容器。前端只有类型检查，没有测试运行器；`npm run build` 自带 `vue-tsc --noEmit`（类型不过直接中断构建），`npm run typecheck` 用于单独快速校验，两者就是前端 CI 的全部校验。
+用例清单、保留标准与「明确不写的测试」见 [AGENTS.md](../AGENTS.md) §14。前端没有测试运行器，`npm run typecheck`（数秒）与 `npm run build`（先类型检查再构建）就是前端 CI 的全部校验。
 
 ## 7. 常见改动入口
 
@@ -112,11 +117,11 @@ cd backend && mvn test
 | 加一个工具 | `agent/tool/WorkbenchTools.java` + `resources/db/data.sql` 的 `wb_tool` 种子 |
 | 加一个模型协议 | `agent/model/` 新增客户端 + `agent/ModelFactory.java` 登记 + `domain/constant/ProviderPresetEnum.java` |
 | 改推理循环 | `agent/loop/AgentLoop.java`（纯逻辑，可离线单测） |
-| 改事件归一 | `agent/AgentEventAdapter.java` + `domain/constant/EventTypeEnum.java` |
+| 改事件归一 | `agent/AgentEventAdapter.java` + `domain/constant/EventTypeEnum.java`，跑 `mvn -o test -Dtest=RunEventPipelineTest` |
 | 改推送节拍或水位快照 | `service/RunService.java` 的 `pumpLocked` / `pushSnapshotIfNeeded` + `domain/constant/RunConst.java` 的节拍常量 |
 | 改规划器 / 记忆 / 子运行 | `agent/tool/PlanNormalizer.java`、`service/MemoryService.java`、`service/SubRunService.java` |
 | 多出一个线程池 | `config/ExecutorConfig.java`（禁止在业务类里裸建线程池，见 AGENTS.md §17） |
-| 加一个权限点 | `resources/db/data.sql` 的菜单种子（`menu_type=button`）+ 控制器注解，`PermissionContractTest` 会校验一致性 |
+| 加一个权限点 | `resources/db/data.sql` 的菜单种子（`menu_type=button`）+ 控制器注解，跑 `mvn -o test -Dtest=PermissionContractTest` |
 | 加一个内置角色 | `domain/constant/RoleCodeConst.java` + `resources/db/data.sql` 的角色与授权 |
 | 加一类日志检索字段 | `observability/ManticoreLogAppender.java` + `mapper/LogSearchMapper.java` 表定义 |
 | 改 SQL / HTTP 调用审计 | `observability/SqlAuditInterceptor.java` / `HttpAuditFilter.java` / `ObserveStats.java`；脱敏规则集中在 `observability/LogSanitizer.java`，阈值在 `config/ObserveProperties.java` |
@@ -129,7 +134,7 @@ cd backend && mvn test
 
 ## 8. 仓库里的可执行资产
 
-只有下面这些，各自单一职责，不在别处另放临时脚本：
+只有这些，各自单一职责，不在别处另放临时脚本。新增脚本前先想清楚能不能并进这三个中的一个。
 
 | 文件 | 职责 |
 |---|---|
@@ -141,3 +146,5 @@ cd backend && mvn test
 | `deploy/.env.infra.example` | 部署机密的字段清单，新增变量只改这里 |
 | `deploy/deploy-app.sh` | 云主机侧发布：拉镜像 → 重建容器 → 清端口转发残留 → 健康自检 → 失败回滚 |
 | `.github/workflows/ci.yml` | 流水线：后端构建与测试 → 前端类型检查与构建 → 构建镜像推仓库 → 同步编排与脚本 → SSH 执行发布 |
+
+测试与可执行资产都收敛在这两处，**没有** `scripts/` 目录，也没有散落的 `.mjs` / `.ps1` / `.py` 联调脚本——临时联调脚本用完即删，不进仓库。

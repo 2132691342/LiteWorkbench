@@ -291,6 +291,92 @@ body {
   color: var(--lw-on-primary);
 }
 
+/* ===== 侧栏：品牌区 + 菜单组，层级靠背景差与选中底 ===== */
+.lw-sidebar__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: var(--lw-topbar-h);
+  padding: 0 16px;
+  border-bottom: 1px solid var(--lw-border);
+  flex: none;
+}
+.lw-sidebar__brand-mark {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--lw-radius-control);
+  background: var(--lw-secondary);
+  color: var(--lw-on-secondary);
+  box-shadow: var(--lw-shadow-sm);
+  transition: transform var(--lw-dur) var(--lw-ease);
+}
+.lw-sidebar__brand-mark:hover {
+  transform: scale(1.05);
+}
+.lw-sidebar__brand-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--lw-ink);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 菜单项：目录 40px / 子项 36px，悬停黑 5% 叠加，选中浅靛底 + 主靛字 */
+.lw-menu__item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--lw-ink);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--lw-radius-control);
+  transition: background var(--lw-dur-fast) var(--lw-ease), color var(--lw-dur-fast) var(--lw-ease);
+}
+.lw-menu__item--dir {
+  height: 40px;
+  padding: 0 10px;
+}
+.lw-menu__item--leaf {
+  height: 36px;
+  padding: 0 10px;
+}
+.lw-menu__item:hover {
+  background: rgba(15, 23, 42, 0.05);
+  color: var(--lw-ink);
+}
+.lw-menu__item.is-active {
+  background: var(--lw-secondary-selected);
+  color: var(--lw-primary-ink);
+  font-weight: 600;
+}
+.lw-menu__item:focus-visible {
+  outline: 2px solid var(--lw-primary);
+  outline-offset: -2px;
+}
+.lw-menu__caret {
+  margin-left: auto;
+  flex: none;
+  opacity: 0.5;
+  transition: transform var(--lw-dur) var(--lw-ease-out), opacity var(--lw-dur) var(--lw-ease);
+}
+.lw-menu__item.is-active .lw-menu__caret,
+.lw-menu__item:hover .lw-menu__caret {
+  opacity: 1;
+}
+.lw-menu__caret.is-open {
+  transform: rotate(90deg);
+}
+
 /* ===== 运行记录：列表行与时间线块 ===== */
 .run-row {
   display: flex;

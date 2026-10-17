@@ -399,16 +399,36 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 
 ## 14. 测试约定
 
-只保留覆盖长链路与跨模块契约的测试；简单断言、纯算法与薄 mock 单元测试一律不写，同一行为的重复覆盖也不写。当前 2 个文件 2 个用例，随 `mvn test` 一次跑完（约 1 秒），全部不依赖中间件与 Spring 容器。
+只保留覆盖长链路与跨模块契约的测试；简单断言、纯算法与薄 mock 单元测试一律不写，同一行为的重复覆盖也不写。当前 2 个文件 2 个用例，随 `mvn test` 一次跑完（约 3 秒，离线 `mvn -o test` 约 1.5 秒），全部不依赖中间件与 Spring 容器。
 
-| 文件 | 用例 | 覆盖 |
-|---|---|---|
-| `service/RunEventPipelineTest` | 1 | 事件长链路一条链跑通：内核事件归一、批内合帧（增量合并、类型切换保序）、工具起止与结果、模型用量入账，以及超长裁剪、失败工具标记、异常事件不带正文 |
-| `config/PermissionContractTest` | 1 | 跨模块契约：控制器注解 + `PermConst` + 菜单种子三处声明的权限点必须一致，漏一处即测试失败；菜单种子从 `db/data.sql` 解析 |
+改一处只想跑相关的一条时，用 `-Dtest=` 指定类，别整目录跑：
+
+```bash
+cd backend
+mvn -o test                                            # 全量，默认入口
+mvn -o test -Dtest=RunEventPipelineTest                # 只跑事件长链路
+mvn -o test -Dtest=PermissionContractTest               # 只跑权限契约（新增权限点、菜单种子、控制器时跑这条）
+```
+
+| 文件 | 用例 | 覆盖 | 什么时候必须跑 |
+|---|---|---|---|
+| `service/RunEventPipelineTest` | 1 | 事件长链路一条链跑通：内核事件归一、批内合帧（增量合并、类型切换保序）、工具起止与结果、模型用量入账，以及超长裁剪、失败工具标记、异常事件不带正文 | 改 `agent/AgentEventAdapter`、`service/RunService.mergeFrames`、`domain/constant/EventTypeEnum` 后 |
+| `config/PermissionContractTest` | 1 | 跨模块契约：控制器注解 + `PermConst` + 菜单种子三处声明的权限点必须一致，漏一处即测试失败；菜单种子从 `db/data.sql` 解析 | 新增/修改权限点、改控制器注解、改 `db/data.sql` 菜单种子后 |
 
 **明确不写的测试**：Mapper XML 的解析由应用启动即校验（错了起不来）；路由兜底的命中范围由容器验收清单里的一次 `curl` 探活覆盖——在测试里手工模拟 Spring 容器初始化只会复制框架行为，并随框架升级失效。
 
 用例名用中文直述业务断言；一个用例串起一条完整链路或一个契约；契约测试集中在 `config/PermissionContractTest`，不按契约拆多个文件。资源扫描一律走 `classpath*:` 模式，禁止用目录列举（打包成 JAR 后失效）；前端不写快照测试与纯渲染测试。
+
+### 14.1 前端的校验
+
+前端没有测试运行器，校验就是类型检查与构建两步，都由 `npm run` 暴露：
+
+```bash
+cd frontend
+npm run typecheck    # vue-tsc --noEmit，单独快速校验
+npm run build        # 先跑 typecheck 再构建，类型不过直接中断
+```
+改前端只跑 `typecheck`（数秒）；提交前再跑一次 `build`。
 
 ## 15. 依赖使用约定
 
@@ -477,7 +497,7 @@ throw new BizException(ErrorCodeEnum.SESSION_NOT_FOUND, sessionId);
 | `.dockerignore` 必须排除 `**/node_modules` 与 `**/target` | `COPY frontend .` 会把 Windows 二进制覆盖进 Alpine 镜像导致构建失败，同时把几百 MB 无谓产物塞进构建上下文 |
 | 容器内 Maven 必须挂可达仓库配置（`deploy/maven-settings.xml`） | 直连 `repo.maven.apache.org` 在部分网络下 SSL 握手中断，CI 构建必失败；且 settings.xml 要放在 `--mount=type=cache` 挂载目标之外，否则被缓存遮蔽读不到 |
 
-### 17. 并发与线程池治理
+## 17. 并发与线程池治理
 
 单个容器跑全部异步能力，**禁止在业务类里裸 `Executors.newXxx()`**。所有线程资源由 `config/ExecutorConfig` 一处声明，按用途分池并各自命名，业务只做构造注入。
 

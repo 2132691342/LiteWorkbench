@@ -724,5 +724,3 @@ export interface AssistEvent {
 export interface DocSearchParams extends PageREQ {
   category?: string
 }
-
-/* ===== 提示词模块已下线，模板能力并入技能（见 wb_skill_seed） ===== */

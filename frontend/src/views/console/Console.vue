@@ -64,6 +64,13 @@ async function updateWorkspace(workspaceId: string): Promise<void> {
   await sessionStore.update({ sessionId, workspaceId })
 }
 
+/** 输入框就地新建工作区：创建后立即切到新桶，用户不必离开当前对话 */
+async function onWorkspaceCreated(workspaceId: string): Promise<void> {
+  const list = await workspaceApi.list()
+  workspaces.value = list
+  await updateWorkspace(workspaceId)
+}
+
 onMounted(async () => {
   const [providerList, workspaceList] = await Promise.all([
     providerApi.list().catch(() => [] as ProviderVO[]),
@@ -284,7 +291,9 @@ onMounted(async () => {
         </LwButton>
       </div>
 
-      <div class="flex-1 overflow-auto p-3 flex flex-col gap-1 min-h-0">
+      <!-- 会话列表按内容高度（上限 46% 后内部滚动），运行历史吸收剩余空间：
+           反过来写会让中间的会话区被 flex-1 拉成一大片空白 -->
+      <div class="overflow-auto p-3 flex flex-col gap-1 min-h-0 max-h-[46%] shrink-0">
         <LwSkeleton v-if="sessionStore.loading" :rows="4" />
         <LwErrorBar
           v-else-if="sessionStore.error"
@@ -323,9 +332,12 @@ onMounted(async () => {
         </div>
       </div>
 
-      <div class="h-56 border-t flex flex-col min-h-0" style="border-color: var(--lw-border)">
-        <div class="px-4 py-2 shrink-0">
+      <div class="flex-1 border-t flex flex-col min-h-0" style="border-color: var(--lw-border)">
+        <div class="px-4 py-2 shrink-0 flex items-center justify-between">
           <span class="lw-label">{{ t('console.runHistory') }}</span>
+          <span v-if="runStore.runs.length" class="text-[10px] font-bold" style="color: var(--lw-ink-disabled)">
+            {{ runStore.runs.length }}
+          </span>
         </div>
         <div class="flex-1 overflow-auto px-3 pb-3 flex flex-col gap-1">
           <LwEmpty v-if="!runStore.runs.length" :description="t('console.noRuns')" />
@@ -478,6 +490,7 @@ onMounted(async () => {
           @new-session="createSession"
           @update:model="updateModel"
           @update:workspace="updateWorkspace"
+          @workspace-created="onWorkspaceCreated"
         />
       </footer>
     </section>

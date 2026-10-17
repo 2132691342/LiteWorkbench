@@ -148,8 +148,8 @@ UnoCSS 主题只映射令牌，组件禁止硬编码色值：颜色 `lw-<别名>
 └────────┴─────────────────────────────────┘
 ```
 
-- 顶栏 `--lw-topbar-h`、白底 `--lw-surface-raised`、下边框 `--lw-border`、内边距 `px-4 md:px-6`。左侧品牌方块 32px、`--lw-secondary` 底 + `--lw-on-primary` 图标 + `--lw-shadow-sm`，后接产品名（18px 加粗）；右侧为语言切换（ghost sm）与用户区（昵称/角色 + 36px 圆形头像，`--lw-surface-subtle` 底 + `--lw-primary-ink` 字 + `--lw-shadow-sm`，悬停放大 1.05）。
-- 侧栏宽 `--lw-sidebar-w`、白底、右边框。菜单组标题 10px 大写 `--lw-ink-muted`（`px-3 mb-2`）；一级菜单项 `h-10` 圆角 8px，二级子项 `h-9`，悬停为黑色 5% 叠加，选中为 `--lw-primary-ink` 文字 + 字重 600 + `--lw-secondary-selected` 底；目录展开箭头 200ms 旋转。
+- 顶栏 `--lw-topbar-h`、白底 `--lw-surface-raised`、下边框 `--lw-border`、内边距 `px-4 md:px-6`。左侧仅留移动端抽屉唤出按钮与产品名（`lg` 以下可见），桌面端品牌块收敛进侧栏，顶栏不再重复放一枚 logo；右侧为问候语（`md` 以下隐藏）、语言切换（ghost sm）与用户区（昵称/角色 + 36px 圆形头像，`--lw-surface-subtle` 底 + `--lw-primary-ink` 字 + `--lw-shadow-sm`，悬停放大 1.05）。
+- 侧栏宽 `--lw-sidebar-w`、白底、右边框。侧栏顶部是与顶栏同高（`--lw-topbar-h`）的品牌区：32px 品牌方块 `--lw-secondary` 底 + `--lw-on-secondary` 图标 + `--lw-shadow-sm`（悬停放大 1.05）后接产品名（14px 加粗），下边框 `--lw-border`。菜单组标题 10px 大写 `--lw-ink-muted`（`px-2 mb-1`）；一级菜单项 `h-10` 圆角 8px，二级子项 `h-9`，悬停为黑色 5% 叠加，选中为 `--lw-primary-ink` 文字 + 字重 600 + `--lw-secondary-selected` 底；目录展开箭头 200ms 旋转。菜单项统一走 `.lw-menu__item` 系列类（`--dir` / `--leaf` 两档高度），不在各页内联书写悬停与选中色。
 - 侧栏底部固定品牌卡：`--lw-secondary` 底 + `--lw-on-secondary` 字，12px 圆角 + `--lw-shadow-sm`，内叠一层 `--lw-on-primary` 10% 蒙版；内容为产品名（12px 加粗）、口号（10px）、`用户名 · 角色码`（10px 等宽）；悬停放大 1.02。
 - 主区 `lw-page`（`p-6 flex flex-col gap-6`）滚屏，侧栏与顶栏固定；断点 `lg` 以下侧栏收起为抽屉（遮罩 `--lw-overlay`，滑入 `--lw-dur`）。
 - 指标卡：`h-32`，白底 + 1px 边框 + 12px 圆角 + `--lw-shadow-sm`，右上角 56px 图标 `opacity-10`，悬停时图标放大 1.1、卡片上移 2px 并加 `--lw-shadow-md`。
@@ -286,7 +286,7 @@ UnoCSS 主题只映射令牌，组件禁止硬编码色值：颜色 `lw-<别名>
 | 容器 | 单一圆角框：`--lw-radius-card` + `--lw-field-border`，静止 `--lw-shadow-sm`；悬停转 `--lw-field-border-hover`；聚焦或面板展开转 `--lw-field-border-focus` + `--lw-field-focus-ring`。**禁止**在框内再嵌一层带边框的输入元素 |
 | 已选项行 | 输入区之上，`flex-wrap gap-2`，**无边框无底**，靠间距与输入区分层；有 chip 时才出现，容器高度在 `--lw-dur` 内过渡。技能 chip `--lw-surface-subtle` 底 + `--lw-primary-ink` 字，引用 chip `--lw-secondary-tint` 底 + `--lw-primary-ink` 字；两者一律 `--lw-radius-pill`、12px、左侧 14px 类型图标、右侧 16px 圆形删除按钮（悬停转 `--lw-error-ink` 并 `rotate(90deg)`，按下 `scale(.9)`） |
 | 输入区 | 透明无边框，14px 行高 1.6，自增高到 200px 后内部滚动；占位色 `--lw-ink-disabled`。**流式期间保持可编辑**——用户可以在 Agent 干活时写下一条，只禁用发送与面板唤出 |
-| 工具条 | 左：`/ 技能`、`@ 引用` 两枚胶囊（12px，`--lw-surface` 底、`--lw-border` 边，悬停转 `--lw-primary-ink` + `--lw-secondary` 边 + `--lw-primary-tint` 底，按下 `scale(0.95)`）；中：`Enter 发送 · Shift + Enter 换行` 灰字，流式时替换为 `Esc 中断`；右：字数计数（等宽，`>= 90%` 上限转 `--lw-warning-ink`）与 `LwButton` 主按钮 |
+| 工具条 | 左：**模型 chip**、**工作区 chip** 两枚常驻五态控件（28px，胶囊形，`--lw-surface` 底 + `--lw-border` 边，悬停转 `--lw-primary-ink` + `--lw-secondary` 边 + `--lw-primary-tint` 底并 `scale(1.03)`，按下 `scale(0.97)`，选中态主靛描边；未绑定时虚线灰态），后接 `/ 技能`、`@ 引用`、`附件` 三枚弱化胶囊（12px，`--lw-surface` 底、`--lw-border` 边，悬停转 `--lw-primary-ink` + `--lw-secondary` 边 + `--lw-primary-tint` 底，按下 `scale(0.95)`）；中：`Enter 发送 · Shift + Enter 换行` 灰字，流式时替换为 `Esc 中断 · 仍可继续输入下一条`；右：字数计数（等宽，`>= 90%` 上限转 `--lw-warning-ink`）与 `LwButton` 主按钮。窄屏（`<= 1024px`）隐藏中间提示文案，底栏允许换行 |
 | 发送 / 中断 | 发送按钮 `primary sm`，五态齐全，空正文或流式中禁用；流式中就地替换为 `secondary sm` + loading 的「中断」按钮（位置与宽度不变，不产生布局跳动）。中断按钮是**常驻**的，不是悬浮出现 |
 | 唤出面板 | 绝对定位于输入框上方 8px，`--lw-radius-card` + `--lw-border` + `--lw-shadow-md`，最大高 300px 内部滚动；头部 `lw-label` 标题 + 键盘提示；条目 8/10 内边距，当前项 `--lw-primary-tint` 底 + `--lw-primary-ink` 字，条目标题 13px 加粗 + 说明 12px `--lw-ink-muted`；关键字命中片段加粗 |
 | 动效 | 面板入场 200ms `--lw-ease-out` 上浮 6px + 淡入，出场 120ms；条目底色切换走 `--lw-dur-fast`；chip 入场 200ms 上浮 + 淡入，删除走 120ms 淡出 |
@@ -482,7 +482,8 @@ UnoCSS 主题只映射令牌，组件禁止硬编码色值：颜色 `lw-<别名>
 
 - 概览条与直方图随过滤条件联动刷新：三个级别计数（圆点 + 标签 + 数字）与迷你直方图并作一行，统计只占一行高度，不做半屏大卡；直方图为内嵌细柱（`--lw-secondary`，圆角顶部 3px），悬停显示时间与条数，点击钻取。
 - 快捷时间预设：15 分钟 / 1 小时 / 24 小时 / 7 天，选中态浅靛底 + 主靛字；自定义时间收进高级行，与快捷时间任选其一。
-- 结果行：级别用 `LwTag`（INFO 主靛 / WARN 警告 / ERROR 错误），时间等宽字体，正文折叠态两行预览（`-webkit-line-clamp: 2`，短消息不截断）；点击展开显示完整正文（等宽 pre 保留换行）+ `traceId` / `logger` / `thread` / `userId` / `runId` 元信息与异常栈（异常区 `--lw-error-tint` 底 + `--lw-error-ink` 字）；行尾箭头随展开旋转 180°，含异常栈的行折叠态即有「异常栈」标签。
+- 结果行：级别用 `LwTag`（INFO 主靛 / WARN 警告 / ERROR 错误），时间与行号等宽字体，正文单行省略（折叠态不截断短消息，长消息省略号收住）；点击展开显示完整正文（等宽 `pre` 保留换行）+ `traceId` / `logger` / `thread` / `userId` / `runId` 元信息（`dl` 定义列表，字段名禁用色 + 值等宽）与异常栈（异常区 `--lw-error-tint` 底 + `--lw-error-ink` 字）；行尾箭头随展开旋转 180°，含异常栈的行折叠态即有「异常栈」标签。
+- **日志流的排版纪律**：表头与数据行共用同一套 CSS Grid 栅格（`grid-template-columns` 只定义一次），列宽不随内容漂移，不会出现表头与行左右错位；统一等宽字体、统一 12.5px 字号与 1.5 行高、数字一律 `tabular-nums`；奇偶行 `--lw-surface` 微差，悬停 `--lw-primary-tint`，展开 `--lw-secondary-tint`；窄屏（`<= 900px` 收起时间列，`<= 640px` 再收级别与异常列）保留「级别 + 正文」两列。
 - 关键字命中在正文内高亮：`<mark>` 浅靛底圆角 2px，不使用浏览器默认黄色。
 - 钻取动作：复制 `traceId`（图标 400ms 切对勾 + toast）、按该 `traceId` 过滤（一键填入过滤区并刷新）。
 - 过滤区主行之下常驻一行简短说明（12px `--lw-ink-muted`）：关键字匹配规则与时间二选一；完整规则说明不放首屏。

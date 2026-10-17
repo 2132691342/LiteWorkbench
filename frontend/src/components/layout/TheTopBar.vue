@@ -51,33 +51,25 @@ function handleCommand(command: string): void {
     style="background-color: var(--lw-surface-raised); border-color: var(--lw-border)"
   >
     <div class="flex items-center gap-4 md:gap-8">
+      <!-- 移动端唤出抽屉；品牌块在侧栏内，顶栏只留当前页上下文与用户区 -->
       <div class="flex items-center gap-3">
-        <el-tooltip :content="t('app.expand')" placement="bottom" :open-delay="300">
-          <LwButton
-            variant="text"
-            size="sm"
-            class="lg:hidden"
-            @click="appStore.openSidebar()"
-          >
-            <template #icon>
-              <el-icon><component :is="appStore.sidebarCollapsed ? Expand : Fold" /></el-icon>
-            </template>
-          </LwButton>
-        </el-tooltip>
-        <div
-          class="w-8 h-8 rounded-lg flex items-center justify-center font-bold lw-shadow-sm"
-          style="background-color: var(--lw-secondary); color: var(--lw-on-secondary)"
+        <LwButton
+          variant="text"
+          size="sm"
+          class="lg:hidden"
+          :aria-label="t('app.expand')"
+          @click="appStore.openSidebar()"
         >
-          <svg width="18" height="18" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-            <path d="M9 22V10h3v9h6v3H9z" fill="currentColor" />
-            <circle cx="22" cy="12" r="2.4" fill="currentColor" opacity="0.85" />
-          </svg>
-        </div>
-        <span class="font-bold text-lg tracking-tight hidden sm:block">{{ t('app.title') }}</span>
+          <template #icon>
+            <el-icon><component :is="appStore.sidebarCollapsed ? Expand : Fold" /></el-icon>
+          </template>
+        </LwButton>
+        <span class="font-bold text-base tracking-tight lg:hidden">{{ t('app.title') }}</span>
       </div>
     </div>
 
     <div class="flex items-center gap-2 md:gap-3">
+      <span class="hidden md:block text-xs font-medium" style="color: var(--lw-ink-muted)">{{ t('app.greeting', { name: userStore.nickname }) }}</span>
       <LwButton variant="ghost" size="sm" @click="toggleLocale">{{ localeText }}</LwButton>
       <div class="hidden sm:flex flex-col items-end mr-1 leading-tight">
         <span class="text-xs font-bold" style="color: var(--lw-ink)">{{ userStore.nickname }}</span>
