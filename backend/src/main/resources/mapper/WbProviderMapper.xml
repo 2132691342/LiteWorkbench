@@ -9,6 +9,13 @@
             <if test="baseUrl != null">base_url = #{baseUrl},</if>
             <if test="apiKeyEnc != null and apiKeyEnc != ''">api_key_enc = #{apiKeyEnc},</if>
             <if test="defaultModel != null">default_model = #{defaultModel},</if>
+            <if test="contextWindow != null">context_window = #{contextWindow},</if>
+            <if test="maxOutputTokens != null">max_output_tokens = #{maxOutputTokens},</if>
+            <if test="temperature != null">temperature = #{temperature},</if>
+            <if test="topP != null">top_p = #{topP},</if>
+            <if test="capVision != null">cap_vision = #{capVision},</if>
+            <if test="capTool != null">cap_tool = #{capTool},</if>
+            <if test="capReasoning != null">cap_reasoning = #{capReasoning},</if>
             <if test="enabled != null">enabled = #{enabled},</if>
             updated_by = #{updatedBy},
             updated_at = now()

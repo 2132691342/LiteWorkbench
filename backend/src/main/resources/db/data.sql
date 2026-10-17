@@ -242,7 +242,16 @@ VALUES
     (121, 46, 'menu.writerCreate',           'button', NULL,            NULL,                     NULL,         'wb:doc:create',            1),
     (122, 46, 'menu.writerUpdate',           'button', NULL,            NULL,                     NULL,         'wb:doc:update',            2),
     (123, 46, 'menu.writerDelete',           'button', NULL,            NULL,                     NULL,         'wb:doc:delete',            3),
-    (124, 46, 'menu.writerSearch',           'button', NULL,            NULL,                     NULL,         'wb:doc:search',            4);
+    (124, 46, 'menu.writerSearch',           'button', NULL,            NULL,                     NULL,         'wb:doc:search',            4),
+    -- 工作区：用户级资产容器，与 MinIO 桶一一绑定，登录即可用
+    (44,  0,  'menu.workspaces',             'menu',   '/workspaces',  'settings/WorkspacePanel', 'box',       NULL,                       45),
+    -- 存储桶管理（管理员）：顶级页面 + 监控分组下的按钮权限点；顶级菜单不带 perm_code，权限由按钮点控制
+    (101, 0,  'menu.storageManage',          'menu',   '/storage',      'monitor/StoragePanel',    'database',   NULL,                       65),
+    (97,  6,  'menu.monitorStorageList',     'button', NULL,            NULL,                     NULL,         'monitor:storage:list',     5),
+    (98,  6,  'menu.monitorStorageCreate',   'button', NULL,            NULL,                     NULL,         'monitor:storage:create',   6),
+    (99,  6,  'menu.monitorStorageDelete',   'button', NULL,            NULL,                     NULL,         'monitor:storage:delete',   7),
+    -- 日志导出：按钮权限由前端 hasPerm 判定、接口侧 SaCheckPermission 兜底，不占 perm_code 行
+    (100, 5,  'menu.logsExport',             'button', NULL,            NULL,                     NULL,         NULL,                       4);
 
 -- 历史残留清理：与本次种子同路由或同权限码、且 ID 不在种子内的行软删，重复菜单在升级后不再出现
 -- 两条判据缺一不可：判据取临时表而非已入库的种子行（新版本新增的菜单也要能裁掉老库同名冲突行）；
@@ -338,7 +347,7 @@ CROSS JOIN sys_menu m
 WHERE r.role_code = 'user' AND r.deleted = false AND m.deleted = false
   AND m.menu_name IN (
       'menu.dashboard', 'menu.console', 'menu.runs', 'menu.files', 'menu.skills', 'menu.kb', 'menu.settings',
-      'menu.showcase', 'menu.writer', 'menu.logs',
+      'menu.showcase', 'menu.writer', 'menu.logs', 'menu.workspaces', 'menu.logsExport',
       'menu.writerList', 'menu.writerCreate', 'menu.writerUpdate', 'menu.writerDelete', 'menu.writerSearch',
       'menu.filesDelete',
       'menu.skillsList', 'menu.skillsCreate', 'menu.skillsUpdate', 'menu.skillsDelete',

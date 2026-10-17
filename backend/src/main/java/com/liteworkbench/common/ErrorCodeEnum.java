@@ -112,6 +112,15 @@ public enum ErrorCodeEnum {
     REDIS_UNAVAILABLE("9002", 503, "缓存不可用"),
     STORAGE_UNAVAILABLE("9003", 503, "对象存储不可用"),
     MQ_UNAVAILABLE("9004", 503, "消息队列不可用"),
+
+    // 工作区 9100
+    WORKSPACE_NOT_FOUND("9101", 404, "工作区不存在"),
+    WORKSPACE_NAME_CONFLICT("9102", 409, "工作区名称已存在"),
+    WORKSPACE_LIMIT_REACHED("9103", 409, "工作区数量已达上限"),
+    WORKSPACE_DEFAULT_REQUIRED("9104", 409, "每个用户至少保留一个默认工作区"),
+    BUCKET_CREATE_FAILED("9105", 500, "存储桶创建失败"),
+    BUCKET_NOT_EMPTY("9106", 409, "存储桶非空，不能删除"),
+    BUCKET_OP_FAILED("9107", 500, "存储桶操作失败"),
     ;
 
     private final String code;

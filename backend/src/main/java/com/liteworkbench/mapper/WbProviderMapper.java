@@ -16,9 +16,13 @@ public interface WbProviderMapper {
     /** 新增供应方 */
     @Insert("""
             INSERT INTO wb_provider (provider_id, provider_code, provider_name, base_url,
-                                     api_key_enc, default_model, enabled, created_by)
+                                     api_key_enc, default_model, context_window, max_output_tokens,
+                                     temperature, top_p, cap_vision, cap_tool, cap_reasoning,
+                                     enabled, created_by)
             VALUES (#{providerId}, #{providerCode}, #{providerName}, #{baseUrl},
-                    #{apiKeyEnc}, #{defaultModel}, #{enabled}, #{createdBy})
+                    #{apiKeyEnc}, #{defaultModel}, #{contextWindow}, #{maxOutputTokens},
+                    #{temperature}, #{topP}, #{capVision}, #{capTool}, #{capReasoning},
+                    #{enabled}, #{createdBy})
             """)
     int insert(WbProviderDO provider);
 

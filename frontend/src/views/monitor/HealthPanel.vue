@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { Refresh } from '@element-plus/icons-vue'
+import { Folder, Refresh } from '@element-plus/icons-vue'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import LwButton from '@/components/ui/LwButton.vue'
 import LwCard from '@/components/ui/LwCard.vue'
@@ -14,6 +15,7 @@ import { useMonitorStore } from '@/stores/monitor'
 /** 健康监控：组件探测 + Python 运行时 + SQL/HTTP 调用观测 */
 const { t } = useI18n()
 const { hasPerm } = usePermission()
+const router = useRouter()
 const monitorStore = useMonitorStore()
 
 const loading = computed(() => monitorStore.loading)
@@ -78,6 +80,10 @@ onMounted(load)
             {{ aggregate }}
           </LwTag>
         </span>
+        <LwButton v-if="hasPerm('monitor:storage:list')" variant="secondary" size="sm" @click="router.push('/storage')">
+          <template #icon><el-icon><Folder /></el-icon></template>
+          {{ t('menu.storageManage') }}
+        </LwButton>
         <LwButton variant="ghost" @click="load">
           <template #icon><el-icon><Refresh /></el-icon></template>
           {{ t('common.refresh') }}

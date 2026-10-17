@@ -6,7 +6,6 @@ import com.liteworkbench.common.ErrorCodeEnum;
 import com.liteworkbench.common.IdGenerator;
 import com.liteworkbench.common.PageResult;
 import com.liteworkbench.common.TimeUtil;
-import com.liteworkbench.config.StorageProperties;
 import com.liteworkbench.domain.constant.AppConst;
 import com.liteworkbench.domain.constant.IdPrefixConst;
 import com.liteworkbench.domain.dto.UploadFileDTO;
@@ -52,7 +51,7 @@ public class FileService {
 
     private final WbFileMapper fileMapper;
     private final MinioClient minioClient;
-    private final StorageProperties storageProperties;
+    private final WorkspaceService workspaceService;
 
     /** 分页列表，每页条数封顶 MAX_SIZE */
     public PageResult<FileVO> page(String userId, String sessionId, String category,
@@ -69,8 +68,8 @@ public class FileService {
         return PageResult.of(list, total, pageNo, pageSize);
     }
 
-    /** 上传：先写对象后写元数据，失败回滚对象 */
-    public FileVO upload(UploadFileDTO file, String userId, String sessionId) {
+    /** 上传：先写对象后写元数据，失败回滚对象；workspaceId 决定落入哪个桶，为空回落默认工作区 */
+    public FileVO upload(UploadFileDTO file, String userId, String sessionId, String workspaceId) {
         if (Objects.isNull(file) || Objects.isNull(file.content()) || file.fileSize() <= 0) {
             throw new BizException(ErrorCodeEnum.PARAM_INVALID, "文件不能为空");
         }
@@ -79,12 +78,15 @@ public class FileService {
         }
         String fileId = IdGenerator.generate(IdPrefixConst.FILE);
         String fileName = sanitizeName(file.fileName());
+        // 桶随工作区解析：默认工作区首次使用时懒建，保证上传链路不中断
+        String bucket = workspaceService.bucketFor(userId, workspaceId);
+        String workspace = workspaceService.resolve(userId, workspaceId).getWorkspaceId();
         String objectKey = StrUtil.format("user/{}/{}/{}/{}/{}",
                 userId, "upload", LocalDate.now().format(DAY_FORMAT), fileId, fileName);
 
         try (InputStream in = file.content()) {
             minioClient.putObject(PutObjectArgs.builder()
-                    .bucket(storageProperties.getBucketName())
+                    .bucket(bucket)
                     .object(objectKey)
                     .contentType(StrUtil.blankToDefault(file.contentType(), "application/octet-stream"))
                     .stream(in, file.fileSize(), -1)
@@ -98,9 +100,10 @@ public class FileService {
         entity.setFileId(fileId);
         entity.setUserId(userId);
         entity.setSessionId(sessionId);
+        entity.setWorkspaceId(workspace);
         entity.setFileName(fileName);
         entity.setObjectKey(objectKey);
-        entity.setBucketName(storageProperties.getBucketName());
+        entity.setBucketName(bucket);
         entity.setFileSize(file.fileSize());
         entity.setContentType(file.contentType());
         entity.setCategory("upload");
@@ -108,7 +111,7 @@ public class FileService {
         try {
             fileMapper.insert(entity);
         } catch (Exception e) {
-            removeObjectQuietly(objectKey);
+            removeObjectQuietly(bucket, objectKey);
             throw new BizException(ErrorCodeEnum.FILE_UPLOAD_FAILED, e.getMessage());
         }
         log.info("[file.upload] userId={} fileId={} size={}", userId, fileId, file.fileSize());
@@ -191,10 +194,10 @@ public class FileService {
         log.info("[file.delete] userId={} fileId={}", userId, fileId);
     }
 
-    private void removeObjectQuietly(String objectKey) {
+    private void removeObjectQuietly(String bucket, String objectKey) {
         try {
             minioClient.removeObject(RemoveObjectArgs.builder()
-                    .bucket(storageProperties.getBucketName())
+                    .bucket(bucket)
                     .object(objectKey)
                     .build());
         } catch (Exception ignored) {
@@ -213,6 +216,7 @@ public class FileService {
         FileVO vo = new FileVO();
         vo.setFileId(file.getFileId());
         vo.setSessionId(file.getSessionId());
+        vo.setWorkspaceId(file.getWorkspaceId());
         vo.setFileName(file.getFileName());
         vo.setFileSize(file.getFileSize());
         vo.setContentType(file.getContentType());

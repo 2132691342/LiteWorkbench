@@ -6,7 +6,7 @@
 
 边界：技能只管存储、检索与提示词注入，不执行技能内部流程；文件只管元数据与对象操作，不解析内容。
 
-不回答：接口路径与请求 / 响应形状（见 docs/API-CONTRACT.md §10、§11）；`wb_skill` / `wb_skill_seed` / `wb_file` 字段（见 docs/DATA-MODEL.md §5.6、§5.7）；对象存储与桶的配置项（见 docs/DEPLOYMENT.md）；技能在系统提示里的装配时机与顺序（见 specs/01、specs/02）。
+不回答：接口路径与请求 / 响应形状（见 docs/API-CONTRACT.md §10、§11、§14）；`wb_skill` / `wb_file` / `wb_skill_seed` 字段（见 docs/DATA-MODEL.md §5.5、§5.6、§5.12）；对象存储与桶的配置项（见 docs/DEPLOYMENT.md）；技能在系统提示里的装配时机与顺序（见 specs/01、specs/02）。
 
 ## 设计
 
@@ -36,14 +36,29 @@
 
 | 项 | 规则 |
 |---|---|
-| 桶 | `liteworkbench.storage.bucket-name`（默认 `liteworkbench`），启动时幂等创建 |
+| 桶 | 按工作区解析：`workspace_id` 命中其绑定桶；为空回落用户默认工作区（无工作区时懒建「默认工作区」并建桶）。桶名 `lwws-` + ULID 小写派生，全局唯一，不接受用户输入 |
+| 平台主桶 | `liteworkbench.storage.bucket-name`（默认 `liteworkbench`），启动时幂等创建；只承载知识库文档原件等平台级对象，不归任何工作区 |
 | 对象键 | `user/{userId}/{category}/{yyyyMMdd}/{fileId}/{fileName}` |
 | `category` 段 | 固定为 `upload`（用户主动上传），分段结构保留以便按类别归档 |
 | 单文件上限 | 100MB（超出抛 `FILE_TOO_LARGE`） |
 | 下载地址 | 预签名 URL，有效期 15 分钟 |
 | 文件名清洗 | 去路径分隔符与控制字符，超 200 字截断 |
 
-元数据进 PG（`wb_file`），二进制进 MinIO；对象键带用户前缀与 `fileId`，同名文件不互相覆盖，可按用户整体迁移。
+元数据进 PG（`wb_file`，含 `workspace_id` 与 `bucket_name` 双列），二进制进 MinIO；对象键带用户前缀与 `fileId`，同名文件不互相覆盖，可按用户整体迁移。上传先写对象后写元数据，元数据失败按实际桶回删对象。
+
+### 工作区：资产容器与桶绑定
+
+工作区是用户级资产容器（表结构见 docs/DATA-MODEL.md §5.14），回答"一个用户的资产分几堆、各放哪个桶"：
+
+| 项 | 规则 |
+|---|---|
+| 创建 | 名称用户内唯一；桶名由 ULID 派生，幂等 `makeBucket`；单用户上限 20 个 |
+| 默认 | 首个工作区即默认；设默认先摘存量再置位（同事务）；默认工作区不可删 |
+| 删除 | 删非默认工作区；删后无默认时最早创建者顶上，保证回落目标恒存在 |
+| 解析 | `resolve(userId, workspaceId)`：空 id 回落默认，无任何工作区时懒建；会话 `workspace_id` 为空按默认归拢 |
+| 隔离 | 上传与 `@` 引用按会话绑定的工作区取桶，工作区之间对象互不可见 |
+
+输入框顶部即点即换模型与工作区（`MessageComposer`），切换即持久化到会话：下一条消息的模型参数与上传落桶按新绑定走。管理端「存储桶管理」（`monitor:storage:list` / `create` / `delete`）给管理员全平台桶清单（含对象数与占用）、建桶与删桶；平台主桶与 `lwws-` 前缀桶标记保护禁删，非空桶 MinIO 侧拒绝（转 `BUCKET_NOT_EMPTY`）。
 
 ## 契约
 
@@ -64,7 +79,7 @@ public final class FileService {
 }
 ```
 
-接口路径与出入参见 docs/API-CONTRACT.md §10、§11、§12。
+接口路径与出入参见 docs/API-CONTRACT.md §10、§11、§14（技能、文件、工作区与存储）。
 
 ## 关键流程
 

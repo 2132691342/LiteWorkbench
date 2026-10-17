@@ -68,8 +68,10 @@ public class MonitorService {
     private static final long DEFAULT_SEARCH_WINDOW_MS = 7 * 24 * 60 * 60 * 1000L;
     /** 直方图按小时分桶的最大区间，超过改按天分桶 */
     private static final long HOUR_BUCKET_MAX_SPAN_MS = 7 * 24 * 60 * 60 * 1000L;
-    /** 检索字段白名单：message 全文 / logger 与 traceId 等值 */
-    private static final Set<String> LOG_FIELDS = Set.of("message", "logger", "traceId");
+    /** 检索字段白名单：message 全文 / logger、traceId 等值 / exception 全文 */
+    private static final Set<String> LOG_FIELDS = Set.of("message", "logger", "traceId", "exception");
+    /** 导出条数上限：一次导出最多拉取的日志行数 */
+    private static final int EXPORT_MAX_ROWS = 5000;
 
     private final HealthMapper healthMapper;
     private final RedisConnectionFactory redisConnectionFactory;
@@ -92,7 +94,7 @@ public class MonitorService {
     /** Manticore 日志检索：视角非全局时锁定本人，未传时间范围默认近 7 天，索引不可用时降级为空结果 */
     public LogPageVO searchLogs(String keyword, String field, String level,
                                 String logger, String traceId, String userId, String runId,
-                                long from, long to, long page, long size) {
+                                String sessionId, long from, long to, long page, long size) {
         validateField(field);
         String scope = globalLogScope() ? "global" : "self";
         long now = System.currentTimeMillis();
@@ -101,7 +103,7 @@ public class MonitorService {
         String scopeUserId = resolveScopeUserId(userId);
         try {
             LogSearchDTO result = logSearchMapper.search(keyword, field, level, logger, traceId,
-                    scopeUserId, runId, effectiveFrom, effectiveTo, page, size);
+                    scopeUserId, runId, sessionId, effectiveFrom, effectiveTo, page, size);
             LogPageVO vo = new LogPageVO();
             vo.setList(result.list());
             vo.setTotal(result.total());
@@ -122,7 +124,8 @@ public class MonitorService {
 
     /** 日志分布概览：过滤条件与视角同检索；未传时间范围默认近 24 小时，超 7 天按天分桶，异常降级为空结构 */
     public LogStatsVO logStats(String keyword, String field, String level, String logger,
-                               String traceId, String userId, String runId, long from, long to) {
+                               String traceId, String userId, String runId, String sessionId,
+                               long from, long to) {
         validateField(field);
         String scope = globalLogScope() ? "global" : "self";
         long now = System.currentTimeMillis();
@@ -131,7 +134,7 @@ public class MonitorService {
         boolean dayBucket = effectiveTo - effectiveFrom > HOUR_BUCKET_MAX_SPAN_MS;
         try {
             LogStatsVO stats = logSearchMapper.stats(resolveScopeUserId(userId), keyword, field, level,
-                    logger, traceId, runId, effectiveFrom, effectiveTo, dayBucket);
+                    logger, traceId, runId, sessionId, effectiveFrom, effectiveTo, dayBucket);
             stats.setScope(scope);
             return stats;
         } catch (Exception e) {
@@ -141,6 +144,44 @@ public class MonitorService {
             stats.setBucketMs(dayBucket ? 86_400_000L : 3_600_000L);
             return stats;
         }
+    }
+
+    /** 导出 CSV：与检索同口径，上限 EXPORT_MAX_ROWS 行；视角与字段白名单同检索 */
+    public String exportLogs(String keyword, String field, String level, String logger,
+                             String traceId, String userId, String runId, String sessionId,
+                             long from, long to) {
+        validateField(field);
+        long now = System.currentTimeMillis();
+        long effectiveFrom = from > 0 ? from : now - DEFAULT_SEARCH_WINDOW_MS;
+        long effectiveTo = to > 0 ? to : now;
+        String scopeUserId = resolveScopeUserId(userId);
+        LogSearchDTO result = logSearchMapper.search(keyword, field, level, logger, traceId,
+                scopeUserId, runId, sessionId, effectiveFrom, effectiveTo, 1, EXPORT_MAX_ROWS);
+        StringBuilder csv = new StringBuilder(1024);
+        csv.append("ts,level,logger,thread,traceId,userId,sessionId,runId,message,exception\n");
+        for (LogDocVO doc : result.list()) {
+            csv.append(csvCell(Objects.isNull(doc.getTs()) ? "" : String.valueOf(doc.getTs()))).append(',')
+                    .append(csvCell(doc.getLevel())).append(',')
+                    .append(csvCell(doc.getLogger())).append(',')
+                    .append(csvCell(doc.getThread())).append(',')
+                    .append(csvCell(doc.getTraceId())).append(',')
+                    .append(csvCell(doc.getUserId())).append(',')
+                    .append(csvCell(doc.getSessionId())).append(',')
+                    .append(csvCell(doc.getRunId())).append(',')
+                    .append(csvCell(doc.getMessage())).append(',')
+                    .append(csvCell(doc.getException())).append('\n');
+        }
+        log.info("[log.export] rows={} scope={}", result.list().size(), globalLogScope() ? "global" : "self");
+        return csv.toString();
+    }
+
+    /** CSV 单元格转义：双引号包裹、内嵌引号加倍、换行与制表符替换为空格，防串列 */
+    private static String csvCell(String value) {
+        if (StrUtil.isBlank(value)) {
+            return "\"\"";
+        }
+        String clean = value.replace("\"", "\"\"").replace("\r", " ").replace("\n", " ").replace("\t", " ");
+        return "\"" + clean + "\"";
     }
 
     /** 检索字段白名单校验，非法值直接拒绝而非静默丢弃关键字 */

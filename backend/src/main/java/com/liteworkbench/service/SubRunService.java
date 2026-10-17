@@ -5,8 +5,10 @@ import com.liteworkbench.agent.AgentRuntime;
 import com.liteworkbench.agent.ModelFactory;
 import com.liteworkbench.agent.RunContext;
 import com.liteworkbench.agent.RunHandle;
+import com.liteworkbench.agent.model.SamplingParams;
 import com.liteworkbench.agent.spi.SubRunPort;
 import com.liteworkbench.common.IdGenerator;
+import com.liteworkbench.config.AgentProperties;
 import com.liteworkbench.domain.constant.EventTypeEnum;
 import com.liteworkbench.domain.constant.IdPrefixConst;
 import com.liteworkbench.domain.constant.PlanConst;
@@ -14,6 +16,7 @@ import com.liteworkbench.domain.constant.RunConst;
 import com.liteworkbench.domain.constant.RunStatusEnum;
 import com.liteworkbench.domain.constant.StopReasonEnum;
 import com.liteworkbench.domain.dto.RunEventDTO;
+import com.liteworkbench.domain.entity.WbProviderDO;
 import com.liteworkbench.domain.entity.WbRunDO;
 import com.liteworkbench.mapper.WbEventMapper;
 import com.liteworkbench.mapper.WbRunMapper;
@@ -55,6 +58,7 @@ public class SubRunService implements SubRunPort {
     /** 运行内核惰性解析：内核反向依赖本端口（task_delegate），构造期直取会形成循环依赖 */
     private final ObjectProvider<AgentRuntime> agentRuntimeProvider;
     private final ModelFactory modelFactory;
+    private final AgentProperties agentProperties;
     private final WbRunMapper runMapper;
     private final WbEventMapper eventMapper;
     private final WbSessionMapper sessionMapper;
@@ -90,8 +94,20 @@ public class SubRunService implements SubRunPort {
         String childRunId = IdGenerator.generate(IdPrefixConst.RUN);
         insertChildRun(childRunId, userId, sessionId, parent, task);
 
+        // 子运行跟随父运行使用的供应方参数：未配置列时 SamplingParams.global 回落全局配置
+        WbProviderDO provider = modelFactory.loadProvider(providerCode);
         RunContext context = new RunContext(userId, sessionId, childRunId, providerCode,
-                parent.getModelName(), CHILD_PROMPT, Collections.emptyList(), task);
+                parent.getModelName(), CHILD_PROMPT, Collections.emptyList(), task,
+                new SamplingParams(
+                        Objects.nonNull(provider.getTemperature()) ? provider.getTemperature()
+                                : agentProperties.getModel().getTemperature(),
+                        provider.getTopP(),
+                        provider.getMaxOutputTokens(),
+                        Objects.nonNull(provider.getContextWindow()) ? provider.getContextWindow()
+                                : agentProperties.getModel().getContextWindow(),
+                        Boolean.TRUE.equals(provider.getCapVision()),
+                        !Boolean.FALSE.equals(provider.getCapTool()),
+                        Boolean.TRUE.equals(provider.getCapReasoning())));
         // 子运行的中间帧不推送，只在收尾一次性落库：父运行的时间线只呈现「委派」这一件事
         List<RunEventDTO> collected = Collections.synchronizedList(new ArrayList<>());
         long started = System.currentTimeMillis();

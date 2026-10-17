@@ -4,6 +4,7 @@ import { i18n } from '@/locales'
 import type {
   ApiResult,
   AssistEvent,
+  BucketAdminVO,
   ChatStreamREQ,
   DocAssistREQ,
   DocREQ,
@@ -56,6 +57,8 @@ import type {
   UserPageREQ,
   UserREQ,
   UserVO,
+  WorkspaceREQ,
+  WorkspaceVO,
 } from '@/types/api'
 
 /** 请求唯一出口：注入令牌、统一解包、统一错误提示 */
@@ -126,6 +129,17 @@ async function request<T>(config: AxiosRequestConfig): Promise<T> {
 
 export function get<T>(url: string, params?: object): Promise<T> {
   return request<T>({ method: 'GET', url, params })
+}
+
+/** 二进制下载：绕过 R<T> 解包，用于 CSV 导出等直接落盘的响应 */
+export async function getBlob(url: string, params?: object, filename = 'export.csv'): Promise<void> {
+  const response = await http.request<Blob>({ method: 'GET', url, params, responseType: 'blob' })
+  const blob = response.data
+  const link = document.createElement('a')
+  link.href = URL.createObjectURL(blob)
+  link.download = filename
+  link.click()
+  URL.revokeObjectURL(link.href)
 }
 
 /** POST 写操作，可附加 axios 配置（params / headers / timeout） */
@@ -240,12 +254,12 @@ export const skillApi = {
 export const fileApi = {
   page: (params: { page?: number; size?: number; sessionId?: string; category?: string; keyword?: string }) =>
     get<PageResult<FileVO>>('/file/page', params),
-  upload: (file: File, sessionId?: string) => {
+  upload: (file: File, sessionId?: string, workspaceId?: string) => {
     const form = new FormData()
     form.append('file', file)
     return post<FileVO>('/file/upload', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      params: sessionId ? { sessionId } : undefined,
+      params: sessionId || workspaceId ? { sessionId, workspaceId } : undefined,
       timeout: 120000,
     })
   },
@@ -302,6 +316,24 @@ export const providerApi = {
   test: (providerId: string) => post<ProviderVO>(`/provider/test/${providerId}`),
 }
 
+/* ===== 工作区 ===== */
+
+export const workspaceApi = {
+  list: () => get<WorkspaceVO[]>('/workspace/list'),
+  create: (data: WorkspaceREQ) => post<string>('/workspace/create', data),
+  update: (data: WorkspaceREQ) => post<void>('/workspace/update', data),
+  setDefault: (workspaceId: string) => post<void>(`/workspace/default/${workspaceId}`),
+  remove: (workspaceId: string) => post<void>(`/workspace/delete/${workspaceId}`),
+}
+
+/* ===== 存储桶管理（管理员） ===== */
+
+export const storageApi = {
+  buckets: () => get<BucketAdminVO[]>('/storage/buckets'),
+  createBucket: (bucketName: string) => post<void>('/storage/bucket/create', { bucketName }),
+  removeBucket: (bucketName: string) => post<void>(`/storage/bucket/delete/${bucketName}`),
+}
+
 /* ===== 监控 ===== */
 
 export const monitorApi = {
@@ -318,6 +350,7 @@ export const monitorApi = {
 export const logApi = {
   search: (params: LogSearchParams) => get<LogPageVO>('/log/search', params),
   stats: (params: Omit<LogSearchParams, 'page' | 'size'>) => get<LogStatsVO>('/log/stats', params),
+  exportCsv: (params: LogSearchParams) => getBlob('/log/export', params, 'lw-log.csv'),
 }
 
 /* ===== SSE 流式对话 ===== */

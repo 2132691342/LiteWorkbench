@@ -110,7 +110,9 @@ public final class ModelTypes {
         private List<Msg> messages = new ArrayList<>();
         private List<ToolSpec> tools = new ArrayList<>();
         private Double temperature;
+        /** 最大输出 token 数，与 maxTokens 同义，按 provider 配置下发 */
         private Integer maxTokens;
+        private Double topP;
         private Integer timeoutSeconds;
     }
 

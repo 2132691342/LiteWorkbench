@@ -15,12 +15,12 @@ import LwErrorBar from '@/components/ui/LwErrorBar.vue'
 import LwMarkdown from '@/components/ui/LwMarkdown.vue'
 import LwSkeleton from '@/components/ui/LwSkeleton.vue'
 import LwTag from '@/components/ui/LwTag.vue'
-import { runApi } from '@/api'
+import { providerApi, runApi, workspaceApi } from '@/api'
 import { useRunStream } from '@/composables/useRunStream'
 import { useRunStore, type ChatMessage } from '@/stores/run'
 import { useSessionStore } from '@/stores/session'
 import { useUserStore } from '@/stores/user'
-import type { RunRefREQ, RunVO } from '@/types/api'
+import type { ProviderVO, RunRefREQ, RunVO, WorkspaceVO } from '@/types/api'
 import { formatClock, formatTime } from '@/utils/const'
 
 /** 工作台：左侧会话与运行历史，右侧流式时间线（实时与回放同路径） */
@@ -41,6 +41,37 @@ const composerRef = ref<InstanceType<typeof MessageComposer> | null>(null)
 /** 距底部多少像素以内算「跟着看」，超过就不再抢用户的滚动位置 */
 const STICK_THRESHOLD = 200
 const stick = ref(true)
+
+/** 模型选择器与工作区切换的数据源：供应方取启用的，工作区取当前用户的 */
+const providers = ref<ProviderVO[]>([])
+const workspaces = ref<WorkspaceVO[]>([])
+
+/** 模型即点即换：持久化到会话后立即生效，下一条消息按新模型走 */
+async function updateModel(model: { providerCode: string; modelName: string }): Promise<void> {
+  const sessionId = sessionStore.activeSessionId
+  if (!sessionId) return
+  await sessionStore.update({
+    sessionId,
+    providerCode: model.providerCode,
+    modelName: model.modelName,
+  })
+}
+
+/** 工作区即点即换：落会话绑定，上传与 @ 引用随后按新工作区取桶 */
+async function updateWorkspace(workspaceId: string): Promise<void> {
+  const sessionId = sessionStore.activeSessionId
+  if (!sessionId) return
+  await sessionStore.update({ sessionId, workspaceId })
+}
+
+onMounted(async () => {
+  const [providerList, workspaceList] = await Promise.all([
+    providerApi.list().catch(() => [] as ProviderVO[]),
+    workspaceApi.list().catch(() => [] as WorkspaceVO[]),
+  ])
+  providers.value = providerList.filter((item) => item.enabled)
+  workspaces.value = workspaceList
+})
 
 const messages = computed<ChatMessage[]>(() => runStore.timeline)
 const activeSession = computed(() => sessionStore.activeSession)
@@ -437,9 +468,16 @@ onMounted(async () => {
           :streaming="runStore.streaming"
           :replaying="runStore.replaying"
           :last-user-message="lastUserMessage"
+          :providers="providers"
+          :provider-code="activeSession?.providerCode ?? ''"
+          :model-name="activeSession?.modelName ?? ''"
+          :workspaces="workspaces"
+          :workspace-id="activeSession?.workspaceId ?? ''"
           @send="send"
           @abort="abort"
           @new-session="createSession"
+          @update:model="updateModel"
+          @update:workspace="updateWorkspace"
         />
       </footer>
     </section>

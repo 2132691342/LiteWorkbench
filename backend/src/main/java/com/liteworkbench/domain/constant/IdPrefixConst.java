@@ -44,6 +44,8 @@ public enum IdPrefixConst {
     MEMORY("MEMO"),
     /** 日志文档 */
     LOG("LOGD"),
+    /** 工作区 */
+    WORKSPACE("WSPC"),
     ;
 
     /** 前缀字面量，最终 ID 形如 前缀_ULID */

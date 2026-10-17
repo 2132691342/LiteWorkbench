@@ -40,15 +40,16 @@ public class FileController {
         return R.ok(fileService.page(LoginContext.userId(), sessionId, category, keyword, page, size));
     }
 
-    /** 上传，单文件 ≤ 100MB */
+    /** 上传，单文件 ≤ 100MB；workspaceId 为空回落用户默认工作区，决定落入哪个桶 */
     @Idempotent(prefix = "file:upload")
     @PostMapping("/upload")
     public R<FileVO> upload(@RequestParam("file") MultipartFile file,
-                            @RequestParam(required = false) String sessionId) {
+                            @RequestParam(required = false) String sessionId,
+                            @RequestParam(required = false) String workspaceId) {
         try (InputStream in = file.getInputStream()) {
             UploadFileDTO payload = new UploadFileDTO(
                     file.getOriginalFilename(), file.getContentType(), file.getSize(), in);
-            return R.ok(fileService.upload(payload, LoginContext.userId(), sessionId));
+            return R.ok(fileService.upload(payload, LoginContext.userId(), sessionId, workspaceId));
         } catch (IOException e) {
             throw new BizException(ErrorCodeEnum.FILE_UPLOAD_FAILED, e.getMessage());
         }

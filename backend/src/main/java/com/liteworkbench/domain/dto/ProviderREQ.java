@@ -28,5 +28,19 @@ public class ProviderREQ implements Serializable {
     /** API Key，脱敏值表示不修改 */
     private String apiKey;
     private String defaultModel;
+    /** 上下文窗口 token 数，空表示回落全局配置 */
+    private Integer contextWindow;
+    /** 最大输出 token 数，空表示不限制 */
+    private Integer maxOutputTokens;
+    /** 采样温度 0~2 */
+    private Double temperature;
+    /** top-P 0~1 */
+    private Double topP;
+    /** 支持图片输入 */
+    private Boolean capVision;
+    /** 支持工具调用 */
+    private Boolean capTool;
+    /** 支持推理输出 */
+    private Boolean capReasoning;
     private Boolean enabled;
 }

@@ -30,6 +30,8 @@ public class WbSessionDO implements Serializable {
     private String providerCode;
     /** 模型名，空则用供应方默认模型 */
     private String modelName;
+    /** 工作区 ID，空回落用户默认工作区 */
+    private String workspaceId;
     private String systemPrompt;
     private Integer messageCount;
     private Integer runCount;

@@ -1,6 +1,7 @@
 package com.liteworkbench.agent;
 
 import com.liteworkbench.agent.model.ModelTypes.Msg;
+import com.liteworkbench.agent.model.SamplingParams;
 
 import java.util.List;
 
@@ -13,5 +14,7 @@ public record RunContext(
         String modelName,
         String systemPrompt,
         List<Msg> history,
-        String prompt) {
+        String prompt,
+        /** 模型采样参数，null 时内核回落全局配置 */
+        SamplingParams sampling) {
 }

@@ -175,6 +175,7 @@ public class RunService {
 - 平台级表不带 `user_id`，仅管理角色可写：`sys_menu`、`sys_user_role`、`sys_role_menu`、`wb_tool`、`wb_provider`、`wb_skill_seed`。
 - 用户身份由 `common.LoginContext` 提供，禁止从请求体采信 `userId`；Service 在请求线程内一律 `LoginContext.userId()` 取当前用户。请求上下文之外（异步线程、MQ 消费）必须把 `userId` 作为第一个业务参数显式传递。
 - 用户拥有的资源，Mapper 查询条件必须显式携带 `user_id`（平台级表除外）。
+- **工作区是用户级资产容器**：每个工作区绑定一个独立 MinIO 桶（`lwws-` 前缀，ULID 派生，全局唯一）；会话绑定工作区，上传与 `@` 引用按工作区取桶。工作区 CRUD 登录即可用（无权限点），桶的增删清单是管理员能力（`monitor:storage:*`），平台主桶与工作区桶在管理端标记保护禁删。
 
 ### 3.2 认证与鉴权
 
@@ -261,6 +262,7 @@ public R<String> create(@RequestBody @Valid UserREQ req) { ... }
 | `DOCV_` | 创作文档版本 |
 | `MEMO_` | 长期记忆 |
 | `LOGD_` | 日志文档（Manticore） |
+| `WSPC_` | 工作区（MinIO 桶容器） |
 
 ## 7. 字段规范
 
@@ -307,6 +309,7 @@ public R<String> create(@RequestBody @Valid UserREQ req) { ... }
 - 日志按天 + 按级别滚动，共三个文件：`liteworkbench.log`（全量 INFO+）、`liteworkbench-error.log`（WARN/ERROR 单独）、`liteworkbench-agent.log`（Agent 链路专用），保留 30 天；目录开发期默认 `logs/`，容器内用 `LITEWORKBENCH_LOG_DIR` 覆盖。
 - **每条日志必须携带链路标识（MDC）**：请求进入即注入 `traceId`；已登录请求注入 `userId`；运行期日志另注入 `sessionId` / `runId`。四者同时落 Logback pattern 与 Manticore `lw_log` 的过滤列，禁止业务代码手工拼接这些字段。
 - **日志检索按角色隔离**：持有 `monitor:log:global` 的角色（管理员）看全局日志；其余用户只能检索 `user_id = 自己` 的日志，约束由服务端强制注入，前端不做假设。
+- **日志检索字段**：等值过滤 `level` / `logger` / `traceId` / `userId` / `runId` / `sessionId` + 时间范围；全文关键字四列 `message` / `logger` / `traceId` / `exception`，白名单外字段直接拒绝。检索结果可导出 CSV（与检索同口径，上限 5000 行，视角隔离同检索）。
 - 业务日志同时异步投递到 Manticore，供页面检索。
 - 禁止打印密钥、Token、完整请求体中的敏感字段。
 
@@ -334,6 +337,8 @@ public class AgentProperties {
 
 - 必填配置在 `application.yaml` 给默认值，缺失时启动失败（fail fast）。
 - 密钥走环境变量，不入库、不进日志。
+
+**模型参数以供应方配置为准，全局配置只作兜底**：`wb_provider` 的 `context_window` / `max_output_tokens` / `temperature` / `top_p` 与能力位（`cap_vision` / `cap_tool` / `cap_reasoning`）按运行下发；列留空即回落 `liteworkbench.agent.model.*` 全局值，存量行行为不变。出站请求体只写有值的采样参数，不向下游发null；`cap_tool = false` 的模型不注入工具描述。
 
 ## 11. 错误码
 

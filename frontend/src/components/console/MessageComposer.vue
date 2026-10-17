@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { ElIcon } from 'element-plus'
-import { ArrowUpBold, Collection, Loading, Promotion, Tools } from '@element-plus/icons-vue'
+import { ArrowDownBold, ArrowUpBold, Box, Collection, Loading, Picture, Promotion, Setting, Tools } from '@element-plus/icons-vue'
 import LwButton from '@/components/ui/LwButton.vue'
 import { docApi, fileApi, kbApi, skillApi } from '@/api'
 import { usePermission } from '@/composables/usePermission'
-import type { RunRefREQ, SkillVO, DocVO, FileVO, KbVO } from '@/types/api'
+import type { ProviderVO, RunRefREQ, SkillVO, DocVO, FileVO, KbVO, WorkspaceVO } from '@/types/api'
 
-/** 工作台输入框：自增高输入 + / 技能与 @ 引用面板；选中项落成 chip，结构化字段单独随请求提交 */
+/** 工作台输入框：模型与工作区即点即换，/ 技能与 @ 引用面板，附件直传当前工作区桶 */
 const { t } = useI18n()
+const router = useRouter()
 const { hasPerm } = usePermission()
 
 const draft = defineModel<string>({ required: true })
@@ -18,11 +20,23 @@ const props = defineProps<{
   replaying: boolean
   /** 上一条用户消息，供 ↑ 回填；宿主按当前会话的时间线给出 */
   lastUserMessage?: string
+  /** 可用模型供应方（enabled），模型选择器数据源 */
+  providers: ProviderVO[]
+  /** 当前会话绑定的供应方码 */
+  providerCode: string
+  /** 当前会话绑定的模型名 */
+  modelName: string
+  /** 当前用户工作区列表 */
+  workspaces: WorkspaceVO[]
+  /** 当前会话绑定的工作区 ID */
+  workspaceId: string
 }>()
 const emit = defineEmits<{
   send: [{ content: string; skillCodes: string[]; refs: RunRefREQ[] }]
   abort: []
   newSession: []
+  'update:model': [{ providerCode: string; modelName: string }]
+  'update:workspace': [workspaceId: string]
 }>()
 
 /** 面板条目：命令 / 技能 / 引用统一成一种可选项 */
@@ -37,10 +51,10 @@ interface PaletteItem {
   ref?: RunRefREQ
 }
 
-/** 已选中的技能与引用 chip */
+/** 已选中的技能、引用与附件 chip */
 interface Chip {
   key: string
-  kind: 'skill' | 'ref'
+  kind: 'skill' | 'ref' | 'file'
   label: string
   skillCode?: string
   ref?: RunRefREQ
@@ -64,6 +78,76 @@ const locked = computed(() => props.streaming || props.replaying)
 const canSend = computed(() => !locked.value && (draft.value.trim().length > 0 || chips.value.length > 0))
 const charCount = computed(() => draft.value.length)
 const nearLimit = computed(() => charCount.value >= MAX_LENGTH * 0.9)
+
+/** 模型选择与工作区切换面板开合 */
+const modelPickerOpen = ref(false)
+const workspacePickerOpen = ref(false)
+/** 手输模型名覆盖：空即用供应方默认模型 */
+const customModel = ref('')
+const uploading = ref(false)
+const uploadInput = ref<HTMLInputElement | null>(null)
+
+const currentProvider = computed(() =>
+  props.providers.find((item) => item.providerCode === props.providerCode) ?? null)
+const currentWorkspace = computed(() =>
+  props.workspaces.find((item) => item.workspaceId === props.workspaceId) ?? null)
+/** 面板标题：展示「供应方 · 模型」与工作区名，未绑定时给引导文案 */
+const modelLabel = computed(() => {
+  const provider = currentProvider.value
+  const model = props.modelName || provider?.defaultModel
+  return model ? `${provider?.providerName ?? props.providerCode} · ${model}` : t('console.pickModel')
+})
+const workspaceLabel = computed(() => currentWorkspace.value?.workspaceName ?? t('console.pickWorkspace'))
+
+function openModelPicker(): void {
+  customModel.value = props.modelName && props.modelName !== currentProvider.value?.defaultModel
+    ? props.modelName
+    : ''
+  modelPickerOpen.value = true
+}
+
+function pickProvider(item: ProviderVO): void {
+  emit('update:model', { providerCode: item.providerCode, modelName: item.defaultModel ?? '' })
+  modelPickerOpen.value = false
+}
+
+function applyCustomModel(): void {
+  const name = customModel.value.trim()
+  if (!name) return
+  const provider = currentProvider.value
+  emit('update:model', {
+    providerCode: provider?.providerCode ?? props.providerCode,
+    modelName: name,
+  })
+  modelPickerOpen.value = false
+}
+
+function pickWorkspace(item: WorkspaceVO): void {
+  emit('update:workspace', item.workspaceId)
+  workspacePickerOpen.value = false
+}
+
+/** 附件上传：直传当前工作区桶，成功后落 file chip 随消息提交 */
+async function onUploadFile(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  uploading.value = true
+  try {
+    const vo = await fileApi.upload(file, undefined, props.workspaceId || undefined)
+    chips.value.push({
+      key: `file:${vo.fileId}`,
+      kind: 'file',
+      label: vo.fileName,
+      ref: { type: 'file', id: vo.fileId, label: vo.fileName },
+    })
+  } catch {
+    // 拦截器已提示，保留输入框供重试
+  } finally {
+    uploading.value = false
+  }
+}
 
 /** 把标签按关键字切成三段，供模板对命中片段加粗；无关键字时整段原样返回 */
 function highlight(label: string): { text: string; hit: boolean }[] {
@@ -140,7 +224,7 @@ async function ensureData(): Promise<void> {
         kind: 'ref' as const,
         label: item.docTitle,
         hint: t('console.refDoc'),
-        ref: { type: 'doc' as const, id: item.docId, label: item.docTitle },
+        ref: { type: 'doc' as const, id: item.docId, label: item.docTitle } as RunRefREQ,
       })),
     ]
     loaded.value = true
@@ -227,7 +311,7 @@ function pick(item: PaletteItem | undefined): void {
     chips.value.push({ key: `skill:${item.skillCode}`, kind: 'skill', label: item.label, skillCode: item.skillCode })
   }
   const ref = item.ref
-  if (ref && !chips.value.some((chip) => chip.ref?.type === ref.type && chip.ref.id === ref.id)) {
+  if (ref && !chips.value.some((chip) => chip.ref?.type === ref.type && chip.ref?.id === ref.id)) {
     chips.value.push({ key: `${ref.type}:${ref.id}`, kind: 'ref', label: ref.label ?? item.label, ref })
   }
   closePalette()
@@ -240,6 +324,11 @@ function pick(item: PaletteItem | undefined): void {
 
 function removeChip(chip: Chip): void {
   chips.value = chips.value.filter((item) => item.key !== chip.key)
+  if (chip.kind === 'file' && chip.ref) {
+    void fileApi.remove(chip.ref.id).catch(() => {
+      // 删除失败不阻塞：chip 已从输入框摘除，文件空间仍可见可再删
+    })
+  }
 }
 
 /** 输入区自增高：内容驱动高度，超过上限后内部滚动 */
@@ -300,6 +389,8 @@ function onKeydown(event: KeyboardEvent): void {
     event.preventDefault()
     // 面板优先；面板关着且正在流式输出时，Esc 就是中断
     if (paletteOpen.value) closePalette()
+    else if (modelPickerOpen.value) modelPickerOpen.value = false
+    else if (workspacePickerOpen.value) workspacePickerOpen.value = false
     else if (props.streaming) emit('abort')
     return
   }
@@ -343,6 +434,75 @@ defineExpose({ focus: () => textareaEl.value?.focus(), clear })
 
 <template>
   <div class="lw-composer">
+    <!-- 模型与工作区：即点即换，改动由宿主持久化到会话 -->
+    <div class="lw-composer__switch">
+      <el-popover v-model:visible="modelPickerOpen" placement="top-start" :width="320" trigger="click">
+        <template #reference>
+          <button type="button" class="lw-composer__pill" :disabled="locked" @click="openModelPicker">
+            <el-icon :size="12"><Setting /></el-icon>
+            <span class="max-w-[220px] truncate">{{ modelLabel }}</span>
+            <el-icon :size="10" class="opacity-60"><ArrowDownBold /></el-icon>
+          </button>
+        </template>
+        <div class="flex flex-col gap-1">
+          <p class="text-[11px] font-bold px-1" style="color: var(--lw-ink-muted)">{{ t('console.pickModel') }}</p>
+          <button
+            v-for="item in providers"
+            :key="item.providerId"
+            type="button"
+            class="lw-composer__option"
+            :class="{ 'is-active': item.providerCode === providerCode }"
+            @click="pickProvider(item)"
+          >
+            <span class="flex-1 min-w-0 truncate text-[13px] font-semibold">{{ item.providerName }}</span>
+            <span class="text-[11px] font-mono truncate max-w-[130px]" style="color: var(--lw-ink-muted)">
+              {{ item.defaultModel || '—' }}
+            </span>
+            <el-tooltip v-if="item.capVision" :content="t('settings.provider.capVision')" placement="top">
+              <el-icon :size="12"><Picture /></el-icon>
+            </el-tooltip>
+            <el-tooltip v-if="item.capTool" :content="t('settings.provider.capTool')" placement="top">
+              <el-icon :size="12"><Tools /></el-icon>
+            </el-tooltip>
+          </button>
+          <div class="flex items-center gap-2 mt-2 pt-2" style="border-top: 1px solid var(--lw-border)">
+            <el-input v-model="customModel" size="small" :placeholder="t('console.customModel')" @keyup.enter="applyCustomModel" />
+            <LwButton size="sm" :disabled="!customModel.trim()" @click="applyCustomModel">{{ t('common.confirm') }}</LwButton>
+          </div>
+        </div>
+      </el-popover>
+
+      <el-popover v-model:visible="workspacePickerOpen" placement="top-start" :width="280" trigger="click">
+        <template #reference>
+          <button type="button" class="lw-composer__pill" :disabled="locked">
+            <el-icon :size="12"><Box /></el-icon>
+            <span class="max-w-[160px] truncate">{{ workspaceLabel }}</span>
+            <el-icon :size="10" class="opacity-60"><ArrowDownBold /></el-icon>
+          </button>
+        </template>
+        <div class="flex flex-col gap-1">
+          <p class="text-[11px] font-bold px-1" style="color: var(--lw-ink-muted)">{{ t('console.pickWorkspace') }}</p>
+          <button
+            v-for="item in workspaces"
+            :key="item.workspaceId"
+            type="button"
+            class="lw-composer__option"
+            :class="{ 'is-active': item.workspaceId === workspaceId }"
+            @click="pickWorkspace(item)"
+          >
+            <span class="flex-1 min-w-0 truncate text-[13px] font-semibold">{{ item.workspaceName }}</span>
+            <span v-if="item.isDefault" class="text-[10px] font-bold" style="color: var(--lw-primary-ink)">
+              {{ t('workspace.default') }}
+            </span>
+          </button>
+          <div class="flex items-center justify-between mt-2 pt-2" style="border-top: 1px solid var(--lw-border)">
+            <span class="text-[11px]" style="color: var(--lw-ink-muted)">{{ t('console.workspaceBucketTip') }}</span>
+            <LwButton variant="text" size="sm" @click="router.push('/workspaces')">{{ t('console.manageWorkspace') }}</LwButton>
+          </div>
+        </div>
+      </el-popover>
+    </div>
+
     <Transition name="lw-rise">
       <div v-if="paletteOpen" class="lw-composer__palette" role="listbox" :aria-label="t('console.paletteTitle')">
         <div class="lw-composer__head">
@@ -394,7 +554,11 @@ defineExpose({ focus: () => textareaEl.value?.focus(), clear })
           class="lw-composer__chip"
           :class="`is-${chip.kind}`"
         >
-          <el-icon :size="12"><Tools v-if="chip.kind === 'skill'" /><Collection v-else /></el-icon>
+          <el-icon :size="12">
+            <Tools v-if="chip.kind === 'skill'" />
+            <Collection v-else-if="chip.kind === 'ref'" />
+            <Picture v-else />
+          </el-icon>
           <span class="max-w-[180px] truncate">{{ chip.label }}</span>
           <button
             type="button"
@@ -450,6 +614,23 @@ defineExpose({ focus: () => textareaEl.value?.focus(), clear })
           >
             <span class="lw-composer__pill-key">@</span>{{ t('console.hintAt') }}
           </button>
+          <button
+            type="button"
+            class="lw-composer__pill"
+            :disabled="locked || uploading"
+            :title="t('console.uploadTitle')"
+            @click="uploadInput?.click()"
+          >
+            <el-icon :size="12" :class="{ 'is-loading': uploading }"><Picture v-if="!uploading" /><Loading v-else /></el-icon>
+            {{ t('console.upload') }}
+          </button>
+          <input
+            ref="uploadInput"
+            type="file"
+            class="hidden"
+            :aria-label="t('console.upload')"
+            @change="onUploadFile"
+          />
           <span class="lw-composer__hint">{{ locked ? t('console.escHint') : t('console.sendHint') }}</span>
         </div>
 
@@ -482,6 +663,35 @@ defineExpose({ focus: () => textareaEl.value?.focus(), clear })
 <style scoped>
 .lw-composer {
   position: relative;
+}
+/* 模型与工作区切换行：贴在输入框上方，弱化成 toolbar 而非抢焦点的主操作区 */
+.lw-composer__switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 0 2px 8px;
+}
+.lw-composer__option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: var(--lw-radius-control);
+  background: transparent;
+  color: var(--lw-ink);
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--lw-dur-fast) var(--lw-ease), color var(--lw-dur-fast) var(--lw-ease);
+}
+.lw-composer__option:hover {
+  background: var(--lw-primary-tint);
+}
+.lw-composer__option.is-active {
+  background: var(--lw-secondary-tint);
+  color: var(--lw-primary-ink);
 }
 .lw-composer__box {
   display: flex;
@@ -525,6 +735,9 @@ defineExpose({ focus: () => textareaEl.value?.focus(), clear })
 }
 .lw-composer__chip.is-ref {
   background: var(--lw-secondary-tint);
+}
+.lw-composer__chip.is-file {
+  background: var(--lw-primary-tint);
 }
 .lw-composer__chip-x {
   display: inline-flex;

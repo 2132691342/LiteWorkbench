@@ -5,6 +5,7 @@ import com.liteworkbench.agent.event.AgentEventType;
 import com.liteworkbench.agent.loop.AgentLoop;
 import com.liteworkbench.agent.model.ModelClient;
 import com.liteworkbench.agent.model.ModelTypes.Msg;
+import com.liteworkbench.agent.model.SamplingParams;
 import com.liteworkbench.agent.spi.KbSearchPort;
 import com.liteworkbench.agent.spi.MemoryPort;
 import com.liteworkbench.agent.spi.SubRunPort;
@@ -70,17 +71,22 @@ public class AgentKernelRuntime implements AgentRuntime {
         RunHandle handle = new RunHandle(context.runId());
         AtomicLong seq = new AtomicLong(RunConst.EVENT_SEQ_START);
         ModelClient client = modelFactory.client(context.providerCode(), context.modelName());
+        SamplingParams sampling = Objects.nonNull(context.sampling())
+                ? context.sampling()
+                : SamplingParams.global(agentProperties.getModel().getTemperature(),
+                        agentProperties.getModel().getContextWindow());
+        int window = sampling.windowOr(agentProperties.getModel().getContextWindow());
         ToolRegistry registry = new ToolRegistry(toolExecutor);
         registry.register(new WorkbenchTools(toolGate, kbSearchPort, memoryPort, subRunPort,
                 pythonRuntime, runtimeProperties,
                 new ToolOwner(context.userId(), context.runId(), context.sessionId())));
         List<Msg> messages = AgentMemory.assemble(context.history(), context.systemPrompt(), context.prompt(),
-                agentProperties.getModel().getContextWindow(), agentProperties.getModel().getReserveTokens());
+                window, agentProperties.getModel().getReserveTokens());
         AgentLoop loop = new AgentLoop(client, registry, toolGate,
                 agentProperties.getLoop().getMaxIters(), agentProperties.getLoop().getRepeatGuard(),
                 agentProperties.getLoop().getToolTimeoutSeconds(),
                 agentProperties.getModel().getStreamTimeoutSeconds(),
-                agentProperties.getModel().getTemperature(), handle::isCancelled);
+                sampling, handle::isCancelled);
         executor.submit(() -> run(handle, context, loop, messages, registry, seq, sink));
         log.info("[agent.start] runId={} provider={} model={} history={} messages={}",
                 context.runId(), context.providerCode(), context.modelName(),

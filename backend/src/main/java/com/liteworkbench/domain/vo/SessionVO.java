@@ -22,6 +22,8 @@ public class SessionVO implements Serializable {
     private String providerCode;
     /** 模型名 */
     private String modelName;
+    /** 工作区 ID */
+    private String workspaceId;
     /** 消息数 */
     private Integer messageCount;
     /** 运行数 */

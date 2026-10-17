@@ -77,6 +77,13 @@ public class ProviderService {
         provider.setApiKeyEnc(encryptIfPresent(req.getApiKey()));
         provider.setDefaultModel(StrUtil.blankToDefault(req.getDefaultModel(),
                 Objects.nonNull(preset) ? preset.getDefaultModel() : null));
+        provider.setContextWindow(req.getContextWindow());
+        provider.setMaxOutputTokens(req.getMaxOutputTokens());
+        provider.setTemperature(req.getTemperature());
+        provider.setTopP(req.getTopP());
+        provider.setCapVision(Objects.nonNull(req.getCapVision()) ? req.getCapVision() : Boolean.FALSE);
+        provider.setCapTool(Objects.nonNull(req.getCapTool()) ? req.getCapTool() : Boolean.TRUE);
+        provider.setCapReasoning(Objects.nonNull(req.getCapReasoning()) ? req.getCapReasoning() : Boolean.FALSE);
         provider.setEnabled(Objects.nonNull(req.getEnabled()) ? req.getEnabled() : Boolean.TRUE);
         provider.setCreatedBy(userId);
         providerMapper.insert(provider);
@@ -102,6 +109,13 @@ public class ProviderService {
         provider.setBaseUrl(req.getBaseUrl());
         provider.setApiKeyEnc(encryptIfPresent(req.getApiKey()));
         provider.setDefaultModel(req.getDefaultModel());
+        provider.setContextWindow(req.getContextWindow());
+        provider.setMaxOutputTokens(req.getMaxOutputTokens());
+        provider.setTemperature(req.getTemperature());
+        provider.setTopP(req.getTopP());
+        provider.setCapVision(req.getCapVision());
+        provider.setCapTool(req.getCapTool());
+        provider.setCapReasoning(req.getCapReasoning());
         provider.setEnabled(req.getEnabled());
         provider.setUpdatedBy(userId);
         providerMapper.update(provider);
@@ -169,6 +183,13 @@ public class ProviderService {
         vo.setApiKeyMasked(mask(provider.getApiKeyEnc()));
         vo.setHasApiKey(StrUtil.isNotBlank(provider.getApiKeyEnc()));
         vo.setDefaultModel(provider.getDefaultModel());
+        vo.setContextWindow(provider.getContextWindow());
+        vo.setMaxOutputTokens(provider.getMaxOutputTokens());
+        vo.setTemperature(provider.getTemperature());
+        vo.setTopP(provider.getTopP());
+        vo.setCapVision(provider.getCapVision());
+        vo.setCapTool(provider.getCapTool());
+        vo.setCapReasoning(provider.getCapReasoning());
         vo.setEnabled(provider.getEnabled());
         vo.setUpdatedAt(TimeUtil.toMillis(provider.getUpdatedAt()));
         return vo;

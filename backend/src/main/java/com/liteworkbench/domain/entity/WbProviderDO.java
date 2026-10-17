@@ -32,6 +32,20 @@ public class WbProviderDO implements Serializable {
     private String apiKeyEnc;
     /** 默认模型名，可空 */
     private String defaultModel;
+    /** 上下文窗口 token 数，NULL 回落全局配置 */
+    private Integer contextWindow;
+    /** 最大输出 token 数，NULL 不限制 */
+    private Integer maxOutputTokens;
+    /** 采样温度 0~2，NULL 回落全局配置 */
+    private Double temperature;
+    /** top-P 0~1，NULL 不下发 */
+    private Double topP;
+    /** 是否支持图片输入 */
+    private Boolean capVision;
+    /** 是否支持工具调用 */
+    private Boolean capTool;
+    /** 是否支持推理（思维链）输出 */
+    private Boolean capReasoning;
     private Boolean enabled;
     private String createdBy;
     private LocalDateTime createdAt;

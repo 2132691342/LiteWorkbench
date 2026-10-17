@@ -188,7 +188,7 @@
 | POST | `/session/delete/{sessionId}` | — → `R<Void>` | `session:delete` |
 | GET | `/session/messages/{sessionId}` | — → `List<MessageVO>` | — |
 
-`SessionREQ` 承载标题 / 模型 / 供应方 / 系统提示词（标题上限 128，系统提示词上限 8000）。`(sessionId, user_id)` 查不到即 `SESSION_NOT_FOUND` `3001`。
+`SessionREQ` 承载标题 / 模型 / 供应方 / 工作区 / 系统提示词（标题上限 128，系统提示词上限 8000）。`(sessionId, user_id)` 查不到即 `SESSION_NOT_FOUND` `3001`。`workspaceId` 显式传入才改绑定（留空沿用当前），新建时空值解析默认工作区（无工作区则懒建）。`SessionVO` 回带 `workspaceId`，输入框据即切换工作区。
 
 ## 8. 对话与运行
 
@@ -374,17 +374,27 @@ data: {"runId":"RUN_..","sessionId":"SESS_..","seq":42,"eventType":"text.delta",
 | POST | `/provider/delete/{providerId}` | — → `R<Void>` | `wb:provider:delete` | `provider:delete` |
 | POST | `/provider/test/{providerId}` | — → `ProviderVO`（连通性测试） | `wb:provider:update` | `provider:test` |
 
-- `ProviderVO`：`providerId` / `providerCode` / `providerName` / `baseUrl` / `apiKeyMasked`（如 `sk-***abcd`）/ `hasApiKey` / `defaultModel` / `enabled` / `updatedAt`。密钥永不回显明文。
+- `ProviderVO`：`providerId` / `providerCode` / `providerName` / `baseUrl` / `apiKeyMasked`（如 `sk-***abcd`）/ `hasApiKey` / `defaultModel` / 模型参数（`contextWindow` / `maxOutputTokens` / `temperature` / `topP` / `capVision` / `capTool` / `capReasoning`）/ `enabled` / `updatedAt`。密钥永不回显明文。
+- 模型参数：`contextWindow`（上下文窗口 token 数，NULL 回落全局）、`maxOutputTokens`（最大输出，NULL 不限）、`temperature`（0~2，NULL 回落全局）、`topP`（0~1，NULL 不下发）、`capVision` / `capTool` / `capReasoning`（能力位，`capTool` 默认 true）。参数随运行下发模型请求（`temperature` / `top_p` / `max_tokens`），`capTool=false` 的模型不注入工具描述。存量行与留空列行为不变。
 - `ProviderPresetVO`：`providerCode` / `baseUrl` / `defaultModel` / `protocol`（固定 `openai`）/ `requiresKey`（固定 `true`）。预设码为 `openai` / `deepseek` / `doubao` / `grok`，`baseUrl` 与 `defaultModel` 留空则取预设默认值。
 - 供应方配置变更后清 `lw:cache:provider:{code}` 缓存，即时生效。启动不预置任何供应方（避免内置一个跑不通的端点误导用户），无可用供应方时调用返回 `PROVIDER_NOT_CONFIGURED` `4001`，前端设置页给出新建引导。
 - `create` 与 `update` 对 `providerCode` 做预设白名单校验：仅接受 `openai` / `deepseek` / `doubao` / `grok`，其余编码（含本地 ollama 端点）返回 `PARAM_INVALID`。存量非预设行仅可读可删，页面展示「协议不受支持」标签。
 
-## 14. 日志与监控
+## 14. 日志、监控与工作区 / 存储
 
 | 方法 | 路径 | 入参 → 出参 | 权限 |
 |---|---|---|---|
 | GET | `/log/search` | 见下表 → `LogPageVO` | `monitor:log:list` |
 | GET | `/log/stats` | 同检索（无 `page` `size`） → `LogStatsVO` | `monitor:log:list` |
+| GET | `/log/export` | 同检索（无 `page` `size`） → CSV 流（带 BOM，上限 5000 行） | `monitor:log:list` |
+| GET | `/workspace/list` | — → `List<WorkspaceVO>`（含 `objectCount` / `totalSize`） | 登录即可 |
+| POST | `/workspace/create` | `WorkspaceREQ` → `R<String>` | 登录即可，`@Idempotent("workspace:create")` |
+| POST | `/workspace/update` | `WorkspaceREQ` → `R<Void>` | 登录即可，`@Idempotent("workspace:update")` |
+| POST | `/workspace/default/{workspaceId}` | — → `R<Void>` | 登录即可，`@Idempotent("workspace:default")` |
+| POST | `/workspace/delete/{workspaceId}` | — → `R<Void>` | 登录即可，`@Idempotent("workspace:delete")` |
+| GET | `/storage/buckets` | — → `List<BucketAdminVO>` | `monitor:storage:list` |
+| POST | `/storage/bucket/create` | `{bucketName}` → `R<Void>` | `monitor:storage:create`，`@Idempotent("storage:create")` |
+| POST | `/storage/bucket/delete/{bucketName}` | — → `R<Void>` | `monitor:storage:delete`，`@Idempotent("storage:delete")` |
 | GET | `/monitor/health` | — → `HealthRESP` | `monitor:health:list` |
 | GET | `/monitor/overview` | — → `OverviewRESP` | `monitor:health:list` |
 | GET | `/runtime/python` | — → `PythonStatusVO` | `monitor:health:list` |
@@ -399,12 +409,13 @@ data: {"runId":"RUN_..","sessionId":"SESS_..","seq":42,"eventType":"text.delta",
 | 参数 | 说明 |
 |---|---|
 | `keyword` | 关键字，匹配列由 `field` 决定 |
-| `field` | 匹配列白名单：`message`（默认，ICU 中文分词全文）/ `logger` / `traceId`；传白名单外的值直接 `PARAM_INVALID` |
+| `field` | 匹配列白名单：`message`（默认，ICU 中文分词全文）/ `exception`（全文）/ `logger` / `traceId`；传白名单外的值直接 `PARAM_INVALID` |
 | `level` | 级别等值：`INFO` / `WARN` / `ERROR` |
 | `logger` | Logger 名等值（如 `com.liteworkbench.service.RunService`） |
 | `traceId` | 链路标识等值，串一次请求的全部日志 |
 | `userId` | 用户 ID 等值，仅全局视角生效 |
 | `runId` | 运行 ID 等值，串一次运行的全部日志 |
+| `sessionId` | 会话 ID 等值，串一个会话的全部日志 |
 | `from` / `to` | 毫秒时间戳，各自缺省：`from` 缺省为近 7 天，`to` 缺省为当前 |
 | `page` / `size` | 按 `ts` 倒序分页，单页上限 500 |
 

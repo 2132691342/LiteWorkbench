@@ -32,6 +32,11 @@ public interface PermConst {
     /** 调用观测窗口重置：清空 SQL 与 HTTP 的累计指标，重新开始统计 */
     String MONITOR_OBSERVE_RESET = "monitor:observe:reset";
 
+    // 监控 · 存储桶管理（管理员）
+    String MONITOR_STORAGE_LIST = "monitor:storage:list";
+    String MONITOR_STORAGE_CREATE = "monitor:storage:create";
+    String MONITOR_STORAGE_DELETE = "monitor:storage:delete";
+
     // 工作台 · 工具
     String WB_TOOL_LIST = "wb:tool:list";
     String WB_TOOL_TOGGLE = "wb:tool:toggle";

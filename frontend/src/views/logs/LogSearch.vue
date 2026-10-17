@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowDown, RefreshLeft, Search } from '@element-plus/icons-vue'
+import { ArrowDown, Download, RefreshLeft, Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -9,11 +9,13 @@ import LwPageState from '@/components/ui/LwPageState.vue'
 import LwSegmented from '@/components/ui/LwSegmented.vue'
 import LwTag from '@/components/ui/LwTag.vue'
 import { logApi } from '@/api'
+import { usePermission } from '@/composables/usePermission'
 import type { LogDocVO } from '@/types/api'
 import { formatTime } from '@/utils/const'
 
-/** 日志中心：一屏看分布，两行完成检索，行内两行预览 + 展开看全文 */
+/** 日志中心：一屏看分布，两行完成检索，日志流行式展示 + 展开看全文 */
 const { t, te } = useI18n()
+const { hasPerm } = usePermission()
 
 const loading = ref(false)
 const statsLoading = ref(false)
@@ -41,6 +43,7 @@ const query = reactive({
   traceId: '',
   userId: '',
   runId: '',
+  sessionId: '',
   from: undefined as TimeInput,
   to: undefined as TimeInput,
   page: 1,
@@ -49,6 +52,16 @@ const query = reactive({
 
 /** 高级筛选展开态：默认收起，主行只留关键字、级别与快捷时间 */
 const advancedOpen = ref(false)
+
+/** 显示列控制：日志流行式展示下按需显隐列，默认时间 + 级别 + 正文 */
+const showCols = reactive({
+  ts: true,
+  level: true,
+  logger: false,
+  traceId: false,
+  sessionId: false,
+  exception: true,
+})
 
 /** 时间归一：空值与非法值一律 undefined，数字字符串转毫秒 */
 function toMillis(value: TimeInput): number | undefined {
@@ -73,11 +86,12 @@ const PRESETS = [
 
 const activePreset = ref<string>('24h')
 
-/** 字段选项：message 走全文分词，logger / traceId 走等值 */
+/** 检索字段选项：message / exception 走全文分词，logger / traceId 走等值 */
 const FIELD_OPTIONS = [
   { value: 'message', labelKey: 'logs.fieldMessage' },
   { value: 'logger', labelKey: 'logs.fieldLogger' },
   { value: 'traceId', labelKey: 'logs.fieldTraceId' },
+  { value: 'exception', labelKey: 'logs.fieldException' },
 ]
 
 /** 链路钻取态：按 traceId 过滤时把结果翻成时间升序，还原一次请求的先后顺序 */
@@ -89,19 +103,15 @@ const displayDocs = computed(() => (traceMode.value ? [...docs.value].reverse() 
 /** 高级筛选已启用条数：用于折叠态上的角标提示；快捷时间预设写入的 from/to 不计入，只有用户自选时间范围才算 */
 const advancedCount = computed(
   () =>
-    [query.logger, query.traceId, query.userId, query.runId].filter((item) => item.trim().length > 0).length +
+    [query.logger, query.traceId, query.userId, query.runId, query.sessionId].filter((item) => item.trim().length > 0).length +
     (activePreset.value ? 0 : (toMillis(query.from) ? 1 : 0) + (toMillis(query.to) ? 1 : 0)),
 )
 
 const levelCount = computed(() => {
-  const map = new Map<string, number>()
-  levels.value.forEach((item) => map.set(item.level, item.count))
+  const map = new Map<string, string>()
+  levels.value.forEach((item) => map.set(item.level, item.count.toLocaleString()))
   return map
 })
-
-function levelTotal(level: string): string {
-  return (levelCount.value.get(level) ?? 0).toLocaleString()
-}
 
 /** 迷你直方图：单行内嵌，柱子高度按占比，悬停看时间与条数，点击钻取 */
 const histogramMax = computed(() => histogram.value.reduce((max, item) => Math.max(max, item.count), 0))
@@ -170,23 +180,27 @@ function handleSearch(): void {
   scheduleRefresh()
 }
 
+/** 检索参数快照：search 与 stats 共用同一份过滤条件 */
+function filters() {
+  return {
+    keyword: query.keyword || undefined,
+    field: query.field || undefined,
+    level: query.level || undefined,
+    logger: query.logger || undefined,
+    traceId: query.traceId || undefined,
+    userId: query.userId || undefined,
+    runId: query.runId || undefined,
+    sessionId: query.sessionId || undefined,
+    from: toMillis(query.from),
+    to: toMillis(query.to),
+  }
+}
+
 async function search(): Promise<void> {
   loading.value = true
   error.value = ''
   try {
-    const result = await logApi.search({
-      keyword: query.keyword || undefined,
-      field: query.field || undefined,
-      level: query.level || undefined,
-      logger: query.logger || undefined,
-      traceId: query.traceId || undefined,
-      userId: query.userId || undefined,
-      runId: query.runId || undefined,
-      from: toMillis(query.from),
-      to: toMillis(query.to),
-      page: query.page,
-      size: query.size,
-    })
+    const result = await logApi.search({ ...filters(), page: query.page, size: query.size })
     docs.value = result.list
     total.value = result.total
     // 视角以检索响应为准，与结果同源
@@ -201,17 +215,7 @@ async function search(): Promise<void> {
 async function loadStats(): Promise<void> {
   statsLoading.value = true
   try {
-    const stats = await logApi.stats({
-      keyword: query.keyword || undefined,
-      field: query.field || undefined,
-      level: query.level || undefined,
-      logger: query.logger || undefined,
-      traceId: query.traceId || undefined,
-      userId: query.userId || undefined,
-      runId: query.runId || undefined,
-      from: toMillis(query.from),
-      to: toMillis(query.to),
-    })
+    const stats = await logApi.stats(filters())
     levels.value = stats.levels ?? []
     histogram.value = stats.histogram ?? []
     if (stats.bucketMs) bucketMs.value = stats.bucketMs
@@ -243,6 +247,7 @@ function handleReset(): void {
   query.traceId = ''
   query.userId = ''
   query.runId = ''
+  query.sessionId = ''
   query.from = undefined
   query.to = undefined
   query.page = 1
@@ -266,7 +271,7 @@ async function copyTraceId(traceId: string): Promise<void> {
     ElMessage.success(t('logs.copied'))
     window.setTimeout(() => {
       if (copiedId.value === traceId) copiedId.value = ''
-    }, 400)
+    }, 2000)
   } catch {
     // 剪贴板不可用（非安全上下文）时静默失败，用户仍可手动选择复制
   }
@@ -294,10 +299,13 @@ function filterByRun(runId: string): void {
   handleSearch()
 }
 
-function levelTone(level?: string): 'error' | 'warning' | 'primary' {
-  if (level === 'ERROR') return 'error'
-  if (level === 'WARN') return 'warning'
-  return 'primary'
+/** 导出：与当前检索同口径，浏览器直接下载 CSV（上限 5000 行） */
+async function exportCsv(): Promise<void> {
+  try {
+    await logApi.exportCsv(filters())
+  } catch {
+    // 拦截器已提示失败原因
+  }
 }
 
 /** 翻译缺失时降级为 key 末段，绝不裸显 i18n key */
@@ -322,11 +330,17 @@ onBeforeUnmount(() => {
         <h2 class="lw-title">{{ t('logs.title') }}</h2>
         <p class="lw-subtitle mt-1">{{ t('logs.desc') }}</p>
       </div>
-      <el-tooltip :content="scope === 'global' ? t('logs.scopeTip_global') : t('logs.scopeTip_self')" placement="left">
-        <LwTag :tone="scope === 'global' ? 'secondary' : 'muted'">
-          {{ scope === 'global' ? t('logs.scope_global') : t('logs.scope_self') }}
-        </LwTag>
-      </el-tooltip>
+      <div class="flex items-center gap-2">
+        <el-tooltip :content="scope === 'global' ? t('logs.scopeTip_global') : t('logs.scopeTip_self')" placement="left">
+          <LwTag :tone="scope === 'global' ? 'secondary' : 'muted'">
+            {{ scope === 'global' ? t('logs.scope_global') : t('logs.scope_self') }}
+          </LwTag>
+        </el-tooltip>
+        <LwButton v-if="hasPerm('monitor:log:list')" variant="secondary" size="sm" @click="exportCsv()">
+          <template #icon><el-icon><Download /></el-icon></template>
+          {{ t('logs.export') }}
+        </LwButton>
+      </div>
     </div>
 
     <!-- 分布概览：级别计数与时间直方图并作一行紧凑条，随过滤条件联动 -->
@@ -347,7 +361,7 @@ onBeforeUnmount(() => {
             />
             <span class="text-xs font-bold" style="color: var(--lw-ink-muted)">{{ t(`logs.level_${level.toLowerCase()}`) }}</span>
             <span class="text-lg font-bold tracking-tight tabular-nums" style="color: var(--lw-ink)">
-              {{ statsLoading ? '·' : levelTotal(level) }}
+              {{ statsLoading ? '·' : levelCount.get(level) ?? '0' }}
             </span>
           </div>
         </div>
@@ -378,7 +392,7 @@ onBeforeUnmount(() => {
     </LwCard>
 
     <LwCard>
-      <!-- 主筛选行：字段 + 关键字 + 级别 + 快捷时间，够用不绕 -->
+      <!-- 主筛选行：检索列 + 关键字 + 级别 + 快捷时间，够用不绕 -->
       <div class="flex flex-wrap items-center gap-2">
         <el-select v-model="query.field" style="width: 116px" @change="handleSearch">
           <el-option v-for="item in FIELD_OPTIONS" :key="item.value" :label="fieldLabel(item.value)" :value="item.value" />
@@ -401,7 +415,7 @@ onBeforeUnmount(() => {
           size="sm"
           @update:model-value="applyPreset"
         />
-        <LwButton variant="ghost" @click="handleSearch">
+        <LwButton @click="handleSearch">
           <template #icon><el-icon><Search /></el-icon></template>
           {{ t('common.search') }}
         </LwButton>
@@ -411,7 +425,7 @@ onBeforeUnmount(() => {
         </LwButton>
       </div>
 
-      <!-- 高级筛选：按需展开，避免首屏被一排输入框淹没 -->
+      <!-- 显示列 + 高级筛选：一行控件管展示与深层过滤，默认收起 -->
       <div class="flex flex-wrap items-center gap-3 mt-3">
         <LwButton variant="text" size="sm" :aria-expanded="advancedOpen" @click="advancedOpen = !advancedOpen">
           <template #icon>
@@ -420,7 +434,12 @@ onBeforeUnmount(() => {
           {{ t('logs.moreFilters') }}
           <span v-if="advancedCount > 0 && !advancedOpen" class="lw-filter-badge">{{ advancedCount }}</span>
         </LwButton>
-        <p class="text-xs" style="color: var(--lw-ink-muted)">{{ t('logs.tipShort') }}</p>
+        <el-checkbox v-model="showCols.ts" size="small">{{ t('logs.colTs') }}</el-checkbox>
+        <el-checkbox v-model="showCols.level" size="small">{{ t('logs.colLevel') }}</el-checkbox>
+        <el-checkbox v-model="showCols.logger" size="small">{{ t('logs.colLogger') }}</el-checkbox>
+        <el-checkbox v-model="showCols.traceId" size="small">{{ t('logs.colTraceId') }}</el-checkbox>
+        <el-checkbox v-model="showCols.sessionId" size="small">{{ t('logs.colSessionId') }}</el-checkbox>
+        <el-checkbox v-model="showCols.exception" size="small">{{ t('logs.colException') }}</el-checkbox>
       </div>
       <transition name="lw-fade">
         <div v-if="advancedOpen" class="flex flex-wrap items-center gap-2 mt-3">
@@ -435,6 +454,14 @@ onBeforeUnmount(() => {
           <el-input
             v-model="query.traceId"
             :placeholder="t('logs.traceIdPlaceholder')"
+            clearable
+            style="width: 220px"
+            @keyup.enter="handleSearch"
+            @clear="handleSearch"
+          />
+          <el-input
+            v-model="query.sessionId"
+            :placeholder="t('logs.sessionIdPlaceholder')"
             clearable
             style="width: 220px"
             @keyup.enter="handleSearch"
@@ -482,43 +509,51 @@ onBeforeUnmount(() => {
         <div v-if="traceMode" class="text-xs mb-3 px-3 py-2 rounded-lg" style="background: var(--lw-secondary-tint); color: var(--lw-primary-ink)">
           {{ t('logs.traceModeTip', { total }) }}
         </div>
-        <div class="flex flex-col gap-2">
+        <!-- 日志流：等宽整行，level 色块 + 时间戳前缀，点行展开全文与链路字段 -->
+        <div class="lw-logstream rounded-lg border overflow-hidden" style="border-color: var(--lw-border)">
           <div
             v-for="doc in displayDocs"
             :key="doc.logId"
-            class="rounded-lg border px-4 py-3 cursor-pointer transition-all duration-200 hover:lw-shadow-sm"
-            style="border-color: var(--lw-border)"
+            class="lw-logline group cursor-pointer transition-colors duration-150"
+            :class="{ 'is-open': expanded === doc.logId }"
             role="button"
             tabindex="0"
             :aria-expanded="expanded === doc.logId"
             @click="expanded = expanded === doc.logId ? '' : doc.logId"
             @keydown.enter="expanded = expanded === doc.logId ? '' : doc.logId"
           >
-            <div class="flex items-center gap-3">
-              <LwTag :tone="levelTone(doc.level)" class="w-16 justify-center shrink-0">{{ doc.level }}</LwTag>
-              <span class="text-xs font-mono opacity-70 shrink-0">{{ formatTime(doc.ts) }}</span>
-              <span class="text-sm flex-1 min-w-0 lw-log-msg" style="color: var(--lw-ink)">
-                <template v-for="(seg, index) in highlight(doc.message, query.field === 'message' ? query.keyword : '')" :key="index">
+            <div class="flex items-baseline gap-2 px-3 py-1.5 min-w-0">
+              <span v-if="showCols.ts" class="lw-logline__ts shrink-0">{{ formatTime(doc.ts) }}</span>
+              <span
+                v-if="showCols.level"
+                class="lw-logline__level shrink-0"
+                :class="`is-${(doc.level ?? 'INFO').toLowerCase()}`"
+              >{{ doc.level }}</span>
+              <span v-if="showCols.logger" class="lw-logline__logger shrink-0 hidden lg:inline max-w-[220px] truncate">{{ doc.logger }}</span>
+              <span v-if="showCols.traceId" class="lw-logline__logger shrink-0 hidden xl:inline max-w-[140px] truncate font-mono">{{ doc.traceId }}</span>
+              <span v-if="showCols.sessionId" class="lw-logline__logger shrink-0 hidden xl:inline max-w-[140px] truncate font-mono">{{ doc.sessionId }}</span>
+              <span class="flex-1 min-w-0 lw-logline__msg">
+                <template v-for="(seg, index) in highlight(doc.message, query.field === 'message' || query.field === 'exception' ? query.keyword : '')" :key="index">
                   <mark v-if="seg.hit" class="lw-mark">{{ seg.text }}</mark>
                   <span v-else>{{ seg.text }}</span>
                 </template>
               </span>
-              <LwTag v-if="doc.exception" tone="error" class="shrink-0">{{ t('logs.hasException') }}</LwTag>
-              <span class="text-xs opacity-50 shrink-0 hidden md:block max-w-[180px] truncate">{{ doc.logger }}</span>
-              <el-icon class="shrink-0 transition-transform duration-200" :class="{ 'rotate-180': expanded === doc.logId }" style="color: var(--lw-ink-muted)">
+              <span v-if="showCols.exception && doc.exception" class="lw-logline__ex shrink-0">{{ t('logs.hasException') }}</span>
+              <el-icon class="shrink-0 transition-transform duration-200" :class="{ 'rotate-180': expanded === doc.logId }" style="color: var(--lw-ink-disabled)">
                 <ArrowDown />
               </el-icon>
             </div>
             <transition name="lw-fade">
-              <div v-if="expanded === doc.logId" class="mt-3 text-xs flex flex-col gap-2">
+              <div v-if="expanded === doc.logId" class="px-3 pb-3 flex flex-col gap-2">
                 <div class="text-xs font-bold" style="color: var(--lw-ink-muted)">{{ t('logs.fullMessage') }}</div>
                 <pre class="whitespace-pre-wrap break-all p-3 rounded-lg max-h-64 overflow-auto" style="background: var(--lw-surface); color: var(--lw-ink); border: 1px solid var(--lw-border)">{{ doc.message || t('logs.noMessage') }}</pre>
-                <div class="flex flex-wrap items-center gap-3 opacity-60">
-                  <span>{{ t('logs.traceId') }}: {{ doc.traceId || '-' }}</span>
-                  <span>{{ t('logs.logger') }}: {{ doc.logger }}</span>
-                  <span>{{ t('logs.thread') }}: {{ doc.thread || '-' }}</span>
-                  <span v-if="doc.userId">{{ t('logs.userId') }}: {{ doc.userId }}</span>
-                  <span v-if="doc.runId">{{ t('logs.runId') }}: {{ doc.runId }}</span>
+                <div class="flex flex-wrap items-center gap-3 text-xs opacity-70 font-mono">
+                  <span>traceId: {{ doc.traceId || '-' }}</span>
+                  <span>logger: {{ doc.logger }}</span>
+                  <span>thread: {{ doc.thread || '-' }}</span>
+                  <span v-if="doc.userId">userId: {{ doc.userId }}</span>
+                  <span v-if="doc.sessionId">sessionId: {{ doc.sessionId }}</span>
+                  <span v-if="doc.runId">runId: {{ doc.runId }}</span>
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
                   <LwButton variant="secondary" size="sm" @click.stop="copyTraceId(doc.traceId ?? '')">
@@ -572,13 +607,62 @@ onBeforeUnmount(() => {
   padding: 0 1px;
 }
 
-/* 折叠态两行预览：短消息不截断，长消息不撑高列表，全文进展开区 */
-.lw-log-msg {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+/* 日志流行式展示：等宽字体、行高压低、奇偶微差，长消息内部截断 */
+.lw-logstream {
+  background: var(--lw-surface-raised);
+  font-family: ui-monospace, 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
+}
+.lw-logline + .lw-logline {
+  border-top: 1px solid var(--lw-border);
+}
+.lw-logline:hover {
+  background: var(--lw-primary-tint);
+}
+.lw-logline.is-open {
+  background: var(--lw-secondary-tint);
+}
+.lw-logline__ts {
+  font-size: 11px;
+  color: var(--lw-ink-disabled);
+  font-variant-numeric: tabular-nums;
+}
+.lw-logline__level {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: var(--lw-radius-tag);
+  line-height: 1.5;
+}
+.lw-logline__level.is-info {
+  background: var(--lw-secondary-tint);
+  color: var(--lw-primary-ink);
+}
+.lw-logline__level.is-warn {
+  background: var(--lw-warning-tint);
+  color: var(--lw-warning-ink);
+}
+.lw-logline__level.is-error {
+  background: var(--lw-error-tint);
+  color: var(--lw-error-ink);
+}
+.lw-logline__logger {
+  font-size: 11px;
+  color: var(--lw-ink-disabled);
+}
+.lw-logline__msg {
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--lw-ink);
   word-break: break-all;
+}
+.lw-logline__ex {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: var(--lw-radius-tag);
+  background: var(--lw-error-tint);
+  color: var(--lw-error-ink);
 }
 
 /* 高级筛选计数角标 */

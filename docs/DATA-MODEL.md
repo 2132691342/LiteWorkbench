@@ -16,7 +16,7 @@
 |---|---|---|
 | 业务与权限主数据 | PostgreSQL | `sys_*` 全表，`wb_*` 全表（会话消息除外） |
 | 全文检索文本 | Manticore | 会话消息 `lw_msg`、知识库分块 `lw_kbchunk`、创作文档检索副本 `lw_doc`、平台日志 `lw_log` |
-| 文件与文档原件 | MinIO | 上传文件、知识库文档原件、运行产物 |
+| 文件与文档原件 | MinIO | 上传文件、知识库文档原件、运行产物；按工作区分桶（每用户每工作区一个 `lwws-*` 桶，平台主桶承载知识库原件） |
 | 缓存、登录态、锁、幂等、限流 | Redis | 见 §7 |
 | 削峰管道 | RabbitMQ | 日志索引、知识库解析任务 |
 
@@ -110,6 +110,7 @@
 | `title` | varchar(128) NOT NULL DEFAULT '新会话' | 会话标题 |
 | `provider_code` | varchar(24) | 供应方码，与 `wb_provider.provider_code` 对应 |
 | `model_name` | varchar(64) | 模型名 |
+| `workspace_id` | varchar(40) | 归属工作区，决定文件落入哪个 MinIO 桶；空回落用户默认工作区 |
 | `system_prompt` | text | 系统提示词 |
 | `message_count` | int NOT NULL DEFAULT 0 | 消息数 |
 | `run_count` | int NOT NULL DEFAULT 0 | 运行数 |
@@ -204,6 +205,7 @@
 | `file_id` | varchar(40) PK | `FILE_` |
 | `user_id` | varchar(40) NOT NULL | 归属用户 |
 | `session_id` | varchar(40) | 归属会话，可空 |
+| `workspace_id` | varchar(40) | 归属工作区，与 `bucket_name` 对应 |
 | `file_name` | varchar(255) NOT NULL | 文件名 |
 | `object_key` | varchar(512) NOT NULL | MinIO 对象键，含用户前缀 |
 | `bucket_name` | varchar(64) NOT NULL | 桶名 |
@@ -224,10 +226,19 @@
 | `base_url` | varchar(512) | 端点 |
 | `api_key_enc` | varchar(512) | 加密存储的密钥 |
 | `default_model` | varchar(64) | 默认模型 |
+| `context_window` | int | 上下文窗口 token 数；NULL 回落全局配置 `liteworkbench.agent.model.context-window` |
+| `max_output_tokens` | int | 最大输出 token 数；NULL 不下发 `max_tokens` |
+| `temperature` | numeric(4,3) | 采样温度 0~2；NULL 回落全局配置 |
+| `top_p` | numeric(4,3) | 核采样 0~1；NULL 不下发 |
+| `cap_vision` | boolean NOT NULL DEFAULT false | 模型是否支持图片输入 |
+| `cap_tool` | boolean NOT NULL DEFAULT true | 模型是否支持工具调用；false 时运行链路不注入工具描述 |
+| `cap_reasoning` | boolean NOT NULL DEFAULT false | 模型是否支持推理（思维链）输出 |
 | `enabled` | boolean NOT NULL DEFAULT true | 是否启用 |
 | 审计 | | `created_by` `created_at` `updated_by` `updated_at` `deleted` `remark` |
 
 索引：`uk_wb_provider_code` 唯一 `(provider_code) WHERE deleted = false`。
+
+模型参数链路：`wb_provider` 参数列 → `RunService.samplingParams()` 组装 `SamplingParams` → `RunContext` 下传 `AgentKernelRuntime` → `AgentLoop` 写入出站请求（`temperature` / `top_p` / `max_tokens`），上下文窗口同时参与历史压缩预算。参数列留空的存量行行为不变，回落全局配置。
 
 预设端点与默认模型（`ProviderPresetEnum`，前端新建时下拉选择自动填充；协议通道固定为 OpenAI 兼容）：
 
@@ -348,6 +359,31 @@ Agent 跨会话记住的用户事实与偏好。同用户同 `memory_key` 只允
 索引：`uk_wb_memory_user_key` 唯一 `(user_id, memory_key) WHERE deleted = false`；`idx_wb_memory_owner` `(user_id, weight DESC, updated_at DESC) WHERE deleted = false`。
 
 容量与注入（`MemoryConst`）：单用户上限 `MAX_PER_USER`（200），写入超限先淘汰最低权重一行；注入系统提示只取 `PROMPT_LIMIT`（5）条，总字符受 `PROMPT_MAX_CHARS`（2000）约束。记忆写入与检索经 Agent 工具 `memory_write` / `memory_search`，链路见 `specs/01`。
+
+### 5.14 wb_workspace（工作区）
+
+用户级资产容器，与 MinIO 桶一一绑定：上传与 `@` 引用按会话绑定的工作区取桶，不同工作区的对象互不可见。
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `workspace_id` | varchar(40) PK | `WSPC_` |
+| `user_id` | varchar(40) NOT NULL | 归属用户，检索必带 |
+| `workspace_name` | varchar(64) NOT NULL | 工作区名，用户内唯一 |
+| `bucket_name` | varchar(63) NOT NULL | 绑定桶名，全局唯一；形如 `lwws-{ULID 小写}`，由系统派生，不接受用户输入 |
+| `description` | varchar(512) | 描述 |
+| `is_default` | boolean NOT NULL DEFAULT false | 用户默认工作区，回落目标 |
+| `state` | varchar(24) NOT NULL DEFAULT 'normal' | `normal` `disabled` `archived` |
+| 审计 | | `created_by` `created_at` `updated_by` `updated_at` `deleted` `remark` |
+
+索引：`uk_wb_ws_bucket` 唯一 `(bucket_name) WHERE deleted = false`；`idx_wb_ws_owner` `(user_id) WHERE deleted = false`。
+
+约束与行为：
+
+- 桶名由 `WSPC_` + ULID 小写派生，创建时幂等 `makeBucket`；用户输入只进 `workspace_name`，不进桶名。
+- 单用户上限 20 个（`WorkspaceService.MAX_PER_USER`）；首个工作区即默认，删除默认工作区被拒，删除后无默认时最早创建者顶上。
+- 工作区解析（`WorkspaceService.resolve`）：id 为空回落默认；用户无任何工作区时懒建「默认工作区」，上传与会话链路不中断。
+- 平台主桶（`liteworkbench.storage.bucket-name`）不归任何工作区，承载知识库文档原件；管理端桶清单对主桶与 `lwws-` 前缀桶标记保护，禁删。
+- 老库 `wb_file` / `wb_session` 无 `workspace_id` 的历史行：解析时按默认工作区归拢，不做数据回填。
 
 ## 6. Manticore 检索表
 

@@ -196,6 +196,9 @@ public class OpenAiCompatClient implements ModelClient {
         if (Objects.nonNull(request.getMaxTokens()) && request.getMaxTokens() > 0) {
             body.put("max_tokens", request.getMaxTokens());
         }
+        if (Objects.nonNull(request.getTopP())) {
+            body.put("top_p", request.getTopP());
+        }
     }
 
     private Map<String, String> headers() {

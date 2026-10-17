@@ -27,6 +27,8 @@ public class WbFileDO implements Serializable {
     private String userId;
     /** 关联会话，可空 */
     private String sessionId;
+    /** 归属工作区，决定落入哪个 MinIO 桶 */
+    private String workspaceId;
     /** 原始文件名 */
     private String fileName;
     /** MinIO 对象键，含用户前缀 */

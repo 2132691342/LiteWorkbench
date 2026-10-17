@@ -155,6 +155,7 @@ export interface SessionVO {
   title: string
   providerCode?: string
   modelName?: string
+  workspaceId?: string
   messageCount?: number
   runCount?: number
   totalTokens?: number
@@ -168,6 +169,7 @@ export interface SessionREQ {
   title?: string
   providerCode?: string
   modelName?: string
+  workspaceId?: string
   systemPrompt?: string
 }
 
@@ -366,6 +368,20 @@ export interface ProviderVO {
   apiKeyMasked?: string
   hasApiKey: boolean
   defaultModel?: string
+  /** 上下文窗口 token 数 */
+  contextWindow?: number
+  /** 最大输出 token 数 */
+  maxOutputTokens?: number
+  /** 采样温度 0~2 */
+  temperature?: number
+  /** top-P 0~1 */
+  topP?: number
+  /** 支持图片输入 */
+  capVision?: boolean
+  /** 支持工具调用 */
+  capTool?: boolean
+  /** 支持推理输出 */
+  capReasoning?: boolean
   enabled: boolean
   updatedAt?: number
 }
@@ -377,6 +393,13 @@ export interface ProviderREQ {
   baseUrl?: string
   apiKey?: string
   defaultModel?: string
+  contextWindow?: number
+  maxOutputTokens?: number
+  temperature?: number
+  topP?: number
+  capVision?: boolean
+  capTool?: boolean
+  capReasoning?: boolean
   enabled?: boolean
 }
 
@@ -483,7 +506,7 @@ export interface LogDocVO {
 
 export interface LogSearchParams {
   keyword?: string
-  /** 关键字匹配列：message（全文）/ logger / traceId */
+  /** 关键字匹配列：message（全文）/ logger / traceId / exception */
   field?: string
   level?: string
   logger?: string
@@ -492,10 +515,47 @@ export interface LogSearchParams {
   userId?: string
   /** 运行 ID 等值，用于串联一次运行的全部日志 */
   runId?: string
+  /** 会话 ID 等值，用于串联一个会话的全部日志 */
+  sessionId?: string
   from?: number
   to?: number
   page?: number
   size?: number
+}
+
+/* ===== 工作区与存储桶 ===== */
+
+/** 工作区：用户级资产容器，与 MinIO 桶一一绑定 */
+export interface WorkspaceVO {
+  workspaceId: string
+  workspaceName: string
+  /** 绑定桶名 */
+  bucketName: string
+  description?: string
+  /** 是否默认工作区 */
+  isDefault?: boolean
+  /** 桶内对象数 */
+  objectCount?: number
+  /** 桶内对象总字节数 */
+  totalSize?: number
+  /** 创建时间，毫秒时间戳 */
+  createdAt?: number
+}
+
+export interface WorkspaceREQ {
+  workspaceId?: string
+  workspaceName: string
+  description?: string
+}
+
+/** 存储桶管理视图（管理员）：全平台桶清单与占用 */
+export interface BucketAdminVO {
+  bucketName: string
+  creationDate?: number
+  objectCount?: number
+  totalSize?: number
+  /** 平台业务桶（主桶与工作区桶）：禁止删除 */
+  protectedBucket?: boolean
 }
 
 /** 日志分布概览：级别计数与时间直方图；scope 为当前检索视角，bucketMs 为直方图桶宽（小时 / 天） */

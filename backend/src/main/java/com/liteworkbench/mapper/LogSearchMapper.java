@@ -141,14 +141,14 @@ public class LogSearchMapper {
     /** 检索日志，按 ts 倒序分页，异常降级为空结果；userId / runId 已由服务端视角判定后传入 */
     public LogSearchDTO search(String keyword, String field, String level,
                                String logger, String traceId, String userId, String runId,
-                               long from, long to, long page, long size) {
+                               String sessionId, long from, long to, long page, long size) {
         // 单页上限 500，offset 用截断后的页大小计算，避免大 size 翻页漏数据
         long pageSize = Math.max(1, Math.min(size, 500));
         long offset = Math.max(page - 1, 0) * pageSize;
         try {
             SearchResponse response = searchApi.search(new SearchRequest()
                     .table(TABLE)
-                    .query(logQuery(keyword, field, level, logger, traceId, userId, runId, from, to))
+                    .query(logQuery(keyword, field, level, logger, traceId, userId, runId, sessionId, from, to))
                     .sort(List.of(Map.of("ts", "desc")))
                     .limit((int) pageSize)
                     .offset((int) Math.max(0, offset)));
@@ -161,9 +161,9 @@ public class LogSearchMapper {
 
     /** 分布概览：级别计数 + 时间直方图，过滤条件与检索一致；dayBucket 为真时按天分桶 */
     public LogStatsVO stats(String userId, String keyword, String field, String level,
-                            String logger, String traceId, String runId,
+                            String logger, String traceId, String runId, String sessionId,
                             long from, long to, boolean dayBucket) {
-        String filter = filterClause(keyword, field, level, logger, traceId, runId);
+        String filter = filterClause(keyword, field, level, logger, traceId, runId, sessionId);
         LogStatsVO stats = new LogStatsVO();
         stats.setLevels(levelCounts(userId, filter, from, to));
         stats.setHistogram(histogram(userId, filter, from, to, dayBucket));
@@ -171,10 +171,10 @@ public class LogSearchMapper {
         return stats;
     }
 
-    /** 日志过滤查询：等值过滤（level / logger / traceId / user_id / run_id）可选，ts 范围可选，关键字按 field 改判匹配列 */
+    /** 日志过滤查询：等值过滤（level / logger / traceId / user_id / run_id / session_id）可选，ts 范围可选，关键字按 field 改判匹配列 */
     private static SearchQuery logQuery(String keyword, String field, String level,
                                         String logger, String traceId, String userId, String runId,
-                                        long from, long to) {
+                                        String sessionId, long from, long to) {
         BoolFilter bool = new BoolFilter();
         if (StrUtil.isNotBlank(level)) {
             bool.addMustItem(new QueryFilter().equalsDef(Map.of("level", level.toUpperCase())));
@@ -190,6 +190,9 @@ public class LogSearchMapper {
         }
         if (StrUtil.isNotBlank(runId)) {
             bool.addMustItem(new QueryFilter().equalsDef(Map.of("run_id", runId)));
+        }
+        if (StrUtil.isNotBlank(sessionId)) {
+            bool.addMustItem(new QueryFilter().equalsDef(Map.of("session_id", sessionId)));
         }
         if (from > 0 && to > 0) {
             bool.addMustItem(new QueryFilter().range(Map.of("ts", Map.of("gte", from, "lte", to))));
@@ -264,7 +267,7 @@ public class LogSearchMapper {
 
     /** 聚合过滤片段：与检索同一套等值与全文条件，字符串值统一转义防注入 */
     private static String filterClause(String keyword, String field, String level,
-                                       String logger, String traceId, String runId) {
+                                       String logger, String traceId, String runId, String sessionId) {
         StringBuilder clause = new StringBuilder();
         if (StrUtil.isNotBlank(level)) {
             clause.append(" AND level = '").append(escape(level.toUpperCase())).append("'");
@@ -277,6 +280,9 @@ public class LogSearchMapper {
         }
         if (StrUtil.isNotBlank(runId)) {
             clause.append(" AND run_id = '").append(escape(runId)).append("'");
+        }
+        if (StrUtil.isNotBlank(sessionId)) {
+            clause.append(" AND session_id = '").append(escape(sessionId)).append("'");
         }
         if (StrUtil.isNotBlank(keyword)) {
             String matchField = StrUtil.isBlank(field) ? "message" : field;

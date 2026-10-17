@@ -15,9 +15,9 @@ public interface WbFileMapper {
 
     /** 新增文件元数据 */
     @Insert("""
-            INSERT INTO wb_file (file_id, user_id, session_id, file_name, object_key, bucket_name,
+            INSERT INTO wb_file (file_id, user_id, session_id, workspace_id, file_name, object_key, bucket_name,
                                  file_size, content_type, category, created_by)
-            VALUES (#{fileId}, #{userId}, #{sessionId}, #{fileName}, #{objectKey}, #{bucketName},
+            VALUES (#{fileId}, #{userId}, #{sessionId}, #{workspaceId}, #{fileName}, #{objectKey}, #{bucketName},
                     #{fileSize}, #{contentType}, #{category}, #{createdBy})
             """)
     int insert(WbFileDO file);

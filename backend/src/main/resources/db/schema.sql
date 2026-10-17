@@ -109,6 +109,8 @@ CREATE TABLE IF NOT EXISTS wb_session (
     remark          varchar(512)
 );
 CREATE INDEX IF NOT EXISTS idx_wb_session_owner ON wb_session (user_id) WHERE deleted = false;
+-- 老库补列：会话绑定的工作区，NULL 回落到用户默认工作区
+ALTER TABLE wb_session ADD COLUMN IF NOT EXISTS workspace_id varchar(40);
 
 -- 运行
 CREATE TABLE IF NOT EXISTS wb_run (
@@ -201,6 +203,7 @@ CREATE TABLE IF NOT EXISTS wb_file (
     file_id      varchar(40)  PRIMARY KEY,
     user_id      varchar(40)  NOT NULL,
     session_id   varchar(40),
+    workspace_id varchar(40),
     file_name    varchar(255) NOT NULL,
     object_key   varchar(512) NOT NULL,
     bucket_name  varchar(64)  NOT NULL,
@@ -212,24 +215,61 @@ CREATE TABLE IF NOT EXISTS wb_file (
     deleted      boolean      NOT NULL DEFAULT false
 );
 CREATE INDEX IF NOT EXISTS idx_wb_file_owner ON wb_file (user_id, created_at DESC) WHERE deleted = false;
+-- 老库补列：工作区归属，历史文件归入用户默认工作区
+ALTER TABLE wb_file ADD COLUMN IF NOT EXISTS workspace_id varchar(40);
+CREATE INDEX IF NOT EXISTS idx_wb_file_ws ON wb_file (workspace_id) WHERE deleted = false;
+
+-- 工作区：用户级资产容器，每个工作区绑定一个独立 MinIO 桶，对象键前缀 user/{userId}/ws/{workspaceId}/
+CREATE TABLE IF NOT EXISTS wb_workspace (
+    workspace_id   varchar(40)  PRIMARY KEY,
+    user_id        varchar(40)  NOT NULL,
+    workspace_name varchar(64)  NOT NULL,
+    bucket_name    varchar(63)  NOT NULL,
+    description    varchar(512),
+    is_default     boolean      NOT NULL DEFAULT false,
+    state          varchar(24)  NOT NULL DEFAULT 'normal',
+    created_by     varchar(40),
+    created_at     timestamptz  NOT NULL DEFAULT now(),
+    updated_by     varchar(40),
+    updated_at     timestamptz,
+    deleted        boolean      NOT NULL DEFAULT false,
+    remark         varchar(512)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_wb_ws_bucket ON wb_workspace (bucket_name) WHERE deleted = false;
+CREATE INDEX IF NOT EXISTS idx_wb_ws_owner ON wb_workspace (user_id) WHERE deleted = false;
 
 -- 模型供应方（平台级）
 CREATE TABLE IF NOT EXISTS wb_provider (
-    provider_id   varchar(40)  PRIMARY KEY,
-    provider_code varchar(24)  NOT NULL,
-    provider_name varchar(64)  NOT NULL,
-    base_url      varchar(512),
-    api_key_enc   varchar(512),
-    default_model varchar(64),
-    enabled       boolean      NOT NULL DEFAULT true,
-    created_by    varchar(40),
-    created_at    timestamptz  NOT NULL DEFAULT now(),
-    updated_by    varchar(40),
-    updated_at    timestamptz,
-    deleted       boolean      NOT NULL DEFAULT false,
-    remark        varchar(512)
+    provider_id      varchar(40)  PRIMARY KEY,
+    provider_code    varchar(24)  NOT NULL,
+    provider_name    varchar(64)  NOT NULL,
+    base_url         varchar(512),
+    api_key_enc      varchar(512),
+    default_model    varchar(64),
+    context_window   int,
+    max_output_tokens int,
+    temperature      numeric(4,3),
+    top_p            numeric(4,3),
+    cap_vision       boolean      NOT NULL DEFAULT false,
+    cap_tool         boolean      NOT NULL DEFAULT true,
+    cap_reasoning    boolean      NOT NULL DEFAULT false,
+    enabled          boolean      NOT NULL DEFAULT true,
+    created_by       varchar(40),
+    created_at       timestamptz  NOT NULL DEFAULT now(),
+    updated_by       varchar(40),
+    updated_at       timestamptz,
+    deleted          boolean      NOT NULL DEFAULT false,
+    remark           varchar(512)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uk_wb_provider_code ON wb_provider (provider_code) WHERE deleted = false;
+-- 模型参数列：NULL 表示回落全局默认，存量行不受影响
+ALTER TABLE wb_provider ADD COLUMN IF NOT EXISTS context_window int;
+ALTER TABLE wb_provider ADD COLUMN IF NOT EXISTS max_output_tokens int;
+ALTER TABLE wb_provider ADD COLUMN IF NOT EXISTS temperature numeric(4,3);
+ALTER TABLE wb_provider ADD COLUMN IF NOT EXISTS top_p numeric(4,3);
+ALTER TABLE wb_provider ADD COLUMN IF NOT EXISTS cap_vision boolean NOT NULL DEFAULT false;
+ALTER TABLE wb_provider ADD COLUMN IF NOT EXISTS cap_tool boolean NOT NULL DEFAULT true;
+ALTER TABLE wb_provider ADD COLUMN IF NOT EXISTS cap_reasoning boolean NOT NULL DEFAULT false;
 
 -- 知识库
 CREATE TABLE IF NOT EXISTS wb_kb (

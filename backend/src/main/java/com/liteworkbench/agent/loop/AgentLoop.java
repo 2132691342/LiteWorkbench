@@ -10,6 +10,7 @@ import com.liteworkbench.agent.model.ModelTypes.Msg;
 import com.liteworkbench.agent.model.ModelTypes.Request;
 import com.liteworkbench.agent.model.ModelTypes.StreamResult;
 import com.liteworkbench.agent.model.ModelTypes.ToolCall;
+import com.liteworkbench.agent.model.SamplingParams;
 import com.liteworkbench.agent.spi.ToolGate;
 import com.liteworkbench.agent.tool.ToolCallTask;
 import com.liteworkbench.agent.tool.ToolRegistry;
@@ -42,14 +43,15 @@ public class AgentLoop {
     private final int repeatGuard;
     private final long toolTimeoutSeconds;
     private final int modelTimeoutSeconds;
-    private final Double temperature;
+    /** 采样参数：由供应方配置经 RunContext 下传，字段 null 时内核已回落全局值 */
+    private final SamplingParams sampling;
     private final BooleanSupplier cancelled;
 
     /** 同一工具同一参数在整个运行内的调用计数 */
     private final Map<String, Integer> callCounter = new HashMap<>();
 
     public AgentLoop(ModelClient client, ToolRegistry tools, ToolGate toolGate, int maxIters, int repeatGuard,
-                     long toolTimeoutSeconds, int modelTimeoutSeconds, Double temperature,
+                     long toolTimeoutSeconds, int modelTimeoutSeconds, SamplingParams sampling,
                      BooleanSupplier cancelled) {
         this.client = client;
         this.tools = tools;
@@ -58,7 +60,7 @@ public class AgentLoop {
         this.repeatGuard = Math.max(repeatGuard, 1);
         this.toolTimeoutSeconds = toolTimeoutSeconds;
         this.modelTimeoutSeconds = modelTimeoutSeconds;
-        this.temperature = temperature;
+        this.sampling = sampling;
         this.cancelled = cancelled;
     }
 
@@ -108,12 +110,19 @@ public class AgentLoop {
         return lastText;
     }
 
-    /** 调用模型：工具描述按平台启停过滤后下发 */
+    /** 调用模型：工具描述按平台启停过滤后下发，采样参数按供应方配置 */
     private StreamResult callModel(List<Msg> context, EventSink sink) {
         Request request = new Request();
         request.setMessages(context);
-        request.setTools(tools.specs(toolGate::isEnabled));
-        request.setTemperature(temperature);
+        // 模型不支持工具调用时不注入 tools：部分端点收到 tools 会直接 400
+        if (sampling.capTool()) {
+            request.setTools(tools.specs(toolGate::isEnabled));
+        }
+        request.setTemperature(sampling.temperature());
+        request.setTopP(sampling.topP());
+        if (Objects.nonNull(sampling.maxOutputTokens()) && sampling.maxOutputTokens() > 0) {
+            request.setMaxTokens(sampling.maxOutputTokens());
+        }
         request.setTimeoutSeconds(modelTimeoutSeconds);
         return client.stream(request, new ModelEventListener() {
 

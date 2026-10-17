@@ -32,6 +32,7 @@
 | 8800 | 已停用（段号不回收） |
 | 8900 | 长期记忆 |
 | 9000 | 系统与中间件 |
+| 9100 | 工作区与存储桶 |
 
 ## 3. 通用 1000（0 为成功保留码）
 
@@ -189,6 +190,18 @@
 | 9002 | `REDIS_UNAVAILABLE` | 503 | 缓存不可用 |
 | 9003 | `STORAGE_UNAVAILABLE` | 503 | 对象存储不可用 |
 | 9004 | `MQ_UNAVAILABLE` | 503 | 消息队列不可用 |
+
+## 19.1 工作区与存储桶 9100
+
+| 码 | 标识 | HTTP | 提示 |
+|---|---|---|---|
+| 9101 | `WORKSPACE_NOT_FOUND` | 404 | 工作区不存在 |
+| 9102 | `WORKSPACE_NAME_CONFLICT` | 409 | 工作区名称已存在 |
+| 9103 | `WORKSPACE_LIMIT_REACHED` | 409 | 工作区数量已达上限（单用户 20） |
+| 9104 | `WORKSPACE_DEFAULT_REQUIRED` | 409 | 每个用户至少保留一个默认工作区 |
+| 9105 | `BUCKET_CREATE_FAILED` | 500 | 存储桶创建失败 |
+| 9106 | `BUCKET_NOT_EMPTY` | 409 | 存储桶非空，不能删除 |
+| 9107 | `BUCKET_OP_FAILED` | 500 | 存储桶操作失败 |
 
 ## 20. 抛出与消费
 

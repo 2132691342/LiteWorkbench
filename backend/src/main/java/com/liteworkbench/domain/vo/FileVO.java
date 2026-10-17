@@ -15,6 +15,8 @@ public class FileVO implements Serializable {
     private String fileId;
     /** 关联会话 */
     private String sessionId;
+    /** 归属工作区 */
+    private String workspaceId;
     private String fileName;
     private Long fileSize;
     /** MIME 类型 */

@@ -9,6 +9,7 @@ import com.liteworkbench.agent.RunContext;
 import com.liteworkbench.agent.RunHandle;
 import com.liteworkbench.agent.model.ModelTypes.Msg;
 import com.liteworkbench.agent.model.ModelTypes.Role;
+import com.liteworkbench.agent.model.SamplingParams;
 import com.liteworkbench.agent.spi.MemoryPort;
 import com.liteworkbench.common.BizException;
 import com.liteworkbench.common.ErrorCodeEnum;
@@ -33,6 +34,7 @@ import com.liteworkbench.domain.dto.RunEventDTO;
 import com.liteworkbench.domain.dto.RunRefREQ;
 import com.liteworkbench.domain.dto.SessionPageREQ;
 import com.liteworkbench.domain.entity.WbEventDO;
+import com.liteworkbench.domain.entity.WbProviderDO;
 import com.liteworkbench.domain.entity.WbRunDO;
 import com.liteworkbench.mapper.MessageIndexMapper;
 import com.liteworkbench.mapper.WbEventMapper;
@@ -127,7 +129,7 @@ public class RunService {
                     req.getSkillCodes(), req.getRefs());
             RunContext context = new RunContext(userId, session.getSessionId(), runId,
                     providerCode, modelName, systemPrompt, loadHistory(session.getSessionId(), runId),
-                    req.getContent());
+                    req.getContent(), samplingParams(provider));
 
             ActiveRun run = new ActiveRun(runId, userId, session.getSessionId(), sink);
             active.put(runId, run);
@@ -237,6 +239,19 @@ public class RunService {
         // 两个节拍器全进程各一个，与运行数量无关；无运行时自行注销，空跑不占调度
         pushLoop.ensure(() -> pumpAll(), RunConst.SSE_PUSH_TICK_MS);
         persistLoop.ensure(() -> persistAll(), RunConst.EVENT_PERSIST_INTERVAL_MS);
+    }
+
+    /** 采样参数：供应方列留空回落全局配置，能力位取供应方值 */
+    private SamplingParams samplingParams(WbProviderDO provider) {
+        AgentProperties.Model model = agentProperties.getModel();
+        return new SamplingParams(
+                Objects.nonNull(provider.getTemperature()) ? provider.getTemperature() : model.getTemperature(),
+                provider.getTopP(),
+                provider.getMaxOutputTokens(),
+                Objects.nonNull(provider.getContextWindow()) ? provider.getContextWindow() : model.getContextWindow(),
+                Boolean.TRUE.equals(provider.getCapVision()),
+                !Boolean.FALSE.equals(provider.getCapTool()),
+                Boolean.TRUE.equals(provider.getCapReasoning()));
     }
 
     /** 通道关闭回调：由 api 层在 SSE 完成 / 超时 / 出错时调用，按中断收敛并释放运行占用 */

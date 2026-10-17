@@ -20,6 +20,8 @@ public class SessionREQ implements Serializable {
     private String title;
     private String providerCode;
     private String modelName;
+    /** 工作区 ID，空表示沿用当前绑定；决定文件落入哪个桶 */
+    private String workspaceId;
     @Size(max = SessionConst.SYSTEM_PROMPT_MAX_LENGTH, message = "系统提示词最长 8000 字")
     private String systemPrompt;
 }

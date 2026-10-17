@@ -36,8 +36,8 @@ Agent **无状态**：上下文不存在 Agent 里，每次运行由工作台从
 | `loop.repeat-guard` | 3 | 同一工具同一参数累计超过该值即拦截，逼模型换路 |
 | `loop.tool-timeout-seconds` | 60 | 循环内单次工具执行超时 |
 | `model.default-name` | `qwen-plus` | 模型名四级兜底的最后一档 |
-| `model.temperature` | 0.3 | 采样温度 |
-| `model.context-window` | 32000 | 上下文窗口，超过即压缩 |
+| `model.temperature` | 0.3 | 采样温度，供应方未配置时的兜底值 |
+| `model.context-window` | 32000 | 上下文窗口，超过即压缩；供应方未配置时的兜底值 |
 | `model.reserve-tokens` | 4096 | 预留给输出的 token |
 | `model.stream-timeout-seconds` | 180 | 流式读超时 |
 | `model.sync-timeout-seconds` | 120 | 同步补全读超时（自研客户端路径） |
@@ -189,18 +189,20 @@ public record ExecResult(int exitCode, String stdout, String stderr, boolean tim
 start(context, sink)
   ├─ 1 ModelFactory.client(provider, model)：命中 LRU 缓存则复用，否则解密密钥并构建
   ├─ 2 装配工具集：registry.register(new WorkbenchTools(...))（全量注册，启停在下发时过滤）
-  ├─ 3 AgentMemory.assemble(history, systemPrompt, prompt, contextWindow, reserveTokens)
+  ├─ 3 解析采样参数：context.sampling()（供应方参数列，缺列回落全局）；窗口取 windowOr(全局)
+  ├─ 4 AgentMemory.assemble(history, systemPrompt, prompt, contextWindow, reserveTokens)
   │      ├─ 协议修复 clean()：丢空助手消息与孤儿 tool 结果
   │      ├─ 估算 token：CJK 一字一 token，其余 3.5 字符一 token，每条消息 +4、每个工具调用 +8
   │      └─ 超预算 compact()：整轮丢弃最老历史，保留系统提示与末尾完整轮次，插入压缩提示
-  ├─ 4 emit AGENT_START → 构建 AgentLoop → executor.submit 后台执行（MDC 注入 userId/sessionId/runId）
-  └─ 5 每产出一个事件：分配 seq → sink.accept（终态帧由 service 层补发）
+  ├─ 5 emit AGENT_START → 构建 AgentLoop（带 sampling）→ executor.submit 后台执行（MDC 注入 userId/sessionId/runId）
+  └─ 6 每产出一个事件：分配 seq → sink.accept（终态帧由 service 层补发）
 
 循环体（AgentLoop#run）
 for (iter = 1; iter <= maxIters; iter++)
   ├─ 取消检查：命中即返回最后一段助手正文，收敛 aborted
   ├─ emit MODEL_CALL_START → tools.specs(toolGate::isEnabled) 过滤启停后下发
-  │    → client.stream(...) 逐块回调
+  │    （capTool=false 的模型不下发 tools，避免部分端点收到工具描述直接 400）
+  │    → client.stream(...) 逐块回调（请求体带 temperature / top_p / max_tokens，仅写有值参数）
   │      ├─ 思考块 → THINKING_DELTA
   │      └─ 正文块 → TEXT_DELTA
   ├─ 累积完整回复（含 tool_calls），emit MODEL_CALL_END（带 usage 与耗时）

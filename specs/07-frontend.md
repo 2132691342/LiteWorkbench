@@ -92,6 +92,18 @@
 - 输入框自增高到上限后内部滚动；容器是单一圆角框（`--lw-field-border` + 聚焦光环），不再套一层内部输入边框。
 - 视觉与键盘契约（含 chip 形态、发送/中断按钮、Esc 中断、↑ 历史回填、字数计数）见 [DESIGN.md §5.11](../DESIGN.md)。
 
+输入框顶部还有一条**模型 / 工作区切换行**（即点即换，改动由宿主持久化到会话）：
+
+| 控件 | 数据源 | 选中行为 |
+|---|---|---|
+| 模型 pill | `providerApi.list()` 的启用供应方（展示能力图标：图片 / 工具 / 推理） | 选中即 `update:model{providerCode, modelName}`；底部输入框可手输模型名覆盖供应方默认值 |
+| 工作区 pill | `workspaceApi.list()`（默认工作区带标记，附桶占用） | 选中即 `update:workspace(workspaceId)`，下一条消息的上传与 `@` 引用按新工作区取桶 |
+| 附件按钮 | `fileApi.upload(file, undefined, workspaceId)` | 上传成功落 file chip 随消息提交；chip 删除同步删对象 |
+
+宿主 `Console.vue` 把两者转成 `sessionApi.update` 落库（流式中锁定，不可切换）；未配置任何供应方时模型 pill 显示引导文案。上传与工作区解析在服务端兜底（空 id 回落默认工作区），前端只做快捷切换。
+
+日志中心（`views/logs/LogSearch.vue`）三层结构：概览条（级别计数 + 可钻取直方图）→ 筛选区（检索列 / 关键字 / 级别 / 快捷时间，显示列勾选控制日志流行内列显隐，更多筛选展开 logger / traceId / sessionId / userId / runId / 时间范围）→ 日志流（等宽整行、级别色块 INFO 靛 / WARN 琥珀 / ERROR 红、点行展开全文与链路字段，支持复制 traceId 与按 trace / user / run 反查、导出 CSV）。
+
 ### 工作台时间线
 
 `views/console/Console.vue` 只负责编排（会话选中、发送、中断、回放、滚动容器），时间线内部的三类块各自独立成件：

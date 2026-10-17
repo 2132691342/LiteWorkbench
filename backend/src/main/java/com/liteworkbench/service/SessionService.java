@@ -40,6 +40,8 @@ public class SessionService {
     private final WbSessionMapper sessionMapper;
     private final MessageIndexMapper messageIndexMapper;
     private final ModelCaller modelCaller;
+    /** 工作区解析：会话绑定的资产桶容器 */
+    private final WorkspaceService workspaceService;
     /** 标题生成走低频后台池：静默、失败不影响对话；线程由 ExecutorConfig 统一回收 */
     @Qualifier(ExecutorConfig.EVENT_EXECUTOR)
     private final ExecutorService renameExecutor;
@@ -67,6 +69,8 @@ public class SessionService {
         session.setTitle(StrUtil.blankToDefault(req.getTitle(), SessionConst.DEFAULT_TITLE));
         session.setProviderCode(req.getProviderCode());
         session.setModelName(req.getModelName());
+        // 新建即绑定工作区：未指定时解析默认工作区，用户无工作区则懒建
+        session.setWorkspaceId(workspaceService.resolve(userId, req.getWorkspaceId()).getWorkspaceId());
         session.setSystemPrompt(req.getSystemPrompt());
         session.setState(StateEnum.NORMAL.getCode());
         session.setCreatedBy(userId);
@@ -75,7 +79,7 @@ public class SessionService {
         return session.getSessionId();
     }
 
-    /** 更新标题 / 模型 / 系统提示词 */
+    /** 更新标题 / 模型 / 工作区 / 系统提示词 */
     public void update(SessionREQ req, String userId) {
         if (StrUtil.isBlank(req.getSessionId())) {
             throw new BizException(ErrorCodeEnum.PARAM_INVALID, "sessionId 不能为空");
@@ -86,6 +90,10 @@ public class SessionService {
         session.setTitle(req.getTitle());
         session.setProviderCode(req.getProviderCode());
         session.setModelName(req.getModelName());
+        // 工作区显式传入才改：留空沿用当前绑定，避免误切
+        if (StrUtil.isNotBlank(req.getWorkspaceId())) {
+            session.setWorkspaceId(workspaceService.resolve(userId, req.getWorkspaceId()).getWorkspaceId());
+        }
         session.setSystemPrompt(req.getSystemPrompt());
         session.setUpdatedBy(userId);
         sessionMapper.update(session);
@@ -159,6 +167,7 @@ public class SessionService {
         vo.setTitle(session.getTitle());
         vo.setProviderCode(session.getProviderCode());
         vo.setModelName(session.getModelName());
+        vo.setWorkspaceId(session.getWorkspaceId());
         vo.setMessageCount(session.getMessageCount());
         vo.setRunCount(session.getRunCount());
         vo.setTotalTokens(session.getTotalTokens());

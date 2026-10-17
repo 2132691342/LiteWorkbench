@@ -17,10 +17,10 @@ public interface WbSessionMapper {
 
     /** 新增会话 */
     @Insert("""
-            INSERT INTO wb_session (session_id, user_id, title, provider_code, model_name,
+            INSERT INTO wb_session (session_id, user_id, title, provider_code, model_name, workspace_id,
                                     system_prompt, message_count, run_count, total_tokens, last_active_at,
                                     state, created_by, remark)
-            VALUES (#{sessionId}, #{userId}, #{title}, #{providerCode}, #{modelName},
+            VALUES (#{sessionId}, #{userId}, #{title}, #{providerCode}, #{modelName}, #{workspaceId},
                     #{systemPrompt}, 0, 0, 0, now(), #{state}, #{createdBy}, #{remark})
             """)
     int insert(WbSessionDO session);

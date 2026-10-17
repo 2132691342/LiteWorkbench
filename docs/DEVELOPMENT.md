@@ -134,6 +134,7 @@ cd backend && mvn test
 | 文件 | 职责 |
 |---|---|
 | `deploy/Dockerfile` | 三阶段构建：Maven 打包 → Vite 构建 → 运行时镜像（JRE + jar + 前端静态资源 + python3 / curl / tzdata） |
+| `deploy/maven-settings.xml` | 构建期 Maven 仓库镜像配置，被 `Dockerfile` 以 `-s` 指定，只作用于镜像内的依赖解析 |
 | `deploy/docker-compose.yaml` | 中间件编排，本机与云主机共用同一份；五个中间件端口全部发布宿主机 |
 | `deploy/docker-compose.app.yaml` | 应用容器编排：单容器、限内存、接入中间件网络、宿主端口由环境注入 |
 | `deploy/gen-secrets.sh` | 生成 `.env.infra`：字段清单取自 `.env.infra.example`，值随机，不打印 |

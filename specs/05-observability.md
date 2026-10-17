@@ -58,8 +58,12 @@
 | 维度 | 参数 | 行为 |
 |---|---|---|
 | 视角 | `monitor:log:global` | 持有 → 按入参 `userId` 反查（可空表示不过滤）；否则服务端强制 `user_id = 当前用户`，传入的 `userId` 被覆盖 |
-| 全文 | `keyword` + `field=message` | ICU 分词全文匹配，命中词前端高亮 |
-| 等值 | `level` / `logger` / `traceId` / `userId` / `runId` | 属性列等值，可组合；`level` 入参统一转大写 |
+| 全文 | `keyword` + `field` | `message` / `exception` 走 ICU 分词全文，命中词前端高亮；`field` 白名单外值直接 `PARAM_INVALID` |
+| 等值 | `level` / `logger` / `traceId` / `userId` / `runId` / `sessionId` | 属性列等值，可组合；`level` 入参统一转大写 |
+| 时间 | `from` / `to` | 缺省检索近 7 天（禁止无界）、概览近 24 小时；概览超 7 天自动改按天分桶 |
+| 导出 | `GET /log/export` | 与检索同口径同视角，上限 5000 行，输出带 BOM 的 CSV（Excel 直开不乱码）；单元格双引号包裹、内嵌引号加倍、换行替换为空格 |
+
+页面呈现为「概览条（级别计数 + 可钻取直方图）→ 筛选区（检索列 / 关键字 / 级别 / 快捷时间 + 显示列勾选）→ 日志流」：等宽字体整行、级别色块（INFO 靛 / WARN 琥珀 / ERROR 红）、点行展开全文与链路字段，支持复制 traceId 与按 trace / user / run 反查。
 | 关键字改判 | `field=logger` / `field=traceId` | 按类名 / 链路标识精确匹配 |
 | 时间 | `from` / `to` | 毫秒时间戳，两者都传才生效；前端另给 15m / 1h / 24h / 7d 预设 |
 
@@ -175,8 +179,17 @@
 
 | 方法 | 路径 | 权限 | 说明 |
 |---|---|---|---|
-| GET | `/api/v1/log/search` | `monitor:log:list` | 检索，参数 `keyword` `field` `level` `logger` `traceId` `userId` `runId` `from` `to` `page` `size`，返回带 `scope` |
+| GET | `/api/v1/log/search` | `monitor:log:list` | 检索，参数 `keyword` `field` `level` `logger` `traceId` `userId` `runId` `sessionId` `from` `to` `page` `size`，返回带 `scope` |
 | GET | `/api/v1/log/stats` | `monitor:log:list` | 分布概览，过滤参数同检索，返回级别计数与时间直方图（带 `scope`） |
+| GET | `/api/v1/log/export` | `monitor:log:list` | CSV 导出，过滤参数同检索，上限 5000 行，响应带 BOM |
+| GET | `/api/v1/workspace/list` | 登录即可 | 当前用户工作区列表，含桶对象数与占用 |
+| POST | `/api/v1/workspace/create` | 登录即可 | 新建工作区并幂等建桶；`workspaceName` 用户内唯一，上限 20 个 |
+| POST | `/api/v1/workspace/update` | 登录即可 | 改名称与描述 |
+| POST | `/api/v1/workspace/default/{workspaceId}` | 登录即可 | 设为默认工作区 |
+| POST | `/api/v1/workspace/delete/{workspaceId}` | 登录即可 | 删除非默认工作区 |
+| GET | `/api/v1/storage/buckets` | `monitor:storage:list` | 全平台桶清单，含对象数、占用与保护标记 |
+| POST | `/api/v1/storage/bucket/create` | `monitor:storage:create` | 新建桶，桶名规则 3~63 位小写字母数字连字符 |
+| POST | `/api/v1/storage/bucket/delete/{bucketName}` | `monitor:storage:delete` | 删桶；平台桶保护、非空拒绝 |
 | GET | `/api/v1/run/page` | 登录即可 | 运行列表，参数 `sessionId` `state` `from` / `to` `page` / `size`，仅当前用户 |
 | GET | `/api/v1/run/detail/{runId}` | 登录即可 | 运行详情，按 `(runId, user_id)` 校验归属 |
 | GET | `/api/v1/run/events/{runId}` | 登录即可 | 事件列表，`afterSeq` 增量，单次上限 500 |
@@ -191,7 +204,7 @@
 | GET | `/api/v1/monitor/observe` | `monitor:health:list` | 调用观测快照：窗口内 SQL 与 HTTP 汇总 + 慢调用榜 |
 | POST | `/api/v1/monitor/observe/reset` | `monitor:observe:reset` | 重置观测窗口，计数与慢调用榜归零 |
 
-日志两个接口需 `monitor:log:list`（内置 `user` 角色种子已授予），检索范围由 `monitor:log:global` 决定是否收窄；运行记录与 `trace` 接口登录即可用，归属强制校验，不泄露他人运行。
+日志两个接口需 `monitor:log:list`（内置 `user` 角色种子已授予），检索范围由 `monitor:log:global` 决定是否收窄；运行记录与 `trace` 接口登录即可用，归属强制校验，不泄露他人运行。工作区接口登录即可用，`user_id` 一律取 `LoginContext`，按 `(workspaceId, user_id)` 校验归属，查不到即 `WORKSPACE_NOT_FOUND` 不泄露存在性；桶管理三接口需 `monitor:storage:*`（管理员），桶清单对平台主桶与 `lwws-` 前缀桶返回 `protectedBucket=true`，删除被服务端拒绝。
 
 ## 关键流程
 
