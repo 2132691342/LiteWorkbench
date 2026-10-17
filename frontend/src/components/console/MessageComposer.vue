@@ -73,11 +73,14 @@ interface Chip {
   ref?: RunRefREQ
 }
 
-/** 输入区自增高上限（px）与正文长度上限（字符） */
-const MAX_HEIGHT = 200
+/** 正文长度上限（字符） */
 const MAX_LENGTH = 4000
 /** 面板最多展示条数：超过后即使有匹配也不再罗列，靠关键字继续收敛 */
 const MAX_OPTIONS = 8
+/** 待发送附件上限：后端与工作台一次可解析的引用数，前端先卡住 */
+const MAX_ATTACH = 5
+/** 顶边把手可拖到的最高高度（px）：再高会顶掉消息区 */
+const MAX_DRAG = 420
 
 const textareaEl = ref<HTMLTextAreaElement | null>(null)
 const paletteOpen = ref(false)
@@ -91,6 +94,8 @@ const locked = computed(() => props.streaming || props.replaying)
 const canSend = computed(() => !locked.value && (draft.value.trim().length > 0 || chips.value.length > 0))
 const charCount = computed(() => draft.value.length)
 const nearLimit = computed(() => charCount.value >= MAX_LENGTH * 0.9)
+/** 附件满额：满后上传按钮置灰并给出一句计数提示，不静默吞掉点击 */
+const attachFull = computed(() => chips.value.filter((chip) => chip.kind === 'file').length >= MAX_ATTACH)
 
 /** 底栏两枚 chip 的开合态；模型面板是两级级联，右列跟随左列悬停切换 */
 const modelPickerOpen = ref(false)
@@ -225,11 +230,11 @@ async function createWorkspace(): Promise<void> {
 }
 
 /** 附件上传：直传当前工作区桶，成功后落 file chip 随消息提交 */
-async function onUploadFile(event: Event): Promise<void> {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  input.value = ''
-  if (!file) return
+async function uploadFile(file: File): Promise<void> {
+  if (attachFull.value) {
+    ElMessage.warning(t('console.attachLimit', { n: MAX_ATTACH }))
+    return
+  }
   uploading.value = true
   try {
     const vo = await fileApi.upload(file, undefined, props.workspaceId || undefined)
@@ -243,6 +248,35 @@ async function onUploadFile(event: Event): Promise<void> {
     // 拦截器已提示，保留输入框供重试
   } finally {
     uploading.value = false
+  }
+}
+
+async function onUploadFile(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  await uploadFile(file)
+}
+
+/** 粘贴图片：截图后直接进附件列表，与回形针走同一条上传链路 */
+function onPaste(event: ClipboardEvent): void {
+  const list = Array.from(event.clipboardData?.files ?? [])
+  const images = list.filter((file) => file.type.startsWith('image/'))
+  if (!images.length) {
+    // 复制的是文件而不是图片：说明该走 @ 或回形针，不装作收到
+    if (list.length) ElMessage.warning(t('console.pasteFileHint'))
+    return
+  }
+  event.preventDefault()
+  for (const file of images) {
+    if (attachFull.value) {
+      ElMessage.warning(t('console.attachLimit', { n: MAX_ATTACH }))
+      return
+    }
+    // 本地时间命名：UTC 会差 8 小时，截图名对不上操作时刻
+    const name = file.name || `截图-${new Date().toLocaleTimeString('zh-CN', { hour12: false }).replace(/:/g, '')}.png`
+    void uploadFile(new File([file], name, { type: file.type }))
   }
 }
 
@@ -428,12 +462,63 @@ function removeChip(chip: Chip): void {
   }
 }
 
-/** 输入区自增高：内容驱动高度，超过上限后内部滚动 */
+/** 输入区自增高：内容驱动高度；用户拖过把手后以手动高度为准，双击把手交还自动 */
+const dragH = ref(0)
+const resizing = ref(false)
+
 function autoGrow(): void {
   const el = textareaEl.value
   if (!el) return
   el.style.height = 'auto'
-  el.style.height = `${Math.min(el.scrollHeight, MAX_HEIGHT)}px`
+  const auto = el.scrollHeight
+  // 手动拉高后不能再按内容高度夹一次：拖上去的框会被立刻压回去，等于拖不动
+  const next = dragH.value ? Math.max(auto, dragH.value) : auto
+  el.style.height = `${Math.min(next, MAX_DRAG)}px`
+}
+
+/** 拖拽上限跟随窗口：写死值在矮窗口上会把消息区顶没，输入框整块掉出视口 */
+function maxDragH(): number {
+  const el = textareaEl.value
+  const wrap = el?.closest('.lw-composer__box') as HTMLElement | null
+  if (!el || !wrap) return MAX_DRAG
+  const rest = wrap.offsetHeight - el.offsetHeight
+  const top = wrap.getBoundingClientRect().top
+  const room = window.innerHeight - top - rest - 24 - 120 // 消息区至少留 120px
+  return Math.max(64, Math.min(MAX_DRAG, room))
+}
+
+function onGripDown(e: PointerEvent): void {
+  const el = textareaEl.value
+  if (!el) return
+  const startY = e.clientY
+  const startH = el.offsetHeight
+  const cap = maxDragH()
+  dragH.value = Math.max(Math.min(startH, cap), 64)
+  resizing.value = true
+  const move = (ev: PointerEvent) => {
+    dragH.value = Math.min(Math.max(startH + (startY - ev.clientY), 64), cap)
+    autoGrow()
+  }
+  const up = () => {
+    resizing.value = false
+    window.removeEventListener('pointermove', move)
+    window.removeEventListener('pointerup', up)
+  }
+  window.addEventListener('pointermove', move)
+  window.addEventListener('pointerup', up)
+  e.preventDefault()
+}
+
+function onGripDbl(): void {
+  dragH.value = 0
+  nextTick(autoGrow)
+}
+
+/** 窗口变小后手动高度可能超出可视区，跟着收回 */
+function onResize(): void {
+  if (resizing.value) return
+  if (dragH.value > maxDragH()) dragH.value = maxDragH()
+  autoGrow()
 }
 
 function onInput(): void {
@@ -537,8 +622,14 @@ function onDocPointerDown(event: PointerEvent): void {
 
 const rootEl = ref<HTMLElement | null>(null)
 
-onMounted(() => document.addEventListener('pointerdown', onDocPointerDown))
-onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocPointerDown))
+onMounted(() => {
+  document.addEventListener('pointerdown', onDocPointerDown)
+  window.addEventListener('resize', onResize)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', onDocPointerDown)
+  window.removeEventListener('resize', onResize)
+})
 
 defineExpose({ focus: () => textareaEl.value?.focus(), clear })
 </script>
@@ -588,9 +679,18 @@ defineExpose({ focus: () => textareaEl.value?.focus(), clear })
 
     <div
       class="lw-composer__box"
-      :class="{ 'is-open': paletteOpen, 'is-locked': locked }"
+      :class="{ 'is-open': paletteOpen, 'is-locked': locked, 'is-resizing': resizing }"
       @keydown="onKeydown"
     >
+      <!-- 顶边拖拽把手：纵向拉高输入区，长文本不用挤在小框里滚；双击交还自动高度 -->
+      <div
+        class="lw-composer__grip"
+        role="separator"
+        :aria-label="t('console.gripTitle')"
+        @pointerdown="onGripDown"
+        @dblclick="onGripDbl"
+      />
+
       <TransitionGroup v-if="chips.length" name="lw-chip" tag="div" class="lw-composer__chips">
         <span
           v-for="chip in chips"
@@ -636,7 +736,13 @@ defineExpose({ focus: () => textareaEl.value?.focus(), clear })
         @click="onCaretMove"
         @focus="onCaretMove"
         @blur="closePalette"
+        @paste="onPaste"
       />
+
+      <!-- 附件满额提示：不让用户对着置灰按钮猜原因 -->
+      <div v-if="attachFull" class="lw-composer__attach-tip">
+        {{ t('console.attachLimit', { n: MAX_ATTACH }) }}
+      </div>
 
       <div class="lw-composer__bar">
         <div class="lw-composer__bar-left">
@@ -820,8 +926,8 @@ defineExpose({ focus: () => textareaEl.value?.focus(), clear })
           <button
             type="button"
             class="lw-composer__pill"
-            :disabled="locked || uploading"
-            :title="t('console.uploadTitle')"
+            :disabled="locked || uploading || attachFull"
+            :title="attachFull ? t('console.attachLimit', { n: MAX_ATTACH }) : t('console.uploadTitle')"
             @click="uploadInput?.click()"
           >
             <el-icon :size="12" :class="{ 'is-loading': uploading }"><Picture v-if="!uploading" /><Loading v-else /></el-icon>
@@ -844,19 +950,28 @@ defineExpose({ focus: () => textareaEl.value?.focus(), clear })
           >
             {{ charCount }}/{{ MAX_LENGTH }}
           </span>
-          <LwButton
+          <!-- 发送键：流式中就地换成中断，位置与尺寸不变，不产生布局跳动 -->
+          <button
             v-if="!props.streaming"
-            size="sm"
+            type="button"
+            class="lw-send"
             :disabled="!canSend"
             :aria-label="t('console.send')"
             @click="submit"
           >
-            <template #icon><el-icon><Promotion /></el-icon></template>
-            {{ t('console.send') }}
-          </LwButton>
-          <LwButton v-else size="sm" variant="secondary" loading @click="emit('abort')">
-            {{ t('console.abort') }}
-          </LwButton>
+            <el-icon :size="16"><Promotion /></el-icon>
+          </button>
+          <button
+            v-else
+            type="button"
+            class="lw-send is-stop"
+            :aria-label="t('console.abort')"
+            @click="emit('abort')"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <rect x="6" y="6" width="12" height="12" rx="2" />
+            </svg>
+          </button>
         </div>
       </div>
     </div>
@@ -868,8 +983,104 @@ defineExpose({ focus: () => textareaEl.value?.focus(), clear })
   position: relative;
 }
 
+/* ===== 顶边拖拽把手：拉高输入区，hover / focus / 拖拽中才显形 ===== */
+.lw-composer__grip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 12px;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  cursor: ns-resize;
+  touch-action: none;
+}
+.lw-composer__grip::before {
+  content: '';
+  width: 40px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--lw-border-strong);
+  opacity: 0;
+  transition: opacity var(--lw-dur) var(--lw-ease), background var(--lw-dur) var(--lw-ease);
+}
+.lw-composer__box:hover .lw-composer__grip::before,
+.lw-composer__box:focus-within .lw-composer__grip::before,
+.lw-composer__box.is-open .lw-composer__grip::before,
+.lw-composer__grip:hover::before {
+  opacity: 1;
+}
+.lw-composer__grip:hover::before {
+  background: var(--lw-secondary);
+}
+.lw-composer__box.is-resizing {
+  user-select: none;
+}
+
+/* 附件满额提示：弱化一行，出现即说明为什么上传按钮点不动 */
+.lw-composer__attach-tip {
+  font-size: 12px;
+  color: var(--lw-warning-ink);
+  padding: 0 2px;
+}
+
+/* ===== 发送 / 中断键：圆形 + 描边，五态齐全 ===== */
+.lw-send {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: var(--lw-radius-pill);
+  border: 2px solid var(--lw-primary);
+  background: transparent;
+  color: var(--lw-primary-ink);
+  cursor: pointer;
+  transition:
+    background var(--lw-dur) var(--lw-ease),
+    color var(--lw-dur) var(--lw-ease),
+    border-color var(--lw-dur) var(--lw-ease),
+    transform var(--lw-dur) var(--lw-ease),
+    box-shadow var(--lw-dur) var(--lw-ease);
+}
+.lw-send:hover:not(:disabled) {
+  background: var(--lw-primary-tint);
+  transform: scale(1.06);
+  box-shadow: var(--lw-shadow-sm);
+}
+.lw-send:active:not(:disabled) {
+  transform: scale(0.94);
+  background: var(--lw-secondary-tint);
+}
+.lw-send:disabled {
+  border-color: var(--lw-border);
+  color: var(--lw-ink-disabled);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+.lw-send.is-stop {
+  border-color: var(--lw-error);
+  color: var(--lw-error-ink);
+}
+.lw-send.is-stop:hover {
+  background: var(--lw-error-tint);
+}
+.lw-send:focus-visible {
+  outline: 2px solid var(--lw-primary);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lw-send:hover:not(:disabled),
+  .lw-send:active:not(:disabled) {
+    transform: none;
+  }
+}
+
 /* ===== 主体输入框：单层圆角框，边框与焦点态全部由外层画，内层纯透明 ===== */
 .lw-composer__box {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -895,7 +1106,7 @@ defineExpose({ focus: () => textareaEl.value?.focus(), clear })
 .lw-composer__box .lw-composer__input {
   width: 100%;
   min-height: 44px;
-  max-height: 200px;
+  max-height: 420px;
   padding: 0;
   resize: none;
   border: none;

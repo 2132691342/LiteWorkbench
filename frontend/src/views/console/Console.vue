@@ -19,14 +19,12 @@ import { providerApi, runApi, workspaceApi } from '@/api'
 import { useRunStream } from '@/composables/useRunStream'
 import { useRunStore, type ChatMessage } from '@/stores/run'
 import { useSessionStore } from '@/stores/session'
-import { useUserStore } from '@/stores/user'
 import type { ProviderVO, RunRefREQ, RunVO, WorkspaceVO } from '@/types/api'
 import { formatClock, formatTime } from '@/utils/const'
 
 /** 工作台：左侧会话与运行历史，右侧流式时间线（实时与回放同路径） */
 const { t } = useI18n()
 const router = useRouter()
-const userStore = useUserStore()
 const sessionStore = useSessionStore()
 const runStore = useRunStore()
 const { start: startStream, dispose: disposeStream } = useRunStream()
@@ -82,6 +80,26 @@ onMounted(async () => {
 
 const messages = computed<ChatMessage[]>(() => runStore.timeline)
 const activeSession = computed(() => sessionStore.activeSession)
+
+/** 回合分组：把连续的同角色消息折成一个回合，一次「提问 → 回答」是一整块 */
+const turns = computed<ChatMessage[]>(() => {
+  const out: ChatMessage[] = []
+  for (const item of messages.value) {
+    const last = out[out.length - 1]
+    // 仅合并连续的助手片段；用户消息即使相邻也各自成块，合并会把两次提问读成一句
+    if (last && last.role === 'assistant' && item.role === 'assistant' && !last.streaming) {
+      last.content += item.content
+      last.thinking += item.thinking
+      last.tools.push(...item.tools)
+      if (item.plan.length) last.plan = item.plan
+    } else {
+      // tools / plan 必须拷贝：直接展开会把 store 里的数组引用带给分组结果，合并时会反向改写到源数据
+      out.push({ ...item, tools: [...item.tools], plan: [...item.plan] })
+    }
+  }
+  return out
+})
+
 const lastUserMessage = computed(
   () => [...messages.value].reverse().find((item) => item.role === 'user')?.content ?? '',
 )
@@ -409,50 +427,58 @@ onMounted(async () => {
         <div v-else-if="!sessionStore.activeSessionId || !messages.length" class="h-full flex items-center justify-center pb-16">
           <ConsoleQuickStart />
         </div>
-        <div v-else class="max-w-3xl mx-auto flex flex-col gap-5 pb-6">
-          <div
-            v-for="(message, index) in messages"
-            :key="index"
-            class="tl-msg"
-            :class="message.role === 'user' ? 'is-user' : 'is-assistant'"
-          >
-            <div class="tl-avatar">
-              <template v-if="message.role === 'user'">
-                {{ (userStore.nickname ?? 'U').slice(0, 1).toUpperCase() }}
-              </template>
-              <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
-              </svg>
+        <div v-else class="max-w-3xl mx-auto flex flex-col gap-6 pb-6">
+          <template v-for="(turn, index) in turns" :key="index">
+            <!-- 用户回合：右对齐气泡，时间贴右下 -->
+            <div v-if="turn.role === 'user'" class="tl-turn">
+              <div class="tl-turn__u">
+                <time class="tl-turn__time">{{ formatClock(turn.createdAt) }}</time>
+                <div class="tl-bubble">{{ turn.content }}</div>
+              </div>
             </div>
 
-            <div class="tl-body">
-              <div class="tl-meta">
-                <span class="tl-who">{{ message.role === 'user' ? t('console.roleUser') : t('console.roleAgent') }}</span>
-                <span v-if="message.createdAt" class="tl-time">{{ formatClock(message.createdAt) }}</span>
+            <!-- 助手回合：头像 + 竖轨，思考 / 计划 / 工具 / 正文都挂在这根线上 -->
+            <div v-else class="tl-turn tl-turn--a">
+              <div class="tl-avatar" :class="{ 'is-live': turn.streaming }">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1 1.275-1.275L12 3Z" />
+                </svg>
               </div>
-
-              <div v-if="message.role === 'user'" class="tl-bubble">{{ message.content }}</div>
-
-              <div v-else class="flex flex-col gap-2">
-                <ThinkingBlock :content="message.thinking" :streaming="message.streaming" />
-                <PlanChecklist v-if="message.plan.length" :steps="message.plan" />
+              <div class="tl-turn__body">
+                <div class="tl-turn__meta">
+                  <span class="tl-who">{{ t('console.roleAgent') }}</span>
+                  <span v-if="turn.createdAt" class="tl-time">{{ formatClock(turn.createdAt) }}</span>
+                </div>
+                <ThinkingBlock :content="turn.thinking" :streaming="turn.streaming" />
+                <PlanChecklist v-if="turn.plan.length" :steps="turn.plan" />
                 <ToolStepCard
-                  v-for="(step, toolIndex) in message.tools"
+                  v-for="(step, toolIndex) in turn.tools"
                   :key="toolIndex"
                   :label="toolLabel(step.name)"
                   :phase="step.phase"
                   :output="step.output"
                   :is-error="step.isError"
                 />
-                <div v-if="message.content || message.streaming" class="text-sm">
-                  <LwMarkdown :content="message.content" />
-                  <span v-if="message.streaming" class="lw-cursor">▍</span>
+                <div v-if="turn.content || turn.streaming" class="tl-prose">
+                  <LwMarkdown :content="turn.content" />
+                  <span v-if="turn.streaming" class="lw-cursor" aria-hidden="true">&#9611;</span>
                 </div>
-                <div v-if="usageText(message)" class="tl-usage">{{ usageText(message) }}</div>
+                <!-- 正文与过程都还没到时给呼吸态，不留一片空白 -->
+                <div
+                  v-else-if="turn.streaming && !turn.tools.length && !turn.thinking"
+                  class="tl-typing"
+                  aria-live="polite"
+                >
+                  <span class="tl-typing__dot" />
+                  <span class="tl-typing__dot" />
+                  <span class="tl-typing__dot" />
+                  <span class="tl-typing__txt">{{ t('console.typing') }}</span>
+                </div>
+                <div v-if="usageText(turn)" class="tl-usage">{{ usageText(turn) }}</div>
               </div>
             </div>
-          </div>
+          </template>
         </div>
       </div>
 
@@ -523,52 +549,40 @@ onMounted(async () => {
   font-size: 14px;
   color: var(--lw-ink-muted);
 }
-.tl-msg {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-}
-.tl-msg.is-user {
-  flex-direction: row-reverse;
-}
-.tl-avatar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 28px;
-  height: 28px;
-  margin-top: 2px;
-  border-radius: 50%;
-  font-size: 12px;
-  font-weight: 700;
-  box-shadow: var(--lw-shadow-sm);
-}
-.tl-msg.is-user .tl-avatar {
-  background: var(--lw-primary);
-  color: var(--lw-on-primary);
-}
-.tl-msg.is-assistant .tl-avatar {
-  background: var(--lw-secondary);
-  color: var(--lw-on-primary);
-}
-.tl-body {
+
+/* ===== 回合：一次「提问 → 回答」是一整块，块间才用大间距断开 ===== */
+.tl-turn {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-  max-width: calc(100% - 38px);
+  gap: 8px;
+  /* 新回合入场：自下方轻浮入；历史首屏渲染带同一动画，打开会话时整屏一次性淡入 */
+  animation: turn-in var(--lw-dur) var(--lw-ease-out);
 }
-.tl-msg.is-user .tl-body {
+@keyframes turn-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+.tl-turn__u {
+  display: flex;
+  flex-direction: column;
   align-items: flex-end;
+  gap: 4px;
 }
-.tl-meta {
+.tl-turn__time {
+  font-size: 11px;
+  color: var(--lw-ink-disabled);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+}
+.tl-turn__meta {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: 8px;
 }
 .tl-who {
+  font-size: 12px;
   font-weight: 700;
   color: var(--lw-ink);
 }
@@ -577,23 +591,115 @@ onMounted(async () => {
   color: var(--lw-ink-disabled);
   font-variant-numeric: tabular-nums;
 }
+
+/* 助手回合：头像列 + 竖轨。没有这根线，一屏里六七个元素读起来是互不相干的流水账 */
+.tl-turn--a {
+  position: relative;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 12px;
+}
+.tl-turn--a::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 34px;
+  bottom: 4px;
+  width: 1px;
+  background: var(--lw-border);
+  pointer-events: none;
+}
+.tl-turn__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.tl-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--lw-secondary);
+  color: var(--lw-on-secondary);
+  box-shadow: var(--lw-shadow-sm);
+  transition: box-shadow var(--lw-dur) var(--lw-ease);
+}
+/* 流式中：头像外圈一圈主靛光环，一眼看出「这一回合还在跑」 */
+.tl-avatar.is-live {
+  box-shadow: 0 0 0 3px var(--lw-secondary-tint);
+}
+
 .tl-bubble {
-  max-width: 100%;
+  max-width: 78%;
   padding: 10px 14px;
   border-radius: var(--lw-radius-card);
-  border-bottom-right-radius: 4px;
+  border-top-right-radius: 4px;
   font-size: 14px;
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
   background: var(--lw-primary);
   color: var(--lw-on-primary);
+  box-shadow: var(--lw-shadow-sm);
 }
+
+/* 助手正文：裸渲染不套气泡，markdown 自己就是容器 */
+.tl-prose {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--lw-ink);
+  min-width: 0;
+}
+
 .tl-usage {
   font-size: 11px;
   color: var(--lw-ink-disabled);
   font-variant-numeric: tabular-nums;
 }
+
+/* 等待首个 token 的呼吸态：三个点依次跳动，比一片空白更容易接受 */
+.tl-typing {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 12px;
+  border-radius: var(--lw-radius-control);
+  background: var(--lw-surface-subtle);
+  align-self: flex-start;
+}
+.tl-typing__dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--lw-primary);
+  animation: typing-bounce 1.1s ease-in-out infinite;
+}
+.tl-typing__dot:nth-child(2) {
+  animation-delay: 0.18s;
+}
+.tl-typing__dot:nth-child(3) {
+  animation-delay: 0.36s;
+}
+.tl-typing__txt {
+  margin-left: 6px;
+  font-size: 12px;
+  color: var(--lw-ink-muted);
+}
+@keyframes typing-bounce {
+  50% {
+    opacity: 0.25;
+    transform: translateY(-3px);
+  }
+}
+
 .tl-jump {
   position: absolute;
   right: 24px;
@@ -644,6 +750,12 @@ onMounted(async () => {
   .tl-jump:hover,
   .tl-jump:active {
     transform: none;
+  }
+  .tl-turn {
+    animation: none;
+  }
+  .tl-typing__dot {
+    animation: none;
   }
 }
 </style>

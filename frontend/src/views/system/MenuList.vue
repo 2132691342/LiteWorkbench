@@ -5,10 +5,8 @@ import { onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { menuApi } from '@/api'
 import LwButton from '@/components/ui/LwButton.vue'
-import LwCard from '@/components/ui/LwCard.vue'
-import LwEmpty from '@/components/ui/LwEmpty.vue'
-import LwErrorBar from '@/components/ui/LwErrorBar.vue'
 import LwSkeleton from '@/components/ui/LwSkeleton.vue'
+import LwTableCard from '@/components/ui/LwTableCard.vue'
 import LwTag from '@/components/ui/LwTag.vue'
 import { usePermission } from '@/composables/usePermission'
 import type { MenuREQ, MenuVO } from '@/types/api'
@@ -123,41 +121,56 @@ onMounted(load)
       </LwButton>
     </div>
 
-    <LwCard>
-      <LwSkeleton v-if="loading" :rows="8" />
-      <LwErrorBar v-else-if="error" :message="error" @retry="load" />
-      <LwEmpty v-else-if="!tree.length" :description="t('common.empty')" />
-      <el-table v-else :data="tree" row-key="menuId" default-expand-all style="width: 100%">
-        <el-table-column :label="t('system.menu.menuName')" min-width="200">
-          <template #default="{ row }">{{ menuLabel(row.menuName) }}</template>
+    <LwTableCard
+      :loading="loading"
+      :error="error"
+      :empty="!tree.length"
+      :empty-text="t('common.empty')"
+      @retry="load"
+    >
+      <template #skeleton>
+        <LwSkeleton :rows="8" />
+      </template>
+
+      <el-table :data="tree" row-key="menuId" default-expand-all style="width: 100%">
+        <el-table-column :label="t('system.menu.menuName')" min-width="220">
+          <template #default="{ row }">
+            <div class="lw-cell-title">{{ menuLabel(row.menuName) }}</div>
+            <div class="lw-cell-mono">{{ row.menuId }}</div>
+          </template>
         </el-table-column>
         <el-table-column :label="t('system.menu.menuType')" width="110">
           <template #default="{ row }">
             <LwTag :tone="typeTone(row.menuType)">{{ typeLabel(row.menuType) }}</LwTag>
           </template>
         </el-table-column>
-        <el-table-column :label="t('system.menu.routePath')" prop="routePath" min-width="140">
-          <template #default="{ row }">{{ row.routePath || '-' }}</template>
-        </el-table-column>
-        <el-table-column :label="t('system.menu.permCode')" prop="permCode" min-width="180">
+        <el-table-column :label="t('system.menu.permCode')" min-width="180">
           <template #default="{ row }">
-            <code class="text-xs font-mono">{{ row.permCode || '-' }}</code>
+            <span class="lw-cell-mono">{{ row.permCode || '-' }}</span>
           </template>
         </el-table-column>
-        <el-table-column :label="t('system.menu.sortNo')" prop="sortNo" width="90" />
+        <el-table-column :label="t('system.menu.routePath')" prop="routePath" min-width="140">
+          <template #default="{ row }">
+            <span class="lw-cell-mono">{{ row.routePath || '-' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('system.menu.sortNo')" prop="sortNo" width="90">
+          <template #default="{ row }"><span class="lw-cell-mono">{{ row.sortNo }}</span></template>
+        </el-table-column>
         <el-table-column v-if="hasPerm('system:menu:update')" :label="t('common.actions')" width="220" fixed="right">
           <template #default="{ row }">
-            <div class="flex gap-2">
+            <div class="lw-rowacts">
               <LwButton variant="text" size="sm" @click="openDialog(undefined, row)">{{ t('system.menu.addChild') }}</LwButton>
               <LwButton variant="text" size="sm" @click="openDialog(row)">{{ t('common.edit') }}</LwButton>
-              <LwButton v-if="hasPerm('system:menu:delete')" variant="text" size="sm" @click="removeMenu(row)">
+              <span v-if="hasPerm('system:menu:delete')" class="lw-rowacts__sep" aria-hidden="true" />
+              <LwButton v-if="hasPerm('system:menu:delete')" variant="text" size="sm" class="lw-text-danger" @click="removeMenu(row)">
                 {{ t('common.delete') }}
               </LwButton>
             </div>
           </template>
         </el-table-column>
       </el-table>
-    </LwCard>
+    </LwTableCard>
 
     <el-dialog v-model="dialogVisible" :title="isEdit ? t('system.menu.update') : t('system.menu.create')" width="520px">
       <form class="flex flex-col gap-4" @submit.prevent="submitDialog">

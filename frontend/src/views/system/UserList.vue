@@ -5,10 +5,8 @@ import { onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { roleApi, userApi } from '@/api'
 import LwButton from '@/components/ui/LwButton.vue'
-import LwCard from '@/components/ui/LwCard.vue'
-import LwEmpty from '@/components/ui/LwEmpty.vue'
-import LwErrorBar from '@/components/ui/LwErrorBar.vue'
 import LwSkeleton from '@/components/ui/LwSkeleton.vue'
+import LwTableCard from '@/components/ui/LwTableCard.vue'
 import LwTag from '@/components/ui/LwTag.vue'
 import { usePermission } from '@/composables/usePermission'
 import type { RoleVO, UserREQ, UserVO } from '@/types/api'
@@ -118,8 +116,30 @@ async function toggleState(user: UserVO): Promise<void> {
     type: 'warning',
   })
   await userApi.toggle(user.userId)
-  ElMessage.success(t('common.success'))
+  ElMessage.success(t('common.saveSuccess'))
   void load()
+}
+
+function openReset(user: UserVO): void {
+  resetForm.userId = user.userId
+  resetForm.newPassword = ''
+  resetVisible.value = true
+}
+
+async function submitReset(): Promise<void> {
+  if ((resetForm.newPassword ?? '').length < 8) {
+    ElMessage.warning(t('system.user.initPasswordTip'))
+    return
+  }
+  resetLoading.value = true
+  try {
+    const { keyId, cipher } = await encryptSecret(resetForm.newPassword)
+    await userApi.resetPassword({ userId: resetForm.userId, newPassword: cipher, keyId })
+    ElMessage.success(t('common.saveSuccess'))
+    resetVisible.value = false
+  } finally {
+    resetLoading.value = false
+  }
 }
 
 async function removeUser(user: UserVO): Promise<void> {
@@ -133,30 +153,18 @@ async function removeUser(user: UserVO): Promise<void> {
   void load()
 }
 
-function openReset(user: UserVO): void {
-  resetForm.userId = user.userId
-  resetForm.newPassword = ''
-  resetVisible.value = true
-}
-
-/** 重置密码同样走 RSA 密文提交 */
-async function submitReset(): Promise<void> {
-  resetLoading.value = true
-  try {
-    const { keyId, cipher } = await encryptSecret(resetForm.newPassword)
-    await userApi.resetPassword({ userId: resetForm.userId, newPassword: cipher, keyId })
-    ElMessage.success(t('common.saveSuccess'))
-    resetVisible.value = false
-  } finally {
-    resetLoading.value = false
-  }
-}
-
 function roleNames(roleIds?: string[]): string {
   if (!roleIds?.length) return '-'
   return roleIds
-    .map((id) => roles.value.find((role) => role.roleId === id)?.roleName ?? id)
+    .map((id) => roles.value.find((item) => item.roleId === id)?.roleName ?? id)
     .join('、')
+}
+
+function stateTone(state: string): 'success' | 'warning' | 'error' | 'muted' {
+  if (state === USER_STATE.NORMAL) return 'success'
+  if (state === USER_STATE.LOCKED) return 'warning'
+  if (state === USER_STATE.DISABLED) return 'muted'
+  return 'error'
 }
 
 onMounted(() => {
@@ -178,9 +186,22 @@ onMounted(() => {
       </LwButton>
     </div>
 
-    <LwCard>
-      <div class="flex flex-wrap items-center gap-3">
-        <el-input v-model="query.keyword" :placeholder="t('common.keyword')" clearable style="width: 220px" @keyup.enter="handleSearch" />
+    <LwTableCard
+      :loading="loading"
+      :error="error"
+      :empty="!list.length"
+      :empty-text="t('common.empty')"
+      :total="total"
+      @retry="load"
+    >
+      <template #filter>
+        <el-input
+          v-model="query.keyword"
+          :placeholder="t('common.keyword')"
+          clearable
+          style="width: 220px"
+          @keyup.enter="handleSearch"
+        />
         <el-select v-model="query.state" :placeholder="t('common.status')" clearable style="width: 140px">
           <el-option :label="t('system.user.stateNormal')" :value="USER_STATE.NORMAL" />
           <el-option :label="t('system.user.stateDisabled')" :value="USER_STATE.DISABLED" />
@@ -194,79 +215,83 @@ onMounted(() => {
           <template #icon><el-icon><Refresh /></el-icon></template>
           {{ t('common.reset') }}
         </LwButton>
-      </div>
-    </LwCard>
-
-    <LwCard>
-      <LwSkeleton v-if="loading" :rows="6" />
-      <LwErrorBar v-else-if="error" :message="error" @retry="load" />
-      <LwEmpty v-else-if="!list.length" :description="t('common.empty')" />
-      <template v-else>
-        <el-table :data="list" style="width: 100%">
-          <el-table-column :label="t('system.user.username')" prop="username" min-width="140" />
-          <el-table-column :label="t('system.user.nickname')" prop="nickname" min-width="140" />
-          <el-table-column :label="t('system.user.email')" prop="email" min-width="180">
-            <template #default="{ row }">{{ row.email || '-' }}</template>
-          </el-table-column>
-          <el-table-column :label="t('system.user.role')" min-width="180">
-            <template #default="{ row }">{{ roleNames(row.roleIds) }}</template>
-          </el-table-column>
-          <el-table-column :label="t('system.user.state')" width="100">
-            <template #default="{ row }">
-              <LwTag :tone="row.state === USER_STATE.NORMAL ? 'success' : 'muted'">
-                {{ row.state === USER_STATE.NORMAL ? t('system.user.stateNormal') : t('system.user.stateDisabled') }}
-              </LwTag>
-            </template>
-          </el-table-column>
-          <el-table-column :label="t('system.user.lastLoginAt')" width="160">
-            <template #default="{ row }">{{ formatTime(row.lastLoginAt) }}</template>
-          </el-table-column>
-          <el-table-column :label="t('common.actions')" width="300" fixed="right">
-            <template #default="{ row }">
-              <div class="flex items-center gap-1">
-                <LwButton v-if="hasPerm('system:user:update')" variant="text" size="sm" @click="openDialog(row)">
-                  {{ t('common.edit') }}
-                </LwButton>
-                <LwButton v-if="hasPerm('system:user:update')" variant="text" size="sm" @click="toggleState(row)">
-                  {{ row.state === USER_STATE.NORMAL ? t('common.disable') : t('common.enable') }}
-                </LwButton>
-                <!-- 改密与删除不可逆，用分隔线隔开并取错误语义色，降低误点概率 -->
-                <span class="w-px h-4 mx-1 shrink-0" style="background: var(--lw-border)" aria-hidden="true" />
-                <LwButton
-                  v-if="hasPerm('system:user:reset')"
-                  variant="text"
-                  size="sm"
-                  class="lw-text-danger"
-                  @click="openReset(row)"
-                >
-                  {{ t('system.user.resetPassword') }}
-                </LwButton>
-                <LwButton
-                  v-if="hasPerm('system:user:delete')"
-                  variant="text"
-                  size="sm"
-                  class="lw-text-danger"
-                  @click="removeUser(row)"
-                >
-                  {{ t('common.delete') }}
-                </LwButton>
-              </div>
-            </template>
-          </el-table-column>
-        </el-table>
-        <div class="flex justify-end mt-4">
-          <el-pagination
-            v-model:current-page="query.page"
-            v-model:page-size="query.size"
-            :total="total"
-            :page-sizes="[10, 20, 50]"
-            layout="total, sizes, prev, pager, next"
-            @current-change="load"
-            @size-change="handleSearch"
-          />
-        </div>
       </template>
-    </LwCard>
+
+      <template #skeleton>
+        <LwSkeleton :rows="6" />
+      </template>
+
+      <el-table :data="list" style="width: 100%">
+        <el-table-column :label="t('system.user.username')" prop="username" min-width="140">
+          <template #default="{ row }">
+            <div class="lw-cell-title">{{ row.username }}</div>
+            <div class="lw-cell-sub">{{ row.email || '-' }}</div>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('system.user.nickname')" prop="nickname" min-width="120" />
+        <el-table-column :label="t('system.user.role')" min-width="180">
+          <template #default="{ row }">
+            <span class="text-sm">{{ roleNames(row.roleIds) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('system.user.state')" width="100">
+          <template #default="{ row }">
+            <LwTag :tone="stateTone(row.state)">
+              {{ row.state === USER_STATE.NORMAL ? t('system.user.stateNormal') : t('system.user.stateDisabled') }}
+            </LwTag>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('system.user.lastLoginAt')" width="160">
+          <template #default="{ row }">
+            <span class="lw-cell-mono">{{ formatTime(row.lastLoginAt) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('common.actions')" width="300" fixed="right">
+          <template #default="{ row }">
+            <div class="lw-rowacts">
+              <LwButton v-if="hasPerm('system:user:update')" variant="text" size="sm" @click="openDialog(row)">
+                {{ t('common.edit') }}
+              </LwButton>
+              <LwButton v-if="hasPerm('system:user:update')" variant="text" size="sm" @click="toggleState(row)">
+                {{ row.state === USER_STATE.NORMAL ? t('common.disable') : t('common.enable') }}
+              </LwButton>
+              <!-- 改密与删除不可逆，用分隔线隔开并取错误语义色，降低误点概率 -->
+              <span class="lw-rowacts__sep" aria-hidden="true" />
+              <LwButton
+                v-if="hasPerm('system:user:reset')"
+                variant="text"
+                size="sm"
+                class="lw-text-danger"
+                @click="openReset(row)"
+              >
+                {{ t('system.user.resetPassword') }}
+              </LwButton>
+              <LwButton
+                v-if="hasPerm('system:user:delete')"
+                variant="text"
+                size="sm"
+                class="lw-text-danger"
+                @click="removeUser(row)"
+              >
+                {{ t('common.delete') }}
+              </LwButton>
+            </div>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <template #pager>
+        <el-pagination
+          v-model:current-page="query.page"
+          v-model:page-size="query.size"
+          :total="total"
+          :page-sizes="[10, 20, 50]"
+          layout="total, sizes, prev, pager, next"
+          @current-change="load"
+          @size-change="handleSearch"
+        />
+      </template>
+    </LwTableCard>
 
     <el-dialog v-model="dialogVisible" :title="isEdit ? t('system.user.update') : t('system.user.create')" width="460px">
       <form class="flex flex-col gap-4" @submit.prevent="submitDialog">

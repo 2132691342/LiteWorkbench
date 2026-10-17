@@ -1,14 +1,12 @@
 <script setup lang="ts">
-import { Plus } from '@element-plus/icons-vue'
+import { Plus, Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { nextTick, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { menuApi, roleApi } from '@/api'
 import LwButton from '@/components/ui/LwButton.vue'
-import LwCard from '@/components/ui/LwCard.vue'
-import LwEmpty from '@/components/ui/LwEmpty.vue'
-import LwErrorBar from '@/components/ui/LwErrorBar.vue'
 import LwSkeleton from '@/components/ui/LwSkeleton.vue'
+import LwTableCard from '@/components/ui/LwTableCard.vue'
 import LwTag from '@/components/ui/LwTag.vue'
 import { usePermission } from '@/composables/usePermission'
 import type { MenuVO, RoleREQ, RoleVO } from '@/types/api'
@@ -33,7 +31,6 @@ const grantVisible = ref(false)
 const grantLoading = ref(false)
 const grantRole = ref<RoleVO | null>(null)
 const menuTree = ref<MenuVO[]>([])
-const checkedMenuIds = ref<string[]>([])
 const treeRef = ref()
 
 async function load(): Promise<void> {
@@ -48,6 +45,11 @@ async function load(): Promise<void> {
   } finally {
     loading.value = false
   }
+}
+
+function handleSearch(): void {
+  query.page = 1
+  void load()
 }
 
 function openDialog(role?: RoleVO): void {
@@ -82,7 +84,6 @@ async function openGrant(role: RoleVO): Promise<void> {
   try {
     const [tree, granted] = await Promise.all([menuApi.tree(), roleApi.menuIds(role.roleId)])
     menuTree.value = tree
-    checkedMenuIds.value = granted
     await nextTick()
     treeRef.value?.setCheckedKeys(granted)
   } finally {
@@ -133,61 +134,85 @@ onMounted(load)
       </LwButton>
     </div>
 
-    <LwCard>
-      <div class="flex flex-wrap items-center gap-3">
-        <el-input v-model="query.keyword" :placeholder="t('common.keyword')" clearable style="width: 220px" @keyup.enter="load" />
-        <LwButton variant="ghost" size="sm" @click="load">{{ t('common.search') }}</LwButton>
-      </div>
-    </LwCard>
-
-    <LwCard>
-      <LwSkeleton v-if="loading" :rows="6" />
-      <LwErrorBar v-else-if="error" :message="error" @retry="load" />
-      <LwEmpty v-else-if="!list.length" :description="t('common.empty')" />
-      <template v-else>
-        <el-table :data="list" style="width: 100%">
-          <el-table-column :label="t('system.role.roleCode')" prop="roleCode" min-width="160" />
-          <el-table-column :label="t('system.role.roleName')" prop="roleName" min-width="160" />
-          <el-table-column :label="t('common.status')" width="120">
-            <template #default="{ row }">
-              <LwTag v-if="row.builtin" tone="secondary">{{ t('system.role.builtin') }}</LwTag>
-              <span v-else>-</span>
-            </template>
-          </el-table-column>
-          <el-table-column :label="t('common.actions')" width="260" fixed="right">
-            <template #default="{ row }">
-              <div class="flex gap-2">
-                <LwButton v-if="hasPerm('system:role:update')" variant="text" size="sm" @click="openDialog(row)">
-                  {{ t('common.edit') }}
-                </LwButton>
-                <LwButton v-if="hasPerm('system:role:grant')" variant="text" size="sm" @click="openGrant(row)">
-                  {{ t('menu.systemRoleGrant') }}
-                </LwButton>
-                <LwButton
-                  v-if="hasPerm('system:role:delete') && !row.builtin"
-                  variant="text"
-                  size="sm"
-                  @click="removeRole(row)"
-                >
-                  {{ t('common.delete') }}
-                </LwButton>
-              </div>
-            </template>
-          </el-table-column>
-        </el-table>
-        <div class="flex justify-end mt-4">
-          <el-pagination
-            v-model:current-page="query.page"
-            v-model:page-size="query.size"
-            :total="total"
-            :page-sizes="[10, 20, 50]"
-            layout="total, sizes, prev, pager, next"
-            @current-change="load"
-            @size-change="load"
-          />
-        </div>
+    <LwTableCard
+      :loading="loading"
+      :error="error"
+      :empty="!list.length"
+      :empty-text="t('common.empty')"
+      :total="total"
+      @retry="load"
+    >
+      <template #filter>
+        <el-input
+          v-model="query.keyword"
+          :placeholder="t('common.keyword')"
+          clearable
+          style="width: 240px"
+          @keyup.enter="handleSearch"
+        />
+        <LwButton variant="ghost" size="sm" @click="handleSearch">
+          <template #icon><el-icon><Search /></el-icon></template>
+          {{ t('common.search') }}
+        </LwButton>
       </template>
-    </LwCard>
+
+      <template #skeleton>
+        <LwSkeleton :rows="6" />
+      </template>
+
+      <el-table :data="list" style="width: 100%">
+        <el-table-column :label="t('system.role.roleName')" prop="roleName" min-width="160">
+          <template #default="{ row }">
+            <div class="lw-cell-title">{{ row.roleName }}</div>
+            <div class="lw-cell-sub">{{ row.roleCode }}</div>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('system.role.roleCode')" prop="roleCode" min-width="160">
+          <template #default="{ row }"><span class="lw-cell-mono">{{ row.roleCode }}</span></template>
+        </el-table-column>
+        <el-table-column :label="t('common.status')" width="120">
+          <template #default="{ row }">
+            <LwTag v-if="row.builtin" tone="secondary">{{ t('system.role.builtin') }}</LwTag>
+            <span v-else class="lw-cell-sub">-</span>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('system.role.sortNo')" prop="sortNo" width="100" />
+        <el-table-column :label="t('common.actions')" width="260" fixed="right">
+          <template #default="{ row }">
+            <div class="lw-rowacts">
+              <LwButton v-if="hasPerm('system:role:update')" variant="text" size="sm" @click="openDialog(row)">
+                {{ t('common.edit') }}
+              </LwButton>
+              <LwButton v-if="hasPerm('system:role:grant')" variant="text" size="sm" @click="openGrant(row)">
+                {{ t('menu.systemRoleGrant') }}
+              </LwButton>
+              <span v-if="hasPerm('system:role:delete') && !row.builtin" class="lw-rowacts__sep" aria-hidden="true" />
+              <LwButton
+                v-if="hasPerm('system:role:delete') && !row.builtin"
+                variant="text"
+                size="sm"
+                class="lw-text-danger"
+                @click="removeRole(row)"
+              >
+                {{ t('common.delete') }}
+              </LwButton>
+            </div>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <template #pager>
+        <el-pagination
+          v-model:current-page="query.page"
+          v-model:page-size="query.size"
+          :total="total"
+          :page-sizes="[10, 20, 50]"
+          layout="total, sizes, prev, pager, next"
+          @current-change="load"
+          @size-change="handleSearch"
+        />
+      </template>
+    </LwTableCard>
 
     <el-dialog v-model="dialogVisible" :title="isEdit ? t('system.role.update') : t('system.role.create')" width="440px">
       <form class="flex flex-col gap-4" @submit.prevent="submitDialog">
@@ -212,7 +237,9 @@ onMounted(load)
       <p class="text-xs mb-4" style="color: var(--lw-ink-muted)">
         {{ t('system.role.grantDesc') }} · {{ grantRole?.roleName }}
       </p>
+      <LwSkeleton v-if="grantLoading && !menuTree.length" :rows="8" />
       <el-tree
+        v-else
         ref="treeRef"
         :data="menuTree"
         node-key="menuId"

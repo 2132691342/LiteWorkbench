@@ -4,8 +4,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import LwButton from '@/components/ui/LwButton.vue'
-import LwCard from '@/components/ui/LwCard.vue'
-import LwPageState from '@/components/ui/LwPageState.vue'
+import LwTableCard from '@/components/ui/LwTableCard.vue'
 import LwTag from '@/components/ui/LwTag.vue'
 import { skillApi } from '@/api'
 import { usePermission } from '@/composables/usePermission'
@@ -134,62 +133,79 @@ onMounted(load)
         {{ t('common.create') }}
       </LwButton>
     </div>
-    <LwCard>
-      <div class="flex flex-wrap items-center gap-2 mb-4">
-        <el-input v-model="keyword" class="flex-1 min-w-40" :placeholder="t('common.search')" clearable @keyup.enter="search" />
-        <LwButton variant="secondary" class="shrink-0" @click="search">{{ t('common.search') }}</LwButton>
-      </div>
-      <LwPageState :loading="loading" :error="error" :empty="!skills.length" @retry="load">
-        <el-table :data="skills" class="lw-table">
-          <el-table-column :label="t('skills.skillCode')" width="190">
-            <template #default="{ row }">
-              <span class="inline-flex items-center gap-1.5">
-                <span>{{ row.skillCode }}</span>
-                <LwTag v-if="row.builtin" tone="secondary">{{ t('skills.builtin') }}</LwTag>
-              </span>
-            </template>
-          </el-table-column>
-          <el-table-column :label="t('skills.skillName')" prop="skillName" min-width="140" />
-          <el-table-column :label="t('skills.summary')" prop="summary" min-width="200" show-overflow-tooltip />
-          <el-table-column :label="t('skills.triggerWords')" prop="triggerWords" min-width="160" show-overflow-tooltip />
-          <el-table-column :label="t('common.status')" width="90">
-            <template #default="{ row }">
-              <LwTag :tone="row.enabled ? 'success' : 'muted'">
-                {{ row.enabled ? t('common.enabled') : t('common.disabled') }}
-              </LwTag>
-            </template>
-          </el-table-column>
-          <el-table-column :label="t('logs.time')" width="180">
-            <template #default="{ row }">{{ formatTime(row.updatedAt ?? row.createdAt) }}</template>
-          </el-table-column>
-          <el-table-column width="150" fixed="right">
-            <template #default="{ row }">
+    <LwTableCard
+      :loading="loading"
+      :error="error"
+      :empty="!skills.length"
+      :empty-text="t('common.empty')"
+      :total="total"
+      @retry="load"
+    >
+      <template #filter>
+        <el-input
+          v-model="keyword"
+          :placeholder="t('common.search')"
+          clearable
+          style="width: 260px"
+          @keyup.enter="search"
+        />
+        <LwButton variant="ghost" size="sm" @click="search">{{ t('common.search') }}</LwButton>
+      </template>
+
+      <el-table :data="skills" style="width: 100%">
+        <el-table-column :label="t('skills.skillCode')" min-width="200">
+          <template #default="{ row }">
+            <div class="flex items-center gap-2">
+              <span class="lw-cell-mono">{{ row.skillCode }}</span>
+              <LwTag v-if="row.builtin" tone="secondary">{{ t('skills.builtin') }}</LwTag>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('skills.skillName')" min-width="140">
+          <template #default="{ row }"><span class="lw-cell-title">{{ row.skillName }}</span></template>
+        </el-table-column>
+        <el-table-column :label="t('skills.summary')" min-width="200" show-overflow-tooltip />
+        <el-table-column :label="t('skills.triggerWords')" min-width="160" show-overflow-tooltip />
+        <el-table-column :label="t('common.status')" width="90">
+          <template #default="{ row }">
+            <LwTag :tone="row.enabled ? 'success' : 'muted'">
+              {{ row.enabled ? t('common.enabled') : t('common.disabled') }}
+            </LwTag>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('logs.time')" width="180">
+          <template #default="{ row }"><span class="lw-cell-mono">{{ formatTime(row.updatedAt ?? row.createdAt) }}</span></template>
+        </el-table-column>
+        <el-table-column width="170" fixed="right">
+          <template #default="{ row }">
+            <div class="lw-rowacts">
               <LwButton v-if="hasPerm('wb:skill:update')" variant="text" size="sm" @click="openEdit(row)">
                 {{ t('common.edit') }}
               </LwButton>
               <LwButton v-if="row.builtin && hasPerm('wb:skill:update')" variant="text" size="sm" @click="restore(row)">
                 {{ t('skills.restore') }}
               </LwButton>
-              <LwButton v-if="hasPerm('wb:skill:delete')" variant="text" size="sm" @click="remove(row)">
+              <span v-if="hasPerm('wb:skill:delete')" class="lw-rowacts__sep" aria-hidden="true" />
+              <LwButton v-if="hasPerm('wb:skill:delete')" variant="text" size="sm" class="lw-text-danger" @click="remove(row)">
                 {{ t('common.delete') }}
               </LwButton>
-            </template>
-          </el-table-column>
-          <template #empty><span /></template>
-        </el-table>
-        <div v-if="total > size" class="flex justify-end mt-4">
-          <el-pagination
-            layout="total, sizes, prev, pager, next"
-            :total="total"
-            :page-size="size"
-            :page-sizes="[10, 20, 50]"
-            :current-page="page"
-            @current-change="changePage"
-            @size-change="changeSize"
-          />
-        </div>
-      </LwPageState>
-    </LwCard>
+            </div>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <template #pager>
+        <el-pagination
+          layout="total, sizes, prev, pager, next"
+          :total="total"
+          :page-size="size"
+          :page-sizes="[10, 20, 50]"
+          :current-page="page"
+          @current-change="changePage"
+          @size-change="changeSize"
+        />
+      </template>
+    </LwTableCard>
 
     <el-dialog v-model="dialogVisible" :title="form.skillId ? t('common.edit') : t('common.create')" width="640">
       <el-form :model="form" label-width="90">

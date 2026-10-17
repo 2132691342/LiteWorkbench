@@ -9,6 +9,7 @@ import 'element-plus/dist/index.css'
 import 'highlight.js/styles/github.css'
 import 'virtual:uno.css'
 import '@/styles/index.css'
+import '@/styles/admin.css'
 
 /** 应用入口：Pinia → Router → i18n → Element Plus 按需组件 → 指令 */
 const app = createApp(App)

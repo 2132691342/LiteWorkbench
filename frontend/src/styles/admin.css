@@ -1,0 +1,131 @@
+/* 管理后台骨架语言：页头 / 筛选条 / 表格 / 空态，色值只引用令牌 */
+@import './tokens.css';
+
+/* ===== 页头：标题 + 一句说明 + 右侧主操作，与管理模板同构 ===== */
+.lw-page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+/* ===== 筛选条：与表格同一张卡，白底 + 1px 边框，控件一律 h-10 ===== */
+.lw-filterbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--lw-border);
+  background: var(--lw-surface-raised);
+  border-radius: var(--lw-radius-card) var(--lw-radius-card) 0 0;
+}
+
+.lw-filterbar__label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--lw-ink-muted);
+  margin-right: -4px;
+}
+
+.lw-filterbar__grow {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.lw-filterbar__sp {
+  flex: 1 1 auto;
+}
+
+/* ===== 表格卡：表头浅底 + 行高 44 + 悬停浅靛；禁斑马纹 ===== */
+.lw-tablecard {
+  overflow: hidden;
+  border-radius: var(--lw-radius-card);
+  background: var(--lw-surface-raised);
+  border: 1px solid var(--lw-border);
+  box-shadow: var(--lw-shadow-sm);
+}
+
+.lw-tablecard__body {
+  padding: 16px;
+}
+
+.lw-tablecard .el-table {
+  --el-table-header-bg-color: var(--lw-surface);
+  --el-table-header-text-color: var(--lw-ink-muted);
+  --el-table-row-height: 44px;
+  --el-table-border-color: var(--lw-border);
+  --el-table-row-hover-bg-color: var(--lw-primary-tint);
+}
+
+.lw-tablecard .el-table th.el-table__cell {
+  font-size: 12px;
+  font-weight: 700;
+  background-color: var(--lw-surface);
+}
+
+.lw-tablecard .el-table .el-table__cell {
+  font-size: 14px;
+  padding: 6px 0;
+}
+
+.lw-tablecard .el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell {
+  background-color: var(--lw-surface-raised);
+}
+
+/* 首列左对齐留白：表格贴卡片边框是「贴边」观感的主要来源 */
+.lw-tablecard .el-table .cell {
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+/* 操作列：按钮等高成组，破坏性动作用竖线隔开 */
+.lw-rowacts {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.lw-rowacts__sep {
+  width: 1px;
+  height: 14px;
+  margin: 0 4px;
+  flex: none;
+  background: var(--lw-border);
+}
+
+/* ===== 表格内主文本 / 次文本两档，避免一列里字号与颜色打架 ===== */
+.lw-cell-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--lw-ink);
+}
+
+.lw-cell-sub {
+  font-size: 12px;
+  color: var(--lw-ink-muted);
+  margin-top: 2px;
+}
+
+.lw-cell-mono {
+  font-family: ui-monospace, 'Cascadia Code', Consolas, 'Courier New', monospace;
+  font-size: 12px;
+  color: var(--lw-ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== 分页条：右对齐 + 顶部细线，与表格底部边界分开 ===== */
+.lw-pager {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 16px;
+  border-top: 1px solid var(--lw-border);
+}
+
+/* ===== 空态：表格内给足呼吸，图标瓷砖与说明居中 ===== */
+.lw-tablecard .lw-empty {
+  padding: 40px 0;
+}

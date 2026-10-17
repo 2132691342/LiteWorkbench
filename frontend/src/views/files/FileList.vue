@@ -6,8 +6,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 /** 预览依赖较重，按需异步加载避免首屏体积膨胀 */
 const VuePdfEmbed = defineAsyncComponent(() => import('vue-pdf-embed'))
 import LwButton from '@/components/ui/LwButton.vue'
-import LwCard from '@/components/ui/LwCard.vue'
-import LwPageState from '@/components/ui/LwPageState.vue'
+import LwTableCard from '@/components/ui/LwTableCard.vue'
 import LwTag from '@/components/ui/LwTag.vue'
 import { fileApi } from '@/api'
 import { usePermission } from '@/composables/usePermission'
@@ -173,45 +172,58 @@ onMounted(load)
       </LwButton>
       <input ref="uploadInput" type="file" class="hidden" @change="onFileChange" />
     </div>
-    <LwCard>
-      <LwPageState :loading="loading" :error="error" :empty="!files.length" @retry="load">
-        <el-table :data="files" class="lw-table">
-          <el-table-column :label="t('files.fileName')" prop="fileName" min-width="220" show-overflow-tooltip />
-          <el-table-column :label="t('files.size')" width="120">
-            <template #default="{ row }">{{ (row.fileSize / 1024).toFixed(1) }} KB</template>
-          </el-table-column>
-          <el-table-column :label="t('files.category')" width="110">
-            <template #default="{ row }">
-              <LwTag tone="muted">{{ row.category }}</LwTag>
-            </template>
-          </el-table-column>
-          <el-table-column :label="t('logs.time')" width="180">
-            <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
-          </el-table-column>
-          <el-table-column width="160" fixed="right">
-            <template #default="{ row }">
+    <LwTableCard
+      :loading="loading"
+      :error="error"
+      :empty="!files.length"
+      :empty-text="t('common.empty')"
+      :total="total"
+      @retry="load"
+    >
+      <el-table :data="files" style="width: 100%">
+        <el-table-column :label="t('files.fileName')" prop="fileName" min-width="240" show-overflow-tooltip>
+          <template #default="{ row }">
+            <div class="lw-cell-title">{{ row.fileName }}</div>
+            <div class="lw-cell-sub">{{ row.fileId }}</div>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('files.size')" width="120">
+          <template #default="{ row }"><span class="lw-cell-mono">{{ (row.fileSize / 1024).toFixed(1) }} KB</span></template>
+        </el-table-column>
+        <el-table-column :label="t('files.category')" width="110">
+          <template #default="{ row }">
+            <LwTag tone="muted">{{ row.category }}</LwTag>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('logs.time')" width="180">
+          <template #default="{ row }"><span class="lw-cell-mono">{{ formatTime(row.createdAt) }}</span></template>
+        </el-table-column>
+        <el-table-column width="180" fixed="right">
+          <template #default="{ row }">
+            <div class="lw-rowacts">
               <LwButton variant="text" size="sm" @click="preview(row)">{{ t('files.preview') }}</LwButton>
               <LwButton variant="text" size="sm" @click="download(row)">{{ t('files.download') }}</LwButton>
-              <LwButton v-if="hasPerm('wb:file:delete')" variant="text" size="sm" @click="remove(row)">
+              <span v-if="hasPerm('wb:file:delete')" class="lw-rowacts__sep" aria-hidden="true" />
+              <LwButton v-if="hasPerm('wb:file:delete')" variant="text" size="sm" class="lw-text-danger" @click="remove(row)">
                 {{ t('common.delete') }}
               </LwButton>
-            </template>
-          </el-table-column>
-          <template #empty><span /></template>
-        </el-table>
-        <div v-if="total > size" class="flex justify-end mt-4">
-          <el-pagination
-            layout="total, sizes, prev, pager, next"
-            :total="total"
-            :page-size="size"
-            :page-sizes="[10, 20, 50]"
-            :current-page="page"
-            @current-change="changePage"
-            @size-change="changeSize"
-          />
-        </div>
-      </LwPageState>
-    </LwCard>
+            </div>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <template #pager>
+        <el-pagination
+          layout="total, sizes, prev, pager, next"
+          :total="total"
+          :page-size="size"
+          :page-sizes="[10, 20, 50]"
+          :current-page="page"
+          @current-change="changePage"
+          @size-change="changeSize"
+        />
+      </template>
+    </LwTableCard>
 
     <el-drawer v-model="previewOpen" :title="t('files.preview')" size="60%">
       <div class="flex flex-col gap-3 h-full">
