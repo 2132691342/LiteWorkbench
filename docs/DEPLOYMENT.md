@@ -304,7 +304,7 @@ Manticore 无文档级 TTL，日志表保留由应用定时任务（每日一次
 | job | 触发 | 动作 |
 |---|---|---|
 | `backend` | push 与 pull_request | JDK 17 + Maven 缓存，`mvn -B -DskipTests=false package`（编译并跑测试） |
-| `frontend` | push 与 pull_request | Node 22 + npm 缓存，`npm ci` → `npm run build`（内含 typecheck 与词条成对校验） |
+| `frontend` | push 与 pull_request | Node 22 + npm 缓存，`npm ci` → `npm run build`（build 内含 typecheck 与词条成对校验，不单独跑一次类型检查） |
 | `release` | 仅 `main` 的 push，且 `backend` / `frontend` 通过 | 构建并推送镜像，同步编排与脚本到主机，执行发布脚本 |
 
 `release` 步骤：

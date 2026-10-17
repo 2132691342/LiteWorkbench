@@ -29,7 +29,7 @@
 | `utils/` | `crypto.ts`（公钥与加密）、`theme.ts`（图表取令牌）、`menu.ts`（`menuLabel()`）、`role.ts`（角色标签唯一实现）、`markdown.ts`、`const.ts`（角色码 / 用户状态 / 菜单类型 / 时间格式化） |
 | `types/` | `api.ts` 与后端 VO 对齐的接口类型 |
 | `locales/` | 中英双语资源与 i18n 实例 |
-| `styles/` | `tokens.css` 唯一色值来源、`index.css` 全局样式、`admin.css` 管理列表页骨架（页头 / 筛选条 / 表格卡 / 分页 / 单元格字体档） |
+| `styles/` | `tokens.css` 唯一色值来源、`index.css` 全局样式与外壳件（五态按钮、分段、侧栏、面包屑、仪表盘磁贴）、`admin.css` 管理列表页骨架（卡头 / 工具栏 / 筛选条 / 批量条 / 表格卡 / 分页 / 单元格字体档） |
 
 ### 路由
 
@@ -87,7 +87,7 @@
 | 侧栏折叠 | 桌面端在 `208px` 与 `64px` 图标栏间切换，状态在 `useAppStore.sidebarCollapsed` 并持久化；折叠由顶栏左侧按钮触发，折叠态下点目录会先展开侧栏再打开该目录 |
 | 面包屑 | `useBreadcrumb` 在当前 `useUserStore.menus` 上按 `route.path` 定位，返回根→叶链条；链条长度 >1 才渲染，单级页面（如仪表盘）不渲染 |
 | 表格工具栏 | 刷新 / 密度 / 全屏由 `LwTableCard` 自带：刷新触发 `retry`，密度三档 `default` / `medium` / `compact`（持久化 `lw-table-density`），全屏是卡片级 `position: fixed` 而非浏览器全屏 API（后者会吞掉 Esc 与弹窗） |
-| 批量与筛选 | `LwBatchBar` 占筛选条下方位置（`batch` 插槽），未选中不占位；高级筛选行在 `filter` 插槽内用 `.lw-filterbar__adv` 折叠，开关按钮有生效条件时打点；行操作溢出收进 `LwRowActions`；破坏性动作统一 `lw-text-danger` + `.lw-rowacts__sep` 竖线 |
+| 批量与高级筛选 | `LwTableCard` 的 `batch` 插槽放 `LwBatchBar`，未选中不占位；高级筛选行用 `.lw-filterbar__adv` 折叠在筛选条内，有生效条件时开关按钮打点；行操作溢出收进 `LwRowActions` 的 `overflow` 插槽 |
 
 ### 国际化
 
@@ -228,22 +228,21 @@ defineExpose({ focus: () => void; clear: () => void })
   ├─ pwdResetRequired = true → 跳 /force-password，改密成功后强制重登
   └─ 否则 → 按 redirect 或 /dashboard 进入外壳
 
+仪表盘
+  ├─ 并发拉 /monitor/overview 与 /run/page（size=5，最近运行）
+  ├─ 概览与最近运行各自三态，互不牵连
+  └─ 最近运行行点击 → /runs?runId=xxx，运行记录页据此直接选中详情
+
+管理列表页（用户 / 角色 / 菜单 / 文件 / 技能 / 工作区 / 存储桶 / 知识库文档）
+  ├─ 进入拉分页 → 卡头显示资源名与总条数 → 工具栏刷新 / 密度 / 全屏
+  ├─ 勾选行 → 批量条出现 → 二次确认 → 批量接口 → 按 BatchResultVO 报逐条结果
+  └─ 高级筛选：角色 / 待改密 / 状态 → 回到第 1 页重查
+
 工作台
   ├─ 加载会话列表（骨架屏）→ 选中会话拉消息与最近运行
   ├─ 输入发送 → openRunStream 建立 SSE → 逐帧 applyEvent 到 runStore
   ├─ 中断按钮 → POST /run/abort/{runId} → 收到 run.end
   └─ 刷新页面 → GET /run/events/{runId} 回放
-
-仪表盘
-  ├─ 进入并发拉 /monitor/overview 与 /run/page(size=5)，两块各自三态
-  ├─ 指标卡 / 趋势图 / 工具分布读 overview；最近运行读分页结果的前 5 条
-  └─ 最近运行行点击 → /runs?runId=xxx，运行记录页据此直接选中并加载详情
-
-管理列表页
-  ├─ 进入拉资源分页 → LwTableCard 渲染卡头（资源名 + 总数 + 工具栏）
-  ├─ 筛选条查询 / 重置 → 回到第 1 页重拉；高级筛选折叠行收起时不占位
-  ├─ 勾选行 → 批量条出现 → 批量动作走批量接口 → 按 BatchResultVO 逐条回报并刷新
-  └─ 工具栏：刷新（重拉）· 密度（三档循环，持久化）· 全屏（卡片级铺满，Esc 仍归弹窗）
 
 运行记录
   ├─ 列表：GET /run/page（状态过滤 + 分页，行显示状态 Tag、模型、耗时、Token）

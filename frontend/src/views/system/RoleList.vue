@@ -5,6 +5,7 @@ import { nextTick, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { menuApi, roleApi } from '@/api'
 import LwButton from '@/components/ui/LwButton.vue'
+import LwRowActions from '@/components/ui/LwRowActions.vue'
 import LwSkeleton from '@/components/ui/LwSkeleton.vue'
 import LwTableCard from '@/components/ui/LwTableCard.vue'
 import LwTag from '@/components/ui/LwTag.vue'
@@ -190,7 +191,7 @@ onMounted(load)
         <el-table-column :label="t('system.role.sortNo')" prop="sortNo" width="100" />
         <el-table-column :label="t('common.actions')" width="260" fixed="right">
           <template #default="{ row }">
-            <div class="lw-rowacts">
+            <LwRowActions>
               <LwButton v-if="hasPerm('system:role:update')" variant="text" size="sm" @click="openDialog(row)">
                 {{ t('common.edit') }}
               </LwButton>
@@ -203,7 +204,7 @@ onMounted(load)
                   {{ t('system.role.remove') }}
                 </LwButton>
               </template>
-            </div>
+            </LwRowActions>
           </template>
         </el-table-column>
       </el-table>

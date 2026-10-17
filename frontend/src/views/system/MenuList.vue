@@ -5,6 +5,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { menuApi } from '@/api'
 import LwButton from '@/components/ui/LwButton.vue'
+import LwRowActions from '@/components/ui/LwRowActions.vue'
 import LwSkeleton from '@/components/ui/LwSkeleton.vue'
 import LwTableCard from '@/components/ui/LwTableCard.vue'
 import LwTag from '@/components/ui/LwTag.vue'
@@ -174,7 +175,7 @@ onMounted(load)
           fixed="right"
         >
           <template #default="{ row }">
-            <div class="lw-rowacts">
+            <LwRowActions>
               <LwButton v-if="hasPerm('system:menu:create')" variant="text" size="sm" @click="openDialog(undefined, row)">
                 {{ t('system.menu.addChild') }}
               </LwButton>
@@ -187,7 +188,7 @@ onMounted(load)
                   {{ t('system.menu.remove') }}
                 </LwButton>
               </template>
-            </div>
+            </LwRowActions>
           </template>
         </el-table-column>
       </el-table>

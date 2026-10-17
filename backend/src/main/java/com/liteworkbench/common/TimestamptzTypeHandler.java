@@ -12,7 +12,7 @@ import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
-/** LocalDateTime 与 timestamptz 列的双向映射：默认处理器走 getObject(LocalDateTime.class)，PostgreSQL JDBC 对 timestamptz 直接拒绝，这里统一改走 Timestamp 通道 */
+/** LocalDateTime ↔ timestamptz 双向映射：默认处理器走 getObject，PG JDBC 对 timestamptz 直接拒绝，统一改走 Timestamp */
 @MappedTypes(LocalDateTime.class)
 public class TimestamptzTypeHandler extends BaseTypeHandler<LocalDateTime> {
 

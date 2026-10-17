@@ -33,6 +33,8 @@ backend/src/main/resources/
 frontend/src/
   api/ components/{layout,ui,charts,console,runs,settings,monitor}/ composables/ directives/
   locales/ router/ stores/ styles/ types/ utils/ views/
+frontend/scripts/check-i18n.mjs        词条成对校验（唯一的前端校验脚本）
+backend/src/test/java/                  长链路事件测试 + 前后端契约测试
 ```
 
 各包的职责与依赖方向见 [ARCHITECTURE.md](ARCHITECTURE.md) 的「分层与依赖方向」；命名规则见 [AGENTS.md](../AGENTS.md) §2。
@@ -135,6 +137,8 @@ npm run build         # = verify + 构建，提交前跑一次
 | 加一个前端页面 | `frontend/src/views/` + `resources/db/data.sql` 菜单种子（`component` 指向该文件） |
 | 改配色或控件形态 | `frontend/src/styles/tokens.css`（唯一色值来源）+ `components/ui/` |
 | 加一个写接口 | `@SaCheckPermission` + `@Idempotent` + `@PostMapping` |
+| 加一类批量动作 | 复用 `domain/dto/BatchREQ` 与 `domain/vo/BatchResultVO`，Service 侧逐条守门并把失败原因写进 `failures`，前端用 `LwBatchBar` 承接 |
+| 加一个管理资源页 | `frontend/src/views/<域>/XxxList.vue` 用 `LwTableCard`（卡头 + 筛选条 + 表体 + 分页一张卡）+ `db/data.sql` 菜单种子的 `component`，跑 `mvn -o test -Dtest=PermissionContractTest` 验证组件路径能落到文件 |
 
 ## 8. 仓库里的可执行资产
 
@@ -150,6 +154,6 @@ npm run build         # = verify + 构建，提交前跑一次
 | `deploy/.env.infra.example` | 部署机密的字段清单，新增变量只改这里 |
 | `deploy/deploy-app.sh` | 云主机侧发布：拉镜像 → 重建容器 → 清端口转发残留 → 健康自检 → 失败回滚 |
 | `frontend/scripts/check-i18n.mjs` | 校验中英词条键集合一致、模板与脚本引用的静态键都存在，被 `npm run verify` 调用 |
-| `.github/workflows/ci.yml` | 流水线：后端构建与测试 → 前端类型检查与构建 → 构建镜像推仓库 → 同步编排与脚本 → SSH 执行发布 |
+| `.github/workflows/ci.yml` | 流水线：`backend`（Maven 编译与测试）+ `frontend`（`npm run build`，内含类型检查与词条校验）→ `release`（构建镜像推仓库 → 同步编排与发布脚本 → SSH 拉起并自检回滚） |
 
 前端只有 `frontend/scripts/check-i18n.mjs` 一个校验脚本，由 `npm run verify` 与 `npm run build` 调用；仓库里没有其他 `.mjs` / `.ps1` / `.py`——临时联调脚本用完即删，不进仓库。新增脚本前先想清楚能不能并进上面已有的一个入口。
